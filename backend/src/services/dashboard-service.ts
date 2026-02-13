@@ -45,8 +45,8 @@ export class DashboardService {
   async getData(filtros: DashboardFiltros): Promise<DashboardResponse> {
     const normalized = this.normalizeFilters(filtros);
     const cacheKey = this.cacheKey(normalized);
-    const startDate = this.parseDate(normalized.data_inicio);
-    const endDate = this.parseDate(normalized.data_fim);
+    const startDate = this.parseStartDate(normalized.data_inicio);
+    const endDate = this.parseEndDate(normalized.data_fim);
 
     const cached = await redis.get(cacheKey);
     if (cached) {
@@ -217,9 +217,32 @@ export class DashboardService {
     };
   }
 
-  private parseDate(value: string) {
+  private parseStartDate(value: string) {
     if (!value) {
       return undefined;
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const parsed = new Date(`${value}T00:00:00.000`);
+      return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      return undefined;
+    }
+
+    return parsed;
+  }
+
+  private parseEndDate(value: string) {
+    if (!value) {
+      return undefined;
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const parsed = new Date(`${value}T23:59:59.999`);
+      return Number.isNaN(parsed.getTime()) ? undefined : parsed;
     }
 
     const parsed = new Date(value);

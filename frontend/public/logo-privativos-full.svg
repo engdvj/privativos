@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <radialGradient id="bg" cx="0.35" cy="0.15" r="1.1">
+      <stop offset="0%" stop-color="#5C5EFF" />
+      <stop offset="55%" stop-color="#3D33DB" />
+      <stop offset="100%" stop-color="#1D1097" />
+    </radialGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.18" />
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="32" fill="url(#bg)" />
+
+  <g stroke="#E9EBF8" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" filter="url(#shadow)">
+    <path d="M267 785V445L209 500L150 440L301 273L510 213L719 273L870 440L811 500L753 445V785C753 797 743 807 731 807H289C277 807 267 797 267 785Z" />
+    <path d="M510 213C523 260 567 291 623 291C679 291 723 260 736 213" />
+  </g>
+
+  <g fill="#E9EBF8">
+    <rect x="371" y="360" width="96" height="96" rx="8" />
+    <rect x="371" y="361" width="96" height="96" rx="8" fill="none" stroke="#E9EBF8" stroke-width="18" />
+
+    <rect x="371" y="536" width="96" height="96" rx="8" />
+    <rect x="371" y="537" width="96" height="96" rx="8" fill="none" stroke="#E9EBF8" stroke-width="18" />
+
+    <path d="M547 359H659V455H608" fill="none" stroke="#E9EBF8" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
+
+    <rect x="505" y="445" width="30" height="30" rx="2" />
+    <rect x="573" y="445" width="30" height="30" rx="2" />
+    <rect x="641" y="445" width="30" height="30" rx="2" />
+
+    <rect x="505" y="536" width="30" height="30" rx="2" />
+    <rect x="573" y="536" width="30" height="30" rx="2" />
+    <rect x="573" y="594" width="30" height="30" rx="2" />
+
+    <path d="M544 679C621 635 671 555 671 464" fill="none" stroke="#E9EBF8" stroke-width="26" stroke-linecap="round" />
+  </g>
+</svg>

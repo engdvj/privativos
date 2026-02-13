@@ -8,7 +8,7 @@ export class ExportService {
     const data = await this.dashboardService.getData(filtros);
 
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = "Reunir V2";
+    workbook.creator = "Controle de Privativos";
     workbook.created = new Date();
 
     const resumo = workbook.addWorksheet("Resumo");

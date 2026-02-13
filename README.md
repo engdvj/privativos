@@ -1,4 +1,4 @@
-# Reunir V2
+# Controle de Privativos
 
 Estrutura do repositorio:
 - `backend/`: API Fastify, Prisma, migracoes e seed

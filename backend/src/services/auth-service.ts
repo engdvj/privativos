@@ -8,7 +8,7 @@ import { redis } from "../lib/redis.js";
 import type { PerfilAcesso, SessionPayload, SolicitanteSessionPayload } from "../types/session.js";
 
 export class AuthService {
-  async login(input: { usuario: string; senha: string; perfil: PerfilAcesso }) {
+  async login(input: { usuario: string; senha: string }) {
     const credencial = await prisma.credencial.findFirst({
       where: {
         usuario: input.usuario,
@@ -22,7 +22,7 @@ export class AuthService {
       },
     });
 
-    if (!credencial || credencial.perfil !== this.mapPerfil(input.perfil)) {
+    if (!credencial) {
       throw new AppError(401, "INVALID_CREDENTIALS", "Credenciais invalidas");
     }
 
@@ -33,9 +33,15 @@ export class AuthService {
     }
 
     const token = randomUUID();
+    const perfil: PerfilAcesso =
+      credencial.perfil === Perfil.superadmin
+        ? "superadmin"
+        : credencial.perfil === Perfil.admin
+          ? "admin"
+          : "setor";
     const session: SessionPayload = {
       usuario: credencial.usuario,
-      perfil: input.perfil,
+      perfil,
       nomeCompleto: credencial.nomeCompleto,
     };
 
@@ -107,10 +113,6 @@ export class AuthService {
       redis.del(this.sessionKey(token)),
       redis.del(this.solicitanteSessionKey(token)),
     ]);
-  }
-
-  private mapPerfil(perfil: PerfilAcesso) {
-    return perfil === "admin" ? Perfil.admin : Perfil.setor;
   }
 
   private sessionKey(token: string) {

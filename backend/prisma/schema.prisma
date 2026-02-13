@@ -9,6 +9,7 @@ datasource db {
 
 enum Perfil {
   setor
+  superadmin
   admin
 }
 
@@ -33,6 +34,28 @@ model Funcionario {
 
   @@index([matricula], map: "idx_funcionarios_matricula")
   @@map("funcionarios")
+}
+
+model Setor {
+  id           Int       @id @default(autoincrement())
+  nome         String    @unique @db.VarChar(100)
+  statusAtivo  Boolean   @default(true) @map("status_ativo")
+  criadoEm     DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoPor String?  @map("atualizado_por") @db.VarChar(150)
+  atualizadoEm DateTime? @map("atualizado_em") @db.Timestamptz(6)
+
+  @@map("setores")
+}
+
+model Funcao {
+  id           Int       @id @default(autoincrement())
+  nome         String    @unique @db.VarChar(100)
+  statusAtivo  Boolean   @default(true) @map("status_ativo")
+  criadoEm     DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoPor String?  @map("atualizado_por") @db.VarChar(150)
+  atualizadoEm DateTime? @map("atualizado_em") @db.Timestamptz(6)
+
+  @@map("funcoes")
 }
 
 model Item {

@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "@/lib/api";
 import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useToast } from "@/components/ui/toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -18,7 +19,6 @@ import {
   RefreshCw,
   Package,
   Undo2,
-  AlertCircle,
   Loader2,
 } from "lucide-react";
 
@@ -44,9 +44,9 @@ function EmprestimoTab() {
   const [quantidade, setQuantidade] = useState(1);
   const [codigo, setCodigo] = useState("");
   const [etapa, setEtapa] = useState<Etapa>("busca");
-  const [erro, setErro] = useState("");
   const [resultado, setResultado] = useState<{ sucesso: boolean; itens: string[] } | null>(null);
   const [loading, setLoading] = useState(false);
+  const { success, error, info } = useToast();
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const limparPolling = useCallback(() => {
@@ -66,21 +66,19 @@ function EmprestimoTab() {
     setQuantidade(1);
     setCodigo("");
     setEtapa("busca");
-    setErro("");
     setResultado(null);
     limparPolling();
   }
 
   async function buscarFuncionario() {
     if (!matricula.trim()) return;
-    setErro("");
     setLoading(true);
     try {
       const data = await api.get<FuncionarioInfo>(`/ops/funcionario/${matricula.trim()}`);
       setFuncionario(data);
       setQuantidade(1);
     } catch (err) {
-      setErro(err instanceof Error ? err.message : "Funcionario nao encontrado");
+      error(err instanceof Error ? err.message : "Funcionario nao encontrado");
       setFuncionario(null);
     } finally {
       setLoading(false);
@@ -89,7 +87,6 @@ function EmprestimoTab() {
 
   async function gerarCodigo() {
     if (!funcionario) return;
-    setErro("");
     setLoading(true);
     try {
       const data = await api.post<{ codigo: string }>("/ops/gerar-codigo", {
@@ -100,14 +97,13 @@ function EmprestimoTab() {
       setCodigo(data.codigo);
       setEtapa("codigo");
     } catch (err) {
-      setErro(err instanceof Error ? err.message : "Erro ao gerar codigo");
+      error(err instanceof Error ? err.message : "Erro ao gerar codigo");
     } finally {
       setLoading(false);
     }
   }
 
   async function confirmar() {
-    setErro("");
     setLoading(true);
     try {
       const data = await api.post<{ sucesso: boolean; itens_emprestados: string[] }>(
@@ -121,15 +117,15 @@ function EmprestimoTab() {
       limparPolling();
       setResultado({ sucesso: true, itens: data.itens_emprestados });
       setEtapa("resultado");
+      success(`Emprestimo realizado: ${data.itens_emprestados.join(", ")}`);
     } catch (err) {
-      setErro(err instanceof Error ? err.message : "Erro ao confirmar");
+      error(err instanceof Error ? err.message : "Erro ao confirmar");
     } finally {
       setLoading(false);
     }
   }
 
   async function cancelar() {
-    setErro("");
     try {
       await api.post("/ops/cancelar", {
         matricula: matricula.trim(),
@@ -141,6 +137,7 @@ function EmprestimoTab() {
     limparPolling();
     setResultado({ sucesso: false, itens: [] });
     setEtapa("resultado");
+    info("Operacao cancelada");
   }
 
   // Inicia polling quando entra na etapa de código
@@ -207,12 +204,9 @@ function EmprestimoTab() {
                 </div>
 
                 {!disponivelParaEmprestimo && (
-                  <Alert variant="warning" className="mt-3">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      Limite de kits atingido. Nao e possivel realizar emprestimo.
-                    </AlertDescription>
-                  </Alert>
+                  <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    Limite de kits atingido. Nao e possivel realizar emprestimo.
+                  </div>
                 )}
 
                 {disponivelParaEmprestimo && (
@@ -286,21 +280,9 @@ function EmprestimoTab() {
       {etapa === "resultado" && resultado && (
         <Card>
           <CardContent className="pt-6">
-            {resultado.sucesso ? (
-              <Alert variant="success">
-                <CheckCircle2 className="h-4 w-4" />
-                <AlertTitle>Emprestimo realizado com sucesso</AlertTitle>
-                <AlertDescription>
-                  Itens emprestados:{" "}
-                  <strong>{resultado.itens.join(", ")}</strong>
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <Alert variant="destructive">
-                <XCircle className="h-4 w-4" />
-                <AlertTitle>Operacao cancelada</AlertTitle>
-              </Alert>
-            )}
+            <p className="text-center text-sm text-muted-foreground">
+              {resultado.sucesso ? "Emprestimo finalizado." : "Operacao cancelada."}
+            </p>
             <div className="mt-4 flex justify-center">
               <Button onClick={reset} variant="outline">
                 <RefreshCw className="h-4 w-4" />
@@ -309,14 +291,6 @@ function EmprestimoTab() {
             </div>
           </CardContent>
         </Card>
-      )}
-
-      {/* Erro global */}
-      {erro && etapa !== "resultado" && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{erro}</AlertDescription>
-        </Alert>
       )}
     </div>
   );
@@ -331,9 +305,9 @@ function DevolucaoTab() {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [codigo, setCodigo] = useState("");
   const [etapa, setEtapa] = useState<Etapa>("busca");
-  const [erro, setErro] = useState("");
   const [resultado, setResultado] = useState<{ sucesso: boolean; itens: string[] } | null>(null);
   const [loading, setLoading] = useState(false);
+  const { success, error, info } = useToast();
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const limparPolling = useCallback(() => {
@@ -354,14 +328,12 @@ function DevolucaoTab() {
     setSelecionados(new Set());
     setCodigo("");
     setEtapa("busca");
-    setErro("");
     setResultado(null);
     limparPolling();
   }
 
   async function buscarFuncionario() {
     if (!matricula.trim()) return;
-    setErro("");
     setLoading(true);
     try {
       const [func, emprestados] = await Promise.all([
@@ -372,7 +344,7 @@ function DevolucaoTab() {
       setItens(emprestados);
       setSelecionados(new Set());
     } catch (err) {
-      setErro(err instanceof Error ? err.message : "Funcionario nao encontrado");
+      error(err instanceof Error ? err.message : "Funcionario nao encontrado");
       setFuncionario(null);
       setItens([]);
     } finally {
@@ -394,7 +366,6 @@ function DevolucaoTab() {
 
   async function gerarCodigo() {
     if (selecionados.size === 0) return;
-    setErro("");
     setLoading(true);
     try {
       const itemCodigos = Array.from(selecionados);
@@ -407,14 +378,13 @@ function DevolucaoTab() {
       setCodigo(data.codigo);
       setEtapa("codigo");
     } catch (err) {
-      setErro(err instanceof Error ? err.message : "Erro ao gerar codigo");
+      error(err instanceof Error ? err.message : "Erro ao gerar codigo");
     } finally {
       setLoading(false);
     }
   }
 
   async function confirmar() {
-    setErro("");
     setLoading(true);
     try {
       const data = await api.post<{ sucesso: boolean; itens_devolvidos: string[] }>(
@@ -428,15 +398,15 @@ function DevolucaoTab() {
       limparPolling();
       setResultado({ sucesso: true, itens: data.itens_devolvidos });
       setEtapa("resultado");
+      success(`Devolucao realizada: ${data.itens_devolvidos.join(", ")}`);
     } catch (err) {
-      setErro(err instanceof Error ? err.message : "Erro ao confirmar");
+      error(err instanceof Error ? err.message : "Erro ao confirmar");
     } finally {
       setLoading(false);
     }
   }
 
   async function cancelar() {
-    setErro("");
     try {
       await api.post("/ops/cancelar", {
         matricula: matricula.trim(),
@@ -448,6 +418,7 @@ function DevolucaoTab() {
     limparPolling();
     setResultado({ sucesso: false, itens: [] });
     setEtapa("resultado");
+    info("Operacao cancelada");
   }
 
   useEffect(() => {
@@ -503,10 +474,9 @@ function DevolucaoTab() {
                 <Separator className="my-3" />
 
                 {itens.length === 0 ? (
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>Nenhum item emprestado para este funcionario.</AlertDescription>
-                  </Alert>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    Nenhum item emprestado para este funcionario.
+                  </div>
                 ) : (
                   <>
                     <p className="mb-2 text-sm font-medium text-muted-foreground">
@@ -585,21 +555,9 @@ function DevolucaoTab() {
       {etapa === "resultado" && resultado && (
         <Card>
           <CardContent className="pt-6">
-            {resultado.sucesso ? (
-              <Alert variant="success">
-                <CheckCircle2 className="h-4 w-4" />
-                <AlertTitle>Devolucao realizada com sucesso</AlertTitle>
-                <AlertDescription>
-                  Itens devolvidos:{" "}
-                  <strong>{resultado.itens.join(", ")}</strong>
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <Alert variant="destructive">
-                <XCircle className="h-4 w-4" />
-                <AlertTitle>Operacao cancelada</AlertTitle>
-              </Alert>
-            )}
+            <p className="text-center text-sm text-muted-foreground">
+              {resultado.sucesso ? "Devolucao finalizada." : "Operacao cancelada."}
+            </p>
             <div className="mt-4 flex justify-center">
               <Button onClick={reset} variant="outline">
                 <RefreshCw className="h-4 w-4" />
@@ -609,14 +567,6 @@ function DevolucaoTab() {
           </CardContent>
         </Card>
       )}
-
-      {/* Erro global */}
-      {erro && etapa !== "resultado" && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{erro}</AlertDescription>
-        </Alert>
-      )}
     </div>
   );
 }
@@ -625,10 +575,10 @@ function DevolucaoTab() {
 
 export function SetorPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-h-dvh flex-col bg-background">
       <Header />
-      <main className="mx-auto max-w-2xl p-6">
-        <Card>
+      <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
+        <Card className="border-border/80 bg-white/86 dark:bg-slate-900/55">
           <CardHeader>
             <CardTitle className="text-xl">Operacoes</CardTitle>
           </CardHeader>
@@ -654,6 +604,7 @@ export function SetorPage() {
           </CardContent>
         </Card>
       </main>
+      <Footer />
     </div>
   );
 }

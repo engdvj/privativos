@@ -1,4 +1,4 @@
-export type PerfilAcesso = "setor" | "admin";
+export type PerfilAcesso = "setor" | "admin" | "superadmin";
 
 export interface SessionPayload {
   usuario: string;

@@ -46,7 +46,6 @@ describe("AuthService", () => {
       service.login({
         usuario: "u",
         senha: "s",
-        perfil: "admin",
       }),
     ).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
   });

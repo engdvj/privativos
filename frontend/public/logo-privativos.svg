@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5B5DFF" />
+      <stop offset="100%" stop-color="#2614A8" />
+    </linearGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="44" fill="url(#bg)" />
+
+  <path
+    d="M64 95L90 66L128 55L166 66L192 95L173 113L161 102V186C161 191 157 195 152 195H104C99 195 95 191 95 186V102L83 113L64 95Z"
+    stroke="#EEF0FF"
+    stroke-width="10"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <path
+    d="M128 55C131 69 143 77 159 77C175 77 187 69 190 55"
+    stroke="#EEF0FF"
+    stroke-width="10"
+    stroke-linecap="round"
+  />
+
+  <rect x="108" y="104" width="20" height="20" rx="1" stroke="#EEF0FF" stroke-width="7" />
+  <rect x="108" y="137" width="20" height="20" rx="1" stroke="#EEF0FF" stroke-width="7" />
+
+  <path d="M142 104H165V125H153" stroke="#EEF0FF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M145 141H158M145 156H154" stroke="#EEF0FF" stroke-width="7" stroke-linecap="round" />
+  <path d="M140 173C153 166 161 154 161 139V129" stroke="#EEF0FF" stroke-width="7" stroke-linecap="round" />
+
+  <path d="M108 128H115M121 128H128M134 128H141" stroke="#EEF0FF" stroke-width="7" stroke-linecap="round" />
+</svg>

@@ -7,7 +7,6 @@ import { getBearerToken } from "../utils/auth.js";
 const loginSchema = z.object({
   usuario: z.string().min(1),
   senha: z.string().min(1),
-  perfil: z.enum(["setor", "admin"]),
 });
 
 const solicitanteSchema = z.object({
@@ -29,7 +28,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       app.log.info({
         evento: "auth.login",
         usuario: parsed.data.usuario,
-        perfil: parsed.data.perfil,
+        perfil: data.perfil,
         resultado: "ok",
         ip: request.ip,
       });
@@ -38,7 +37,6 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       app.log.warn({
         evento: "auth.login",
         usuario: parsed.data.usuario,
-        perfil: parsed.data.perfil,
         resultado: "falha",
         ip: request.ip,
       });

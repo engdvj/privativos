@@ -31,7 +31,7 @@ async function main() {
     where: { usuario: "admin" },
     update: {
       senhaHash,
-      perfil: Perfil.admin,
+      perfil: Perfil.superadmin,
       nomeCompleto: "Administrador Padrao",
       ativo: true,
       deveAlterarSenha: true,
@@ -41,11 +41,41 @@ async function main() {
     create: {
       usuario: "admin",
       senhaHash,
-      perfil: Perfil.admin,
+      perfil: Perfil.superadmin,
       nomeCompleto: "Administrador Padrao",
       ativo: true,
       deveAlterarSenha: true,
       criadoPor: "sistema",
+    },
+  });
+
+  await prisma.setor.upsert({
+    where: { nome: "Almoxarifado" },
+    update: {
+      statusAtivo: true,
+      atualizadoPor: "sistema",
+      atualizadoEm: new Date(),
+    },
+    create: {
+      nome: "Almoxarifado",
+      statusAtivo: true,
+      atualizadoPor: "sistema",
+      atualizadoEm: new Date(),
+    },
+  });
+
+  await prisma.funcao.upsert({
+    where: { nome: "Operador" },
+    update: {
+      statusAtivo: true,
+      atualizadoPor: "sistema",
+      atualizadoEm: new Date(),
+    },
+    create: {
+      nome: "Operador",
+      statusAtivo: true,
+      atualizadoPor: "sistema",
+      atualizadoEm: new Date(),
     },
   });
 }

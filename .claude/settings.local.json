@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm ls:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat\\(frontend\\): implementa SPA React com login e painel do setor\n\nStack: React 19 + Vite + TypeScript + shadcn/ui + Tailwind CSS + React Router.\nInclui tela de login \\(usuario/senha/perfil\\), painel do setor com abas de\nemprestimo e devolucao, HTTP client com interceptor 401, componentes shadcn/ui\ne guard de autenticacao. Backend ajustado para servir frontend/dist com\nfallback SPA. TDD e CLAUDE.md atualizados com nova stack.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")"
     ]
   }
 }
