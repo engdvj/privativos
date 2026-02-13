@@ -1,0 +1,103 @@
+import { FastifyPluginAsync } from "fastify";
+import { z } from "zod";
+import { AuthService } from "../services/auth-service.js";
+import { AppError } from "../errors/app-error.js";
+import { getBearerToken } from "../utils/auth.js";
+
+const loginSchema = z.object({
+  usuario: z.string().min(1),
+  senha: z.string().min(1),
+  perfil: z.enum(["setor", "admin"]),
+});
+
+const solicitanteSchema = z.object({
+  matricula: z.string().min(1).max(20),
+});
+
+const authService = new AuthService();
+
+export const authRoutes: FastifyPluginAsync = async (app) => {
+  app.post("/auth/login", async (request, reply) => {
+    const parsed = loginSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+    }
+
+    try {
+      const data = await authService.login(parsed.data);
+      app.log.info({
+        evento: "auth.login",
+        usuario: parsed.data.usuario,
+        perfil: parsed.data.perfil,
+        resultado: "ok",
+        ip: request.ip,
+      });
+      return reply.status(200).send(data);
+    } catch (error) {
+      app.log.warn({
+        evento: "auth.login",
+        usuario: parsed.data.usuario,
+        perfil: parsed.data.perfil,
+        resultado: "falha",
+        ip: request.ip,
+      });
+      throw error;
+    }
+  });
+
+  app.post("/auth/solicitante", async (request, reply) => {
+    const parsed = solicitanteSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+    }
+
+    const data = await authService.criarSessaoSolicitante(parsed.data);
+    app.log.info({
+      evento: "auth.solicitante",
+      matricula: parsed.data.matricula,
+      resultado: "ok",
+      ip: request.ip,
+    });
+    return reply.status(200).send(data);
+  });
+
+  app.post("/auth/logout", async (request, reply) => {
+    const token = getBearerToken(request.headers.authorization);
+
+    if (!token) {
+      throw new AppError(401, "UNAUTHENTICATED", "Nao autenticado");
+    }
+
+    const session = await authService.validarSessao(token);
+    await authService.logout(token);
+    app.log.info({
+      evento: "auth.logout",
+      usuario:
+        session?.tipo === "setor_admin"
+          ? session.dados.usuario
+          : session?.tipo === "solicitante"
+            ? session.dados.matricula
+            : null,
+      ip: request.ip,
+    });
+    return reply.status(204).send();
+  });
+
+  app.get("/auth/session", async (request, reply) => {
+    const token = getBearerToken(request.headers.authorization);
+
+    if (!token) {
+      throw new AppError(401, "UNAUTHENTICATED", "Nao autenticado");
+    }
+
+    const session = await authService.validarSessao(token);
+
+    if (!session) {
+      throw new AppError(401, "INVALID_SESSION", "Sessao invalida");
+    }
+
+    return reply.status(200).send(session);
+  });
+};

@@ -1,0 +1,9 @@
+process.env.DATABASE_URL ??= "postgresql://reunir:reunir@localhost:5432/reunir";
+process.env.REDIS_URL ??= "redis://localhost:6379";
+process.env.SESSION_TTL_SECONDS ??= "43200";
+process.env.VALIDATION_TTL_SECONDS ??= "3600";
+process.env.BCRYPT_ROUNDS ??= "12";
+process.env.ADMIN_SEED_PASSWORD ??= "ReunirAdmin@2026";
+process.env.PORT ??= "3000";
+process.env.NODE_ENV ??= "development";
+process.env.LOG_LEVEL ??= "error";

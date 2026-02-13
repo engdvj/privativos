@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Perfil {
+  setor
+  admin
+}
+
+enum StatusItem {
+  disponivel
+  emprestado
+  inativo
+}
+
+model Funcionario {
+  id          Int      @id @default(autoincrement())
+  matricula   String   @unique @db.VarChar(20)
+  nome        String   @db.VarChar(150)
+  setor       String   @db.VarChar(100)
+  funcao      String   @db.VarChar(100)
+  statusAtivo Boolean  @default(true) @map("status_ativo")
+  criadoEm    DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoPor String? @map("atualizado_por") @db.VarChar(150)
+  atualizadoEm DateTime? @map("atualizado_em") @db.Timestamptz(6)
+
+  itens Item[]
+
+  @@index([matricula], map: "idx_funcionarios_matricula")
+  @@map("funcionarios")
+}
+
+model Item {
+  id                   Int       @id @default(autoincrement())
+  codigo               String    @unique @db.VarChar(50)
+  descricao            String    @db.VarChar(200)
+  status               StatusItem
+  solicitanteMatricula String?   @map("solicitante_matricula") @db.VarChar(20)
+  dataEmprestimo       DateTime? @map("data_emprestimo") @db.Timestamptz(6)
+  statusAtivo          Boolean   @default(true) @map("status_ativo")
+  criadoEm             DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
+  atualizadoPor        String?   @map("atualizado_por") @db.VarChar(150)
+  atualizadoEm         DateTime? @map("atualizado_em") @db.Timestamptz(6)
+
+  funcionario Funcionario? @relation(fields: [solicitanteMatricula], references: [matricula])
+
+  @@index([status], map: "idx_itens_status")
+  @@index([solicitanteMatricula], map: "idx_itens_solicitante")
+  @@map("itens")
+}
+
+model Solicitacao {
+  id             Int      @id @default(autoincrement())
+  timestamp      DateTime @default(now()) @db.Timestamptz(6)
+  matricula      String   @db.VarChar(20)
+  nomeFuncionario String  @map("nome_funcionario") @db.VarChar(150)
+  itemCodigo     String   @map("item_codigo") @db.VarChar(50)
+  operadorNome   String   @map("operador_nome") @db.VarChar(150)
+
+  @@index([matricula], map: "idx_solicitacoes_matricula")
+  @@index([timestamp], map: "idx_solicitacoes_timestamp")
+  @@map("solicitacoes")
+}
+
+model Devolucao {
+  id             Int      @id @default(autoincrement())
+  timestamp      DateTime @default(now()) @db.Timestamptz(6)
+  matricula      String   @db.VarChar(20)
+  nomeFuncionario String  @map("nome_funcionario") @db.VarChar(150)
+  itemCodigo     String   @map("item_codigo") @db.VarChar(50)
+  operadorNome   String   @map("operador_nome") @db.VarChar(150)
+
+  @@index([matricula], map: "idx_devolucoes_matricula")
+  @@index([timestamp], map: "idx_devolucoes_timestamp")
+  @@map("devolucoes")
+}
+
+model Credencial {
+  id               Int       @id @default(autoincrement())
+  usuario          String    @unique @db.VarChar(100)
+  senhaHash        String    @map("senha_hash") @db.VarChar(255)
+  perfil           Perfil
+  nomeCompleto     String    @map("nome_completo") @db.VarChar(150)
+  ativo            Boolean   @default(true)
+  deveAlterarSenha Boolean   @default(true) @map("deve_alterar_senha")
+  criadoEm         DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
+  criadoPor        String    @map("criado_por") @db.VarChar(150)
+  atualizadoPor    String?   @map("atualizado_por") @db.VarChar(150)
+  atualizadoEm     DateTime? @map("atualizado_em") @db.Timestamptz(6)
+
+  @@map("credenciais")
+}
+
+model Configuracao {
+  chave         String    @id @db.VarChar(100)
+  valor         String    @db.VarChar(255)
+  atualizadoPor String?   @map("atualizado_por") @db.VarChar(150)
+  atualizadoEm  DateTime? @map("atualizado_em") @db.Timestamptz(6)
+
+  @@map("configuracoes")
+}
+
+model Auditoria {
+  id         Int      @id @default(autoincrement())
+  timestamp  DateTime @default(now()) @db.Timestamptz(6)
+  operador   String   @db.VarChar(150)
+  entidade   String   @db.VarChar(50)
+  operacao   String   @db.VarChar(20)
+  registroId String   @map("registro_id") @db.VarChar(100)
+  dadosAntes Json?    @map("dados_antes")
+  dadosDepois Json?   @map("dados_depois")
+
+  @@map("auditoria")
+}
