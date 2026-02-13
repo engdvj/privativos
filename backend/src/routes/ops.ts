@@ -30,6 +30,111 @@ const cancelarSchema = z.object({
   tipo: z.enum(["emprestimo", "devolucao"]),
 });
 
+const buscaGlobalSchema = z.object({
+  q: z.string().min(1).max(150),
+});
+
+const buscaSugestoesSchema = z.object({
+  q: z.string().min(2).max(150),
+});
+
+const historicoDetalhesSchema = z.object({
+  entidade: z.enum(["funcionario", "kit"]),
+  id: z.string().min(1).max(50),
+  pagina: z.coerce.number().int().positive().default(1),
+  limite: z.coerce.number().int().min(5).max(100).default(25),
+});
+
+type EventoHistoricoRaw = {
+  timestamp: Date;
+  matricula: string;
+  nomeFuncionario: string;
+  itemCodigo: string;
+  operadorNome: string;
+};
+
+type CicloHistorico = {
+  matricula: string;
+  nome_funcionario: string;
+  item_codigo: string;
+  saida_em: string | null;
+  saida_operador: string | null;
+  entrada_em: string | null;
+  entrada_operador: string | null;
+  duracao_horas: number | null;
+  em_aberto: boolean;
+};
+
+function montarCiclosHistorico(
+  solicitacoes: EventoHistoricoRaw[],
+  devolucoes: EventoHistoricoRaw[],
+): CicloHistorico[] {
+  const pendentes = new Map<string, EventoHistoricoRaw[]>();
+  const ciclos: CicloHistorico[] = [];
+
+  const eventos = [
+    ...solicitacoes.map((evento) => ({ tipo: "saida" as const, evento })),
+    ...devolucoes.map((evento) => ({ tipo: "entrada" as const, evento })),
+  ].sort((a, b) => a.evento.timestamp.getTime() - b.evento.timestamp.getTime());
+
+  for (const item of eventos) {
+    const key = `${item.evento.itemCodigo}::${item.evento.matricula}`;
+    if (item.tipo === "saida") {
+      const fila = pendentes.get(key) ?? [];
+      fila.push(item.evento);
+      pendentes.set(key, fila);
+      continue;
+    }
+
+    const fila = pendentes.get(key) ?? [];
+    const saida = fila.shift();
+    if (fila.length > 0) {
+      pendentes.set(key, fila);
+    } else {
+      pendentes.delete(key);
+    }
+
+    if (!saida) {
+      continue;
+    }
+
+    const duracaoMs = item.evento.timestamp.getTime() - saida.timestamp.getTime();
+    ciclos.push({
+      matricula: saida.matricula,
+      nome_funcionario: saida.nomeFuncionario,
+      item_codigo: saida.itemCodigo,
+      saida_em: saida.timestamp.toISOString(),
+      saida_operador: saida.operadorNome,
+      entrada_em: item.evento.timestamp.toISOString(),
+      entrada_operador: item.evento.operadorNome,
+      duracao_horas: duracaoMs >= 0 ? Number((duracaoMs / 3_600_000).toFixed(2)) : null,
+      em_aberto: false,
+    });
+  }
+
+  for (const fila of pendentes.values()) {
+    for (const saida of fila) {
+      ciclos.push({
+        matricula: saida.matricula,
+        nome_funcionario: saida.nomeFuncionario,
+        item_codigo: saida.itemCodigo,
+        saida_em: saida.timestamp.toISOString(),
+        saida_operador: saida.operadorNome,
+        entrada_em: null,
+        entrada_operador: null,
+        duracao_horas: null,
+        em_aberto: true,
+      });
+    }
+  }
+
+  return ciclos.sort((a, b) => {
+    const aTime = a.saida_em ? new Date(a.saida_em).getTime() : 0;
+    const bTime = b.saida_em ? new Date(b.saida_em).getTime() : 0;
+    return bTime - aTime;
+  });
+}
+
 export const opsRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/ops/stream",
@@ -309,6 +414,335 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         setor: funcionario.setor,
         kits_em_uso: kitsEmUso,
         max_kits: Number(maxConfig?.valor ?? 2),
+      });
+    },
+  );
+
+  app.get(
+    "/ops/busca-sugestoes",
+    {
+      preHandler: [authenticate, authorize(["setor", "admin", "superadmin"])],
+    },
+    async (request, reply) => {
+      const query = buscaSugestoesSchema.parse(request.query);
+      const termo = query.q.trim();
+
+      const [funcionarios, kits] = await Promise.all([
+        prisma.funcionario.findMany({
+          where: {
+            statusAtivo: true,
+            OR: [
+              { matricula: { contains: termo, mode: "insensitive" } },
+              { nome: { contains: termo, mode: "insensitive" } },
+            ],
+          },
+          select: {
+            matricula: true,
+            nome: true,
+            setor: true,
+            funcao: true,
+          },
+          orderBy: [{ nome: "asc" }, { matricula: "asc" }],
+          take: 6,
+        }),
+        prisma.item.findMany({
+          where: {
+            OR: [
+              { codigo: { contains: termo, mode: "insensitive" } },
+              { descricao: { contains: termo, mode: "insensitive" } },
+            ],
+          },
+          select: {
+            codigo: true,
+            descricao: true,
+            status: true,
+            solicitanteMatricula: true,
+          },
+          orderBy: [{ codigo: "asc" }],
+          take: 4,
+        }),
+      ]);
+
+      const sugestoes = [
+        ...funcionarios.map((funcionario) => ({
+          tipo: "funcionario" as const,
+          chave: funcionario.matricula,
+          titulo: funcionario.nome,
+          subtitulo: `Matricula ${funcionario.matricula} | ${funcionario.setor} | ${funcionario.funcao}`,
+        })),
+        ...kits.map((kit) => ({
+          tipo: "kit" as const,
+          chave: kit.codigo,
+          titulo: `Kit ${kit.codigo}`,
+          subtitulo: `${kit.descricao} | Status: ${kit.status}${kit.solicitanteMatricula ? ` | Matricula atual: ${kit.solicitanteMatricula}` : ""}`,
+        })),
+      ];
+
+      return reply.status(200).send({ sugestoes });
+    },
+  );
+
+  app.get(
+    "/ops/busca-global",
+    {
+      preHandler: [authenticate, authorize(["setor", "admin", "superadmin"])],
+    },
+    async (request, reply) => {
+      const query = buscaGlobalSchema.parse(request.query);
+      const termo = query.q.trim();
+
+      const kit = await prisma.item.findFirst({
+        where: {
+          codigo: {
+            equals: termo,
+            mode: "insensitive",
+          },
+        },
+        select: {
+          codigo: true,
+          descricao: true,
+          status: true,
+          statusAtivo: true,
+          solicitanteMatricula: true,
+          dataEmprestimo: true,
+        },
+      });
+
+      if (kit) {
+        const [solicitacoes, devolucoes] = await Promise.all([
+          prisma.solicitacao.findMany({
+            where: { itemCodigo: kit.codigo },
+            select: {
+              timestamp: true,
+              matricula: true,
+              nomeFuncionario: true,
+              itemCodigo: true,
+              operadorNome: true,
+            },
+            orderBy: { timestamp: "desc" },
+            take: 20,
+          }),
+          prisma.devolucao.findMany({
+            where: { itemCodigo: kit.codigo },
+            select: {
+              timestamp: true,
+              matricula: true,
+              nomeFuncionario: true,
+              itemCodigo: true,
+              operadorNome: true,
+            },
+            orderBy: { timestamp: "desc" },
+            take: 20,
+          }),
+        ]);
+
+        return reply.status(200).send({
+          tipo: "kit",
+          consulta: termo,
+          kit: {
+            codigo: kit.codigo,
+            descricao: kit.descricao,
+            status: kit.status,
+            status_ativo: kit.statusAtivo,
+            solicitante_matricula: kit.solicitanteMatricula,
+            data_emprestimo: kit.dataEmprestimo,
+          },
+          historico: {
+            solicitacoes: solicitacoes.map((evento) => ({
+              timestamp: evento.timestamp,
+              matricula: evento.matricula,
+              nome_funcionario: evento.nomeFuncionario,
+              item_codigo: evento.itemCodigo,
+              operador_nome: evento.operadorNome,
+            })),
+            devolucoes: devolucoes.map((evento) => ({
+              timestamp: evento.timestamp,
+              matricula: evento.matricula,
+              nome_funcionario: evento.nomeFuncionario,
+              item_codigo: evento.itemCodigo,
+              operador_nome: evento.operadorNome,
+            })),
+          },
+        });
+      }
+
+      const funcionarios = await prisma.funcionario.findMany({
+        where: {
+          statusAtivo: true,
+          OR: [
+            {
+              matricula: {
+                equals: termo,
+                mode: "insensitive",
+              },
+            },
+            {
+              nome: {
+                contains: termo,
+                mode: "insensitive",
+              },
+            },
+          ],
+        },
+        select: {
+          matricula: true,
+          nome: true,
+          setor: true,
+          funcao: true,
+          statusAtivo: true,
+        },
+        orderBy: [{ nome: "asc" }, { matricula: "asc" }],
+        take: 8,
+      });
+
+      if (funcionarios.length === 0) {
+        return reply.status(200).send({
+          tipo: "nao_encontrado",
+          consulta: termo,
+        });
+      }
+
+      const funcionarioExato = funcionarios.find(
+        (funcionario) => funcionario.matricula.toLowerCase() === termo.toLowerCase(),
+      );
+
+      if (!funcionarioExato && funcionarios.length > 1) {
+        return reply.status(200).send({
+          tipo: "sugestoes_funcionario",
+          consulta: termo,
+          sugestoes: funcionarios.map((funcionario) => ({
+            matricula: funcionario.matricula,
+            nome: funcionario.nome,
+            setor: funcionario.setor,
+            funcao: funcionario.funcao,
+          })),
+        });
+      }
+
+      const funcionario = funcionarioExato ?? funcionarios[0];
+
+      const [itensEmprestados, solicitacoes, devolucoes] = await Promise.all([
+        prisma.item.findMany({
+          where: {
+            solicitanteMatricula: funcionario.matricula,
+            status: "emprestado",
+            statusAtivo: true,
+          },
+          select: {
+            codigo: true,
+            descricao: true,
+            dataEmprestimo: true,
+          },
+          orderBy: { codigo: "asc" },
+        }),
+        prisma.solicitacao.findMany({
+          where: { matricula: funcionario.matricula },
+          select: {
+            timestamp: true,
+            matricula: true,
+            nomeFuncionario: true,
+            itemCodigo: true,
+            operadorNome: true,
+          },
+          orderBy: { timestamp: "desc" },
+          take: 20,
+        }),
+        prisma.devolucao.findMany({
+          where: { matricula: funcionario.matricula },
+          select: {
+            timestamp: true,
+            matricula: true,
+            nomeFuncionario: true,
+            itemCodigo: true,
+            operadorNome: true,
+          },
+          orderBy: { timestamp: "desc" },
+          take: 20,
+        }),
+      ]);
+
+      return reply.status(200).send({
+        tipo: "funcionario",
+        consulta: termo,
+        funcionario: {
+          matricula: funcionario.matricula,
+          nome: funcionario.nome,
+          setor: funcionario.setor,
+          funcao: funcionario.funcao,
+          status_ativo: funcionario.statusAtivo,
+        },
+        itens_emprestados: itensEmprestados.map((item) => ({
+          codigo: item.codigo,
+          descricao: item.descricao,
+          data_emprestimo: item.dataEmprestimo,
+        })),
+        historico: {
+          solicitacoes: solicitacoes.map((evento) => ({
+            timestamp: evento.timestamp,
+            matricula: evento.matricula,
+            nome_funcionario: evento.nomeFuncionario,
+            item_codigo: evento.itemCodigo,
+            operador_nome: evento.operadorNome,
+          })),
+          devolucoes: devolucoes.map((evento) => ({
+            timestamp: evento.timestamp,
+            matricula: evento.matricula,
+            nome_funcionario: evento.nomeFuncionario,
+            item_codigo: evento.itemCodigo,
+            operador_nome: evento.operadorNome,
+          })),
+        },
+      });
+    },
+  );
+
+  app.get(
+    "/ops/historico-detalhes",
+    {
+      preHandler: [authenticate, authorize(["setor", "admin", "superadmin"])],
+    },
+    async (request, reply) => {
+      const query = historicoDetalhesSchema.parse(request.query);
+      const skip = (query.pagina - 1) * query.limite;
+      const where =
+        query.entidade === "funcionario"
+          ? { matricula: query.id }
+          : { itemCodigo: query.id };
+
+      const [solicitacoes, devolucoes] = await Promise.all([
+        prisma.solicitacao.findMany({
+          where,
+          select: {
+            timestamp: true,
+            matricula: true,
+            nomeFuncionario: true,
+            itemCodigo: true,
+            operadorNome: true,
+          },
+          orderBy: { timestamp: "asc" },
+        }),
+        prisma.devolucao.findMany({
+          where,
+          select: {
+            timestamp: true,
+            matricula: true,
+            nomeFuncionario: true,
+            itemCodigo: true,
+            operadorNome: true,
+          },
+          orderBy: { timestamp: "asc" },
+        }),
+      ]);
+
+      const ciclos = montarCiclosHistorico(solicitacoes, devolucoes);
+      const total = ciclos.length;
+      const rows = ciclos.slice(skip, skip + query.limite);
+
+      return reply.status(200).send({
+        pagina: query.pagina,
+        limite: query.limite,
+        total,
+        ciclos: rows,
       });
     },
   );

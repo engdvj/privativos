@@ -8,6 +8,162 @@ import { DashboardService } from "./dashboard-service.js";
 const dashboardService = new DashboardService();
 
 export class AdminService {
+  async listSetores(includeInactive = false) {
+    return prisma.setor.findMany({
+      where: includeInactive ? undefined : { statusAtivo: true },
+      orderBy: [{ nome: "asc" }],
+    });
+  }
+
+  async createSetor(input: { nome: string; operador: string }) {
+    const created = await prisma.setor.create({
+      data: {
+        nome: input.nome,
+        statusAtivo: true,
+        atualizadoPor: input.operador,
+        atualizadoEm: new Date(),
+      },
+    });
+
+    await this.audit({
+      operador: input.operador,
+      entidade: "setores",
+      operacao: "INSERT",
+      registroId: String(created.id),
+      dadosAntes: null,
+      dadosDepois: created,
+    });
+
+    return created;
+  }
+
+  async updateSetor(
+    id: number,
+    input: { nome?: string; statusAtivo?: boolean; operador: string },
+  ) {
+    const before = await prisma.setor.findUnique({ where: { id } });
+    if (!before) {
+      throw new AppError(404, "SETOR_NOT_FOUND", "Setor nao encontrado");
+    }
+
+    const updated = await prisma.setor.update({
+      where: { id },
+      data: {
+        nome: input.nome,
+        statusAtivo: input.statusAtivo,
+        atualizadoPor: input.operador,
+        atualizadoEm: new Date(),
+      },
+    });
+
+    await this.audit({
+      operador: input.operador,
+      entidade: "setores",
+      operacao: "UPDATE",
+      registroId: String(id),
+      dadosAntes: before,
+      dadosDepois: updated,
+    });
+
+    return updated;
+  }
+
+  async deleteSetor(id: number, operador: string) {
+    const before = await prisma.setor.findUnique({ where: { id } });
+    if (!before) {
+      throw new AppError(404, "SETOR_NOT_FOUND", "Setor nao encontrado");
+    }
+
+    await prisma.setor.delete({ where: { id } });
+
+    await this.audit({
+      operador,
+      entidade: "setores",
+      operacao: "DELETE",
+      registroId: String(id),
+      dadosAntes: before,
+      dadosDepois: null,
+    });
+  }
+
+  async listFuncoes(includeInactive = false) {
+    return prisma.funcao.findMany({
+      where: includeInactive ? undefined : { statusAtivo: true },
+      orderBy: [{ nome: "asc" }],
+    });
+  }
+
+  async createFuncao(input: { nome: string; operador: string }) {
+    const created = await prisma.funcao.create({
+      data: {
+        nome: input.nome,
+        statusAtivo: true,
+        atualizadoPor: input.operador,
+        atualizadoEm: new Date(),
+      },
+    });
+
+    await this.audit({
+      operador: input.operador,
+      entidade: "funcoes",
+      operacao: "INSERT",
+      registroId: String(created.id),
+      dadosAntes: null,
+      dadosDepois: created,
+    });
+
+    return created;
+  }
+
+  async updateFuncao(
+    id: number,
+    input: { nome?: string; statusAtivo?: boolean; operador: string },
+  ) {
+    const before = await prisma.funcao.findUnique({ where: { id } });
+    if (!before) {
+      throw new AppError(404, "FUNCAO_NOT_FOUND", "Funcao nao encontrada");
+    }
+
+    const updated = await prisma.funcao.update({
+      where: { id },
+      data: {
+        nome: input.nome,
+        statusAtivo: input.statusAtivo,
+        atualizadoPor: input.operador,
+        atualizadoEm: new Date(),
+      },
+    });
+
+    await this.audit({
+      operador: input.operador,
+      entidade: "funcoes",
+      operacao: "UPDATE",
+      registroId: String(id),
+      dadosAntes: before,
+      dadosDepois: updated,
+    });
+
+    return updated;
+  }
+
+  async deleteFuncao(id: number, operador: string) {
+    const before = await prisma.funcao.findUnique({ where: { id } });
+    if (!before) {
+      throw new AppError(404, "FUNCAO_NOT_FOUND", "Funcao nao encontrada");
+    }
+
+    await prisma.funcao.delete({ where: { id } });
+
+    await this.audit({
+      operador,
+      entidade: "funcoes",
+      operacao: "DELETE",
+      registroId: String(id),
+      dadosAntes: before,
+      dadosDepois: null,
+    });
+  }
+
   async listFuncionarios(includeInactive = false) {
     return prisma.funcionario.findMany({
       where: includeInactive ? undefined : { statusAtivo: true },
@@ -22,6 +178,19 @@ export class AdminService {
     funcao: string;
     operador: string;
   }) {
+    const [setorAtivo, funcaoAtiva] = await Promise.all([
+      prisma.setor.findFirst({ where: { nome: input.setor, statusAtivo: true }, select: { id: true } }),
+      prisma.funcao.findFirst({ where: { nome: input.funcao, statusAtivo: true }, select: { id: true } }),
+    ]);
+
+    if (!setorAtivo) {
+      throw new AppError(400, "SETOR_INVALIDO", "Setor invalido ou inativo");
+    }
+
+    if (!funcaoAtiva) {
+      throw new AppError(400, "FUNCAO_INVALIDA", "Funcao invalida ou inativa");
+    }
+
     const created = await prisma.funcionario.create({
       data: {
         matricula: input.matricula,
@@ -56,6 +225,26 @@ export class AdminService {
       throw new AppError(404, "FUNCIONARIO_NOT_FOUND", "Funcionario nao encontrado");
     }
 
+    if (input.setor) {
+      const setorAtivo = await prisma.setor.findFirst({
+        where: { nome: input.setor, statusAtivo: true },
+        select: { id: true },
+      });
+      if (!setorAtivo) {
+        throw new AppError(400, "SETOR_INVALIDO", "Setor invalido ou inativo");
+      }
+    }
+
+    if (input.funcao) {
+      const funcaoAtiva = await prisma.funcao.findFirst({
+        where: { nome: input.funcao, statusAtivo: true },
+        select: { id: true },
+      });
+      if (!funcaoAtiva) {
+        throw new AppError(400, "FUNCAO_INVALIDA", "Funcao invalida ou inativa");
+      }
+    }
+
     const updated = await prisma.funcionario.update({
       where: { matricula },
       data: {
@@ -79,6 +268,41 @@ export class AdminService {
     await this.invalidateDashboardCaches();
 
     return updated;
+  }
+
+  async deleteFuncionario(matricula: string, operador: string) {
+    const before = await prisma.funcionario.findUnique({ where: { matricula } });
+    if (!before) {
+      throw new AppError(404, "FUNCIONARIO_NOT_FOUND", "Funcionario nao encontrado");
+    }
+
+    const emprestados = await prisma.item.count({
+      where: {
+        solicitanteMatricula: matricula,
+        status: "emprestado",
+        statusAtivo: true,
+      },
+    });
+
+    if (emprestados > 0) {
+      throw new AppError(
+        409,
+        "FUNCIONARIO_COM_EMPRESTIMO",
+        "Funcionario possui itens emprestados e nao pode ser removido",
+      );
+    }
+
+    await prisma.funcionario.delete({ where: { matricula } });
+
+    await this.audit({
+      operador,
+      entidade: "funcionarios",
+      operacao: "DELETE",
+      registroId: matricula,
+      dadosAntes: before,
+      dadosDepois: null,
+    });
+    await this.invalidateDashboardCaches();
   }
 
   async listItens(includeInactive = false) {
@@ -166,11 +390,33 @@ export class AdminService {
     return updated;
   }
 
+  async deleteItem(codigo: string, operador: string) {
+    const before = await prisma.item.findUnique({ where: { codigo } });
+    if (!before) {
+      throw new AppError(404, "ITEM_NOT_FOUND", "Item nao encontrado");
+    }
+
+    if (before.status === "emprestado") {
+      throw new AppError(409, "ITEM_EMPRESTADO", "Item emprestado nao pode ser removido");
+    }
+
+    await prisma.item.delete({ where: { codigo } });
+
+    await this.audit({
+      operador,
+      entidade: "itens",
+      operacao: "DELETE",
+      registroId: codigo,
+      dadosAntes: before,
+      dadosDepois: null,
+    });
+    await this.invalidateDashboardCaches();
+  }
+
   async listCredenciais() {
     return prisma.credencial.findMany({
       orderBy: [{ usuario: "asc" }],
       select: {
-        id: true,
         usuario: true,
         perfil: true,
         nomeCompleto: true,
@@ -187,7 +433,7 @@ export class AdminService {
   async createCredencial(input: {
     usuario: string;
     senha: string;
-    perfil: "setor" | "admin";
+    perfil: "setor" | "admin" | "superadmin";
     nomeCompleto: string;
     operador: string;
   }) {
@@ -197,7 +443,12 @@ export class AdminService {
       data: {
         usuario: input.usuario,
         senhaHash,
-        perfil: input.perfil === "admin" ? Perfil.admin : Perfil.setor,
+        perfil:
+          input.perfil === "superadmin"
+            ? Perfil.superadmin
+            : input.perfil === "admin"
+              ? Perfil.admin
+              : Perfil.setor,
         nomeCompleto: input.nomeCompleto,
         ativo: true,
         deveAlterarSenha: true,
@@ -229,7 +480,7 @@ export class AdminService {
     usuario: string,
     input: {
       nomeCompleto?: string;
-      perfil?: "setor" | "admin";
+      perfil?: "setor" | "admin" | "superadmin";
       ativo?: boolean;
       senha?: string;
       deveAlterarSenha?: boolean;
@@ -257,7 +508,13 @@ export class AdminService {
       where: { usuario },
       data: {
         nomeCompleto: input.nomeCompleto,
-        perfil: input.perfil ? (input.perfil === "admin" ? Perfil.admin : Perfil.setor) : undefined,
+        perfil: input.perfil
+          ? input.perfil === "superadmin"
+            ? Perfil.superadmin
+            : input.perfil === "admin"
+              ? Perfil.admin
+              : Perfil.setor
+          : undefined,
         ativo: input.ativo,
         senhaHash,
         deveAlterarSenha: input.deveAlterarSenha,
@@ -284,6 +541,46 @@ export class AdminService {
     });
 
     return updated;
+  }
+
+  async deleteCredencial(usuario: string, operador: string) {
+    const before = await prisma.credencial.findUnique({
+      where: { usuario },
+      select: {
+        id: true,
+        usuario: true,
+        perfil: true,
+        nomeCompleto: true,
+        ativo: true,
+        deveAlterarSenha: true,
+      },
+    });
+
+    if (!before) {
+      throw new AppError(404, "CREDENCIAL_NOT_FOUND", "Credencial nao encontrada");
+    }
+
+    try {
+      await prisma.credencial.delete({ where: { usuario } });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+        throw new AppError(
+          409,
+          "CREDENCIAL_DEPENDENTE",
+          "Credencial possui dependencias e nao pode ser removida com hard delete",
+        );
+      }
+      throw err;
+    }
+
+    await this.audit({
+      operador,
+      entidade: "credenciais",
+      operacao: "DELETE",
+      registroId: usuario,
+      dadosAntes: before,
+      dadosDepois: null,
+    });
   }
 
   async getConfiguracoes() {

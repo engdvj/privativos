@@ -80,6 +80,13 @@ export function buildApp() {
         return reply.status(409).send({ erro: "Registro duplicado", codigo: "CONFLICT" });
       }
 
+      if (error.code === "P2003") {
+        return reply.status(409).send({
+          erro: "Registro possui dependencias e nao pode ser removido",
+          codigo: "FOREIGN_KEY_CONFLICT",
+        });
+      }
+
       if (error.code === "P2025") {
         return reply.status(404).send({ erro: "Registro nao encontrado", codigo: "NOT_FOUND" });
       }

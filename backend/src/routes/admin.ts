@@ -39,13 +39,13 @@ const itemUpdateSchema = z.object({
 const credencialCreateSchema = z.object({
   usuario: z.string().min(1).max(100),
   senha: z.string().min(8).max(100),
-  perfil: z.enum(["setor", "admin"]),
+  perfil: z.enum(["setor", "admin", "superadmin"]),
   nome_completo: z.string().min(1).max(150),
 });
 
 const credencialUpdateSchema = z.object({
   nome_completo: z.string().min(1).max(150).optional(),
-  perfil: z.enum(["setor", "admin"]).optional(),
+  perfil: z.enum(["setor", "admin", "superadmin"]).optional(),
   ativo: z.boolean().optional(),
   senha: z.string().min(8).max(100).optional(),
   deve_alterar_senha: z.boolean().optional(),
@@ -53,6 +53,15 @@ const credencialUpdateSchema = z.object({
 
 const configUpdateSchema = z.object({
   max_kits_por_funcionario: z.coerce.number().int().positive(),
+});
+
+const catalogoCreateSchema = z.object({
+  nome: z.string().min(1).max(100),
+});
+
+const catalogoUpdateSchema = z.object({
+  nome: z.string().min(1).max(100).optional(),
+  status_ativo: z.boolean().optional(),
 });
 
 const dashboardFiltrosSchema = z.object({
@@ -69,9 +78,15 @@ function parseBool(value: unknown) {
   return value === "1" || value.toLowerCase() === "true";
 }
 
+function ensureSuperadmin(request: { user?: { kind?: string; perfil?: string } }) {
+  if (request.user?.kind !== "setor_admin" || request.user.perfil !== "superadmin") {
+    throw new AppError(403, "FORBIDDEN", "Acesso permitido somente para superadmin");
+  }
+}
+
 export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.addHook("preHandler", authenticate);
-  app.addHook("preHandler", authorize(["admin"]));
+  app.addHook("preHandler", authorize(["admin", "superadmin"]));
 
   app.get("/admin/funcionarios", async (request, reply) => {
     const includeInactive = parseBool((request.query as Record<string, unknown>)?.include_inactive);
@@ -118,6 +133,118 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(200).send(row);
   });
 
+  app.delete("/admin/funcionarios/:matricula", async (request, reply) => {
+    const params = z.object({ matricula: z.string().min(1).max(20) }).parse(request.params);
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+    await adminService.deleteFuncionario(params.matricula, operador);
+    return reply.status(204).send();
+  });
+
+  app.get("/admin/setores", async (request, reply) => {
+    const includeInactive = parseBool((request.query as Record<string, unknown>)?.include_inactive);
+    const rows = await adminService.listSetores(includeInactive);
+    return reply.status(200).send(rows);
+  });
+
+  app.post("/admin/setores", async (request, reply) => {
+    const parsed = catalogoCreateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+    }
+
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+
+    const row = await adminService.createSetor({ nome: parsed.data.nome, operador });
+    return reply.status(201).send(row);
+  });
+
+  app.put("/admin/setores/:id", async (request, reply) => {
+    const params = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
+    const parsed = catalogoUpdateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+    }
+
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+
+    const row = await adminService.updateSetor(params.id, {
+      nome: parsed.data.nome,
+      statusAtivo: parsed.data.status_ativo,
+      operador,
+    });
+    return reply.status(200).send(row);
+  });
+
+  app.delete("/admin/setores/:id", async (request, reply) => {
+    const params = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+    await adminService.deleteSetor(params.id, operador);
+    return reply.status(204).send();
+  });
+
+  app.get("/admin/funcoes", async (request, reply) => {
+    const includeInactive = parseBool((request.query as Record<string, unknown>)?.include_inactive);
+    const rows = await adminService.listFuncoes(includeInactive);
+    return reply.status(200).send(rows);
+  });
+
+  app.post("/admin/funcoes", async (request, reply) => {
+    const parsed = catalogoCreateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+    }
+
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+
+    const row = await adminService.createFuncao({ nome: parsed.data.nome, operador });
+    return reply.status(201).send(row);
+  });
+
+  app.put("/admin/funcoes/:id", async (request, reply) => {
+    const params = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
+    const parsed = catalogoUpdateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+    }
+
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+
+    const row = await adminService.updateFuncao(params.id, {
+      nome: parsed.data.nome,
+      statusAtivo: parsed.data.status_ativo,
+      operador,
+    });
+    return reply.status(200).send(row);
+  });
+
+  app.delete("/admin/funcoes/:id", async (request, reply) => {
+    const params = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+    await adminService.deleteFuncao(params.id, operador);
+    return reply.status(204).send();
+  });
+
   app.get("/admin/itens", async (request, reply) => {
     const includeInactive = parseBool((request.query as Record<string, unknown>)?.include_inactive);
     const rows = await adminService.listItens(includeInactive);
@@ -162,12 +289,24 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(200).send(row);
   });
 
+  app.delete("/admin/itens/:codigo", async (request, reply) => {
+    const params = z.object({ codigo: z.string().min(1).max(50) }).parse(request.params);
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+    await adminService.deleteItem(params.codigo, operador);
+    return reply.status(204).send();
+  });
+
   app.get("/admin/credenciais", async (_request, reply) => {
+    ensureSuperadmin(_request);
     const rows = await adminService.listCredenciais();
     return reply.status(200).send(rows);
   });
 
   app.post("/admin/credenciais", async (request, reply) => {
+    ensureSuperadmin(request);
     const parsed = credencialCreateSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
@@ -190,6 +329,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.put("/admin/credenciais/:usuario", async (request, reply) => {
+    ensureSuperadmin(request);
     const params = z.object({ usuario: z.string().min(1).max(100) }).parse(request.params);
     const parsed = credencialUpdateSchema.safeParse(request.body);
 
@@ -214,12 +354,31 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(200).send(row);
   });
 
+  app.delete("/admin/credenciais/:usuario", async (request, reply) => {
+    ensureSuperadmin(request);
+    const params = z.object({ usuario: z.string().min(1).max(100) }).parse(request.params);
+
+    if (request.user?.usuario === params.usuario) {
+      throw new AppError(400, "INVALID_OPERATION", "Nao e permitido apagar a propria credencial");
+    }
+
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+
+    await adminService.deleteCredencial(params.usuario, operador);
+    return reply.status(204).send();
+  });
+
   app.get("/admin/configuracoes", async (_request, reply) => {
+    ensureSuperadmin(_request);
     const rows = await adminService.getConfiguracoes();
     return reply.status(200).send(rows);
   });
 
   app.put("/admin/configuracoes/max-kits", async (request, reply) => {
+    ensureSuperadmin(request);
     const parsed = configUpdateSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
@@ -235,6 +394,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get("/admin/auditoria", async (request, reply) => {
+    ensureSuperadmin(request);
     const limit = Number((request.query as Record<string, unknown>)?.limit ?? 100);
     const rows = await adminService.listAuditoria(Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 500) : 100);
     return reply.status(200).send(rows);
@@ -270,7 +430,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
         "Content-Type",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       )
-      .header("Content-Disposition", `attachment; filename=\"reunir_export_${timestamp}.xlsx\"`)
+      .header("Content-Disposition", `attachment; filename=\"privativos_export_${timestamp}.xlsx\"`)
       .send(buffer);
   });
 };

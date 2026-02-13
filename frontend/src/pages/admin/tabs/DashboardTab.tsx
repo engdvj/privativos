@@ -1,0 +1,398 @@
+import { useEffect, useMemo, useState } from "react";
+import { api } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
+import { BarChart3, Download, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { DashboardDataResponse, DashboardFiltersResponse } from "../types";
+
+const ITENS_POR_PAGINA = 5;
+
+export function DashboardTab() {
+  const FILTROS_INICIAIS = {
+    data_inicio: "",
+    data_fim: "",
+    setor: "",
+    matricula: "",
+  };
+  const [filtros, setFiltros] = useState({
+    ...FILTROS_INICIAIS,
+  });
+  const [opcoes, setOpcoes] = useState<DashboardFiltersResponse>({
+    setores: [],
+    funcionarios: [],
+  });
+  const [data, setData] = useState<DashboardDataResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [paginaSolicitacoes, setPaginaSolicitacoes] = useState(1);
+  const [paginaDevolucoes, setPaginaDevolucoes] = useState(1);
+  const { success, error } = useToast();
+
+  async function carregarOpcoes() {
+    try {
+      const payload = await api.get<DashboardFiltersResponse>("/admin/dashboard/filtros");
+      setOpcoes(payload);
+    } catch (err) {
+      error(err instanceof Error ? err.message : "Erro ao carregar filtros");
+    }
+  }
+
+  async function carregarDashboard(filtrosOverride?: typeof FILTROS_INICIAIS) {
+    const filtrosAtuais = filtrosOverride ?? filtros;
+    setLoading(true);
+    try {
+      const payload = await api.post<DashboardDataResponse>("/admin/dashboard", {
+        data_inicio: filtrosAtuais.data_inicio || undefined,
+        data_fim: filtrosAtuais.data_fim || undefined,
+        setor: filtrosAtuais.setor || undefined,
+        matricula: filtrosAtuais.matricula || undefined,
+      });
+      setData(payload);
+    } catch (err) {
+      error(err instanceof Error ? err.message : "Erro ao carregar dashboard");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function exportar() {
+    setExporting(true);
+    try {
+      const blob = await api.postBlob("/admin/export", {
+        data_inicio: filtros.data_inicio || undefined,
+        data_fim: filtros.data_fim || undefined,
+        setor: filtros.setor || undefined,
+        matricula: filtros.matricula || undefined,
+      });
+
+      const fileName = `privativos_export_${new Date().toISOString().replace(/[:.]/g, "-")}.xlsx`;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      success("Exportacao XLSX concluida");
+    } catch (err) {
+      error(err instanceof Error ? err.message : "Erro ao exportar XLSX");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function limparFiltros() {
+    setFiltros(FILTROS_INICIAIS);
+  }
+
+  useEffect(() => {
+    carregarOpcoes();
+  }, []);
+
+  useEffect(() => {
+    carregarDashboard();
+  }, [filtros.data_inicio, filtros.data_fim, filtros.setor, filtros.matricula]);
+
+  const solicitacoesFiltradas = useMemo(() => {
+    if (!data) return [];
+    return data.rows.solicitacoes;
+  }, [data]);
+
+  const devolucoesFiltradas = useMemo(() => {
+    if (!data) return [];
+    return data.rows.devolucoes;
+  }, [data]);
+
+  useEffect(() => {
+    setPaginaSolicitacoes(1);
+    setPaginaDevolucoes(1);
+  }, [filtros.data_inicio, filtros.data_fim, filtros.setor, filtros.matricula, data]);
+
+  const totalPaginasSolicitacoes = Math.max(1, Math.ceil(solicitacoesFiltradas.length / ITENS_POR_PAGINA));
+  const totalPaginasDevolucoes = Math.max(1, Math.ceil(devolucoesFiltradas.length / ITENS_POR_PAGINA));
+
+  const solicitacoesPaginadas = useMemo(() => {
+    const inicio = (paginaSolicitacoes - 1) * ITENS_POR_PAGINA;
+    return solicitacoesFiltradas.slice(inicio, inicio + ITENS_POR_PAGINA);
+  }, [solicitacoesFiltradas, paginaSolicitacoes]);
+
+  const devolucoesPaginadas = useMemo(() => {
+    const inicio = (paginaDevolucoes - 1) * ITENS_POR_PAGINA;
+    return devolucoesFiltradas.slice(inicio, inicio + ITENS_POR_PAGINA);
+  }, [devolucoesFiltradas, paginaDevolucoes]);
+
+  useEffect(() => {
+    if (paginaSolicitacoes > totalPaginasSolicitacoes) setPaginaSolicitacoes(totalPaginasSolicitacoes);
+  }, [paginaSolicitacoes, totalPaginasSolicitacoes]);
+
+  useEffect(() => {
+    if (paginaDevolucoes > totalPaginasDevolucoes) setPaginaDevolucoes(totalPaginasDevolucoes);
+  }, [paginaDevolucoes, totalPaginasDevolucoes]);
+
+  const inicioSolicitacoes = solicitacoesFiltradas.length === 0 ? 0 : (paginaSolicitacoes - 1) * ITENS_POR_PAGINA + 1;
+  const fimSolicitacoes = Math.min(paginaSolicitacoes * ITENS_POR_PAGINA, solicitacoesFiltradas.length);
+  const inicioDevolucoes = devolucoesFiltradas.length === 0 ? 0 : (paginaDevolucoes - 1) * ITENS_POR_PAGINA + 1;
+  const fimDevolucoes = Math.min(paginaDevolucoes * ITENS_POR_PAGINA, devolucoesFiltradas.length);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            Filtros do Dashboard
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="space-y-1">
+              <Label htmlFor="f-data-inicio">Data inicio</Label>
+              <Input
+                id="f-data-inicio"
+                type="date"
+                value={filtros.data_inicio}
+                onChange={(e) => setFiltros((p) => ({ ...p, data_inicio: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="f-data-fim">Data fim</Label>
+              <Input
+                id="f-data-fim"
+                type="date"
+                value={filtros.data_fim}
+                onChange={(e) => setFiltros((p) => ({ ...p, data_fim: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="f-setor">Setor</Label>
+              <Select
+                value={filtros.setor || "todos"}
+                onValueChange={(value) => setFiltros((p) => ({ ...p, setor: value === "todos" ? "" : value }))}
+              >
+                <SelectTrigger id="f-setor">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  {opcoes.setores.map((setor) => (
+                    <SelectItem key={setor} value={setor}>
+                      {setor}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="f-matricula">Funcionario</Label>
+              <Select
+                value={filtros.matricula || "todos"}
+                onValueChange={(value) =>
+                  setFiltros((p) => ({ ...p, matricula: value === "todos" ? "" : value }))
+                }
+              >
+                <SelectTrigger id="f-matricula">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  {opcoes.funcionarios.map((f) => (
+                    <SelectItem key={f.matricula} value={f.matricula}>
+                      {f.nome} ({f.matricula})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={limparFiltros} disabled={loading}>
+              Limpar filtros
+            </Button>
+            <Button onClick={exportar} disabled={exporting}>
+              {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Exportar XLSX
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {data && (
+        <>
+          <div className="grid gap-3 md:grid-cols-5">
+            <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Emprestimos</p><p className="text-2xl font-semibold">{data.kpis.total_emprestimos}</p></CardContent></Card>
+            <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Devolucoes</p><p className="text-2xl font-semibold">{data.kpis.total_devolucoes}</p></CardContent></Card>
+            <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Itens disponiveis</p><p className="text-2xl font-semibold">{data.kpis.itens_disponiveis}</p></CardContent></Card>
+            <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Itens emprestados</p><p className="text-2xl font-semibold">{data.kpis.itens_emprestados}</p></CardContent></Card>
+            <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Funcionarios ativos</p><p className="text-2xl font-semibold">{data.kpis.funcionarios_ativos}</p></CardContent></Card>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <Card className="h-full">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Solicitacoes ({solicitacoesFiltradas.length})</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="overflow-x-auto min-h-[320px]">
+                  <table className="w-full min-w-[700px] text-base">
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th className="p-2">Data/Hora</th><th className="p-2">Matricula</th><th className="p-2">Nome</th><th className="p-2">Setor</th><th className="p-2">Item</th><th className="p-2">Operador</th><th className="p-2 text-right">Acoes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: ITENS_POR_PAGINA }).map((_, index) => {
+                        const row = solicitacoesPaginadas[index];
+                        if (!row) {
+                          return (
+                            <tr key={`solicitacao-vazia-${index}`} className="h-[44px] border-b">
+                              <td className="p-2" colSpan={7} />
+                            </tr>
+                          );
+                        }
+                        return (
+                          <tr key={row.id} className="h-[44px] border-b">
+                            <td className="p-2">{new Date(row.timestamp).toLocaleString()}</td>
+                            <td className="p-2 font-mono">{row.matricula}</td>
+                            <td className="p-2">{row.nome_funcionario}</td>
+                            <td className="p-2">{row.setor ?? "-"}</td>
+                            <td className="p-2 font-mono">{row.item_codigo}</td>
+                            <td className="p-2">{row.operador_nome}</td>
+                            <td className="p-2">
+                              <div className="flex justify-end gap-2">
+                                <Button size="icon" variant="ghost" disabled aria-label="Editar" title="Editar">
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button size="icon" variant="ghost" disabled aria-label="Apagar" title="Apagar">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {totalPaginasSolicitacoes > 1 && (
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs text-muted-foreground">
+                      {inicioSolicitacoes}-{fimSolicitacoes} de {solicitacoesFiltradas.length} . Pagina {paginaSolicitacoes} de {totalPaginasSolicitacoes}
+                    </p>
+                    <div className="flex min-w-[220px] justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="min-w-24"
+                        onClick={() => setPaginaSolicitacoes((p) => Math.max(1, p - 1))}
+                        disabled={paginaSolicitacoes === 1}
+                      >
+                        Anterior
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="min-w-24"
+                        onClick={() => setPaginaSolicitacoes((p) => Math.min(totalPaginasSolicitacoes, p + 1))}
+                        disabled={paginaSolicitacoes === totalPaginasSolicitacoes}
+                      >
+                        Proxima
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="h-full">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Devolucoes ({devolucoesFiltradas.length})</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="overflow-x-auto min-h-[320px]">
+                  <table className="w-full min-w-[700px] text-base">
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th className="p-2">Data/Hora</th><th className="p-2">Matricula</th><th className="p-2">Nome</th><th className="p-2">Setor</th><th className="p-2">Item</th><th className="p-2">Operador</th><th className="p-2 text-right">Acoes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: ITENS_POR_PAGINA }).map((_, index) => {
+                        const row = devolucoesPaginadas[index];
+                        if (!row) {
+                          return (
+                            <tr key={`devolucao-vazia-${index}`} className="h-[44px] border-b">
+                              <td className="p-2" colSpan={7} />
+                            </tr>
+                          );
+                        }
+                        return (
+                          <tr key={row.id} className="h-[44px] border-b">
+                            <td className="p-2">{new Date(row.timestamp).toLocaleString()}</td>
+                            <td className="p-2 font-mono">{row.matricula}</td>
+                            <td className="p-2">{row.nome_funcionario}</td>
+                            <td className="p-2">{row.setor ?? "-"}</td>
+                            <td className="p-2 font-mono">{row.item_codigo}</td>
+                            <td className="p-2">{row.operador_nome}</td>
+                            <td className="p-2">
+                              <div className="flex justify-end gap-2">
+                                <Button size="icon" variant="ghost" disabled aria-label="Editar" title="Editar">
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button size="icon" variant="ghost" disabled aria-label="Apagar" title="Apagar">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {totalPaginasDevolucoes > 1 && (
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs text-muted-foreground">
+                      {inicioDevolucoes}-{fimDevolucoes} de {devolucoesFiltradas.length} . Pagina {paginaDevolucoes} de {totalPaginasDevolucoes}
+                    </p>
+                    <div className="flex min-w-[220px] justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="min-w-24"
+                        onClick={() => setPaginaDevolucoes((p) => Math.max(1, p - 1))}
+                        disabled={paginaDevolucoes === 1}
+                      >
+                        Anterior
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="min-w-24"
+                        onClick={() => setPaginaDevolucoes((p) => Math.min(totalPaginasDevolucoes, p + 1))}
+                        disabled={paginaDevolucoes === totalPaginasDevolucoes}
+                      >
+                        Proxima
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+
+    </div>
+  );
+}
+
+
