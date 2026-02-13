@@ -25,7 +25,7 @@ Sistema de controle de empréstimo e devolução de kits, reescrito como API RES
 | Hash de senha | bcrypt (rounds: 12) | 04 § 6 |
 | Tokens | UUID v4 (crypto nativo) | — |
 | Exportação | exceljs (in-memory) | PRD FMD-05; 04 P-04 |
-| Frontend | HTML/CSS/JS vanilla (servido pelo Fastify como static) | AS-IS — sem alteração de UI além do necessário |
+| Frontend | React 19 + Vite + TypeScript + shadcn/ui (Tailwind CSS) + React Router | Decisão revisada — design system completo |
 | Notificação em tempo real | SSE (Server-Sent Events) | ADR-05 |
 | Containerização | Docker + Docker Compose | 04 PENDENTE-C |
 | Deploy | Manual (on-prem); sem CI/CD externo | 04 PENDENTE-C |

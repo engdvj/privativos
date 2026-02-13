@@ -1,5 +1,9 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
 import helmet from "@fastify/helmet";
+import fastifyStatic from "@fastify/static";
 import { Prisma } from "@prisma/client";
 import { ZodError } from "zod";
 import { env } from "./config/env.js";
@@ -9,6 +13,10 @@ import { authRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
 import { opsRoutes } from "./routes/ops.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const frontendDist = path.join(__dirname, "../../frontend/dist");
+
 export function buildApp() {
   const app = Fastify({
     logger: {
@@ -17,6 +25,16 @@ export function buildApp() {
   });
 
   app.register(helmet);
+
+  // Serve frontend build (production)
+  if (existsSync(frontendDist)) {
+    app.register(fastifyStatic, {
+      root: frontendDist,
+      prefix: "/",
+      wildcard: false,
+      decorateReply: false,
+    });
+  }
   app.addHook("onRequest", async (request) => {
     request.startTimeNs = process.hrtime.bigint();
   });
@@ -70,6 +88,17 @@ export function buildApp() {
     app.log.error(error);
     reply.status(500).send({ erro: "Erro interno" });
   });
+
+  // SPA fallback: rotas não-API servem index.html
+  if (existsSync(frontendDist)) {
+    app.setNotFoundHandler(async (request, reply) => {
+      const apiPrefixes = ["/auth/", "/ops/", "/admin/", "/health"];
+      if (apiPrefixes.some((p) => request.url.startsWith(p))) {
+        return reply.status(404).send({ erro: "Rota nao encontrada" });
+      }
+      return reply.sendFile("index.html");
+    });
+  }
 
   return app;
 }
