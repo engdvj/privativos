@@ -1,16 +1,7 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { CheckCircle2, Info, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-type ToastVariant = "success" | "error" | "info";
+import { ToastContext, type ToastVariant } from "@/components/ui/toast-context";
 
 interface ToastItem {
   id: number;
@@ -18,19 +9,12 @@ interface ToastItem {
   variant: ToastVariant;
 }
 
-interface ToastContextValue {
-  showToast: (message: string, variant?: ToastVariant) => void;
-  success: (message: string) => void;
-  error: (message: string) => void;
-  info: (message: string) => void;
-}
-
-const ToastContext = createContext<ToastContextValue | null>(null);
+const TOAST_TTL_MS = 3400;
 
 const variantClassName: Record<ToastVariant, string> = {
-  success: "border-emerald-200 bg-emerald-50 text-emerald-900",
-  error: "border-red-200 bg-red-50 text-red-900",
-  info: "border-slate-200 bg-slate-50 text-slate-900",
+  success: "border-success/30 bg-success/14 text-foreground",
+  error: "border-destructive/30 bg-destructive/14 text-foreground",
+  info: "border-primary/30 bg-primary/14 text-foreground",
 };
 
 const variantIcon = {
@@ -54,17 +38,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
       window.setTimeout(() => {
         removeToast(id);
-      }, 3000);
+      }, TOAST_TTL_MS);
     },
     [removeToast],
   );
 
-  const value = useMemo<ToastContextValue>(
+  const value = useMemo(
     () => ({
       showToast,
-      success: (message) => showToast(message, "success"),
-      error: (message) => showToast(message, "error"),
-      info: (message) => showToast(message, "info"),
+      success: (message: string) => showToast(message, "success"),
+      error: (message: string) => showToast(message, "error"),
+      info: (message: string) => showToast(message, "info"),
     }),
     [showToast],
   );
@@ -72,31 +56,29 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed right-4 bottom-4 z-[100] flex w-full max-w-sm flex-col gap-2">
+      <div
+        aria-live="polite"
+        aria-atomic="false"
+        className="pointer-events-none fixed right-4 bottom-4 z-[100] flex w-full max-w-sm flex-col gap-2"
+      >
         {toasts.map((toast) => {
           const Icon = variantIcon[toast.variant];
+
           return (
             <div
               key={toast.id}
               className={cn(
-                "pointer-events-auto flex items-start gap-2 rounded-lg border px-3 py-2 text-sm shadow-md",
+                "animate-fade-up pointer-events-auto flex items-start gap-2 rounded-xl border px-3.5 py-3 text-sm shadow-lg backdrop-blur",
                 variantClassName[toast.variant],
               )}
+              role="status"
             >
               <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>{toast.message}</p>
+              <p className="leading-snug">{toast.message}</p>
             </div>
           );
         })}
       </div>
     </ToastContext.Provider>
   );
-}
-
-export function useToast() {
-  const context = useContext(ToastContext);
-  if (!context) {
-    throw new Error("useToast must be used within ToastProvider");
-  }
-  return context;
 }

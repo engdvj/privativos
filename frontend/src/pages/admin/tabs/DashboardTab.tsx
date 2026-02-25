@@ -1,26 +1,27 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/toast";
-import { BarChart3, Download, Loader2, Pencil, Trash2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DataTable } from "@/components/ui/data-table";
+import { SectionCard } from "@/components/ui/section-card";
+import { useToast } from "@/components/ui/use-toast";
+import { BarChart3, Download } from "lucide-react";
 import type { DashboardDataResponse, DashboardFiltersResponse } from "../types";
 
 const ITENS_POR_PAGINA = 5;
 
+const FILTROS_INICIAIS = {
+  data_inicio: "",
+  data_fim: "",
+  setor: "",
+  matricula: "",
+};
+
 export function DashboardTab() {
-  const FILTROS_INICIAIS = {
-    data_inicio: "",
-    data_fim: "",
-    setor: "",
-    matricula: "",
-  };
-  const [filtros, setFiltros] = useState({
-    ...FILTROS_INICIAIS,
-  });
+  const [filtros, setFiltros] = useState({ ...FILTROS_INICIAIS });
   const [opcoes, setOpcoes] = useState<DashboardFiltersResponse>({
     setores: [],
     funcionarios: [],
@@ -32,32 +33,35 @@ export function DashboardTab() {
   const [paginaDevolucoes, setPaginaDevolucoes] = useState(1);
   const { success, error } = useToast();
 
-  async function carregarOpcoes() {
+  const carregarOpcoes = useCallback(async () => {
     try {
       const payload = await api.get<DashboardFiltersResponse>("/admin/dashboard/filtros");
       setOpcoes(payload);
     } catch (err) {
       error(err instanceof Error ? err.message : "Erro ao carregar filtros");
     }
-  }
+  }, [error]);
 
-  async function carregarDashboard(filtrosOverride?: typeof FILTROS_INICIAIS) {
-    const filtrosAtuais = filtrosOverride ?? filtros;
-    setLoading(true);
-    try {
-      const payload = await api.post<DashboardDataResponse>("/admin/dashboard", {
-        data_inicio: filtrosAtuais.data_inicio || undefined,
-        data_fim: filtrosAtuais.data_fim || undefined,
-        setor: filtrosAtuais.setor || undefined,
-        matricula: filtrosAtuais.matricula || undefined,
-      });
-      setData(payload);
-    } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao carregar dashboard");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const carregarDashboard = useCallback(
+    async (filtrosOverride?: typeof FILTROS_INICIAIS) => {
+      const filtrosAtuais = filtrosOverride ?? filtros;
+      setLoading(true);
+      try {
+        const payload = await api.post<DashboardDataResponse>("/admin/dashboard", {
+          data_inicio: filtrosAtuais.data_inicio || undefined,
+          data_fim: filtrosAtuais.data_fim || undefined,
+          setor: filtrosAtuais.setor || undefined,
+          matricula: filtrosAtuais.matricula || undefined,
+        });
+        setData(payload);
+      } catch (err) {
+        error(err instanceof Error ? err.message : "Erro ao carregar dashboard");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [error, filtros],
+  );
 
   async function exportar() {
     setExporting(true);
@@ -86,27 +90,20 @@ export function DashboardTab() {
     }
   }
 
-  async function limparFiltros() {
+  function limparFiltros() {
     setFiltros(FILTROS_INICIAIS);
   }
 
   useEffect(() => {
-    carregarOpcoes();
-  }, []);
+    void carregarOpcoes();
+  }, [carregarOpcoes]);
 
   useEffect(() => {
-    carregarDashboard();
-  }, [filtros.data_inicio, filtros.data_fim, filtros.setor, filtros.matricula]);
+    void carregarDashboard();
+  }, [carregarDashboard, filtros.data_inicio, filtros.data_fim, filtros.setor, filtros.matricula]);
 
-  const solicitacoesFiltradas = useMemo(() => {
-    if (!data) return [];
-    return data.rows.solicitacoes;
-  }, [data]);
-
-  const devolucoesFiltradas = useMemo(() => {
-    if (!data) return [];
-    return data.rows.devolucoes;
-  }, [data]);
+  const solicitacoesFiltradas = useMemo(() => data?.rows.solicitacoes ?? [], [data]);
+  const devolucoesFiltradas = useMemo(() => data?.rows.devolucoes ?? [], [data]);
 
   useEffect(() => {
     setPaginaSolicitacoes(1);
@@ -141,87 +138,84 @@ export function DashboardTab() {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            Filtros do Dashboard
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-4">
-            <div className="space-y-1">
-              <Label htmlFor="f-data-inicio">Data inicio</Label>
-              <Input
-                id="f-data-inicio"
-                type="date"
-                value={filtros.data_inicio}
-                onChange={(e) => setFiltros((p) => ({ ...p, data_inicio: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="f-data-fim">Data fim</Label>
-              <Input
-                id="f-data-fim"
-                type="date"
-                value={filtros.data_fim}
-                onChange={(e) => setFiltros((p) => ({ ...p, data_fim: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="f-setor">Setor</Label>
-              <Select
-                value={filtros.setor || "todos"}
-                onValueChange={(value) => setFiltros((p) => ({ ...p, setor: value === "todos" ? "" : value }))}
-              >
-                <SelectTrigger id="f-setor">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  {opcoes.setores.map((setor) => (
-                    <SelectItem key={setor} value={setor}>
-                      {setor}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="f-matricula">Funcionario</Label>
-              <Select
-                value={filtros.matricula || "todos"}
-                onValueChange={(value) =>
-                  setFiltros((p) => ({ ...p, matricula: value === "todos" ? "" : value }))
-                }
-              >
-                <SelectTrigger id="f-matricula">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  {opcoes.funcionarios.map((f) => (
-                    <SelectItem key={f.matricula} value={f.matricula}>
-                      {f.nome} ({f.matricula})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
+      <SectionCard
+        title="Filtros do Dashboard"
+        icon={BarChart3}
+        actions={
+          <>
             <Button variant="ghost" onClick={limparFiltros} disabled={loading}>
               Limpar filtros
             </Button>
-            <Button onClick={exportar} disabled={exporting}>
-              {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            <Button onClick={exportar} loading={exporting}>
+              <Download className="h-4 w-4" />
               Exportar XLSX
             </Button>
+          </>
+        }
+      >
+        <div className="grid gap-3 md:grid-cols-4">
+          <div className="space-y-1">
+            <Label htmlFor="f-data-inicio">Data inicio</Label>
+            <Input
+              id="f-data-inicio"
+              type="date"
+              value={filtros.data_inicio}
+              onChange={(e) => setFiltros((p) => ({ ...p, data_inicio: e.target.value }))}
+            />
           </div>
-        </CardContent>
-      </Card>
+          <div className="space-y-1">
+            <Label htmlFor="f-data-fim">Data fim</Label>
+            <Input
+              id="f-data-fim"
+              type="date"
+              value={filtros.data_fim}
+              onChange={(e) => setFiltros((p) => ({ ...p, data_fim: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="f-setor">Setor</Label>
+            <Select
+              value={filtros.setor || "todos"}
+              onValueChange={(value) => setFiltros((p) => ({ ...p, setor: value === "todos" ? "" : value }))}
+            >
+              <SelectTrigger id="f-setor">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                {opcoes.setores.map((setor) => (
+                  <SelectItem key={setor} value={setor}>
+                    {setor}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="f-matricula">Funcionario</Label>
+            <Select
+              value={filtros.matricula || "todos"}
+              onValueChange={(value) =>
+                setFiltros((p) => ({ ...p, matricula: value === "todos" ? "" : value }))
+              }
+            >
+              <SelectTrigger id="f-matricula">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                {opcoes.funcionarios.map((f) => (
+                  <SelectItem key={f.matricula} value={f.matricula}>
+                    {f.nome} ({f.matricula})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </SectionCard>
 
-      {data && (
+      {data ? (
         <>
           <div className="grid gap-3 md:grid-cols-5">
             <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Emprestimos</p><p className="text-2xl font-semibold">{data.kpis.total_emprestimos}</p></CardContent></Card>
@@ -231,168 +225,153 @@ export function DashboardTab() {
             <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground">Funcionarios ativos</p><p className="text-2xl font-semibold">{data.kpis.funcionarios_ativos}</p></CardContent></Card>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            <Card className="h-full">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Solicitacoes ({solicitacoesFiltradas.length})</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="overflow-x-auto min-h-[320px]">
-                  <table className="w-full min-w-[700px] text-base">
-                    <thead>
-                      <tr className="border-b text-left">
-                        <th className="p-2">Data/Hora</th><th className="p-2">Matricula</th><th className="p-2">Nome</th><th className="p-2">Setor</th><th className="p-2">Item</th><th className="p-2">Operador</th><th className="p-2 text-right">Acoes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Array.from({ length: ITENS_POR_PAGINA }).map((_, index) => {
-                        const row = solicitacoesPaginadas[index];
-                        if (!row) {
-                          return (
-                            <tr key={`solicitacao-vazia-${index}`} className="h-[44px] border-b">
-                              <td className="p-2" colSpan={7} />
-                            </tr>
-                          );
-                        }
-                        return (
-                          <tr key={row.id} className="h-[44px] border-b">
-                            <td className="p-2">{new Date(row.timestamp).toLocaleString()}</td>
-                            <td className="p-2 font-mono">{row.matricula}</td>
-                            <td className="p-2">{row.nome_funcionario}</td>
-                            <td className="p-2">{row.setor ?? "-"}</td>
-                            <td className="p-2 font-mono">{row.item_codigo}</td>
-                            <td className="p-2">{row.operador_nome}</td>
-                            <td className="p-2">
-                              <div className="flex justify-end gap-2">
-                                <Button size="icon" variant="ghost" disabled aria-label="Editar" title="Editar">
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button size="icon" variant="ghost" disabled aria-label="Apagar" title="Apagar">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                {totalPaginasSolicitacoes > 1 && (
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs text-muted-foreground">
-                      {inicioSolicitacoes}-{fimSolicitacoes} de {solicitacoesFiltradas.length} . Pagina {paginaSolicitacoes} de {totalPaginasSolicitacoes}
-                    </p>
-                    <div className="flex min-w-[220px] justify-end gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="min-w-24"
-                        onClick={() => setPaginaSolicitacoes((p) => Math.max(1, p - 1))}
-                        disabled={paginaSolicitacoes === 1}
-                      >
-                        Anterior
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="min-w-24"
-                        onClick={() => setPaginaSolicitacoes((p) => Math.min(totalPaginasSolicitacoes, p + 1))}
-                        disabled={paginaSolicitacoes === totalPaginasSolicitacoes}
-                      >
-                        Proxima
-                      </Button>
-                    </div>
-                  </div>
+          <div className="grid gap-4 2xl:grid-cols-2">
+            <SectionCard title={`Solicitacoes (${solicitacoesFiltradas.length})`}>
+              <DataTable
+                columns={[
+                  {
+                    key: "timestamp",
+                    title: "Data/Hora",
+                    align: "center",
+                    width: "20%",
+                    className: "font-mono tabular-nums",
+                  },
+                  {
+                    key: "matricula",
+                    title: "Matricula",
+                    align: "center",
+                    width: "20%",
+                    className: "font-mono tabular-nums",
+                  },
+                  { key: "nome", title: "Nome", align: "center", width: "20%" },
+                  { key: "setor", title: "Setor", align: "center", width: "20%" },
+                  { key: "item", title: "Item", align: "center", width: "20%", className: "font-mono tabular-nums" },
+                ]}
+                rows={solicitacoesPaginadas}
+                getRowKey={(row) => row.id}
+                loading={loading}
+                emptyMessage="Sem solicitacoes para os filtros atuais."
+                minWidthClassName="min-w-0"
+                containerClassName="overflow-x-hidden"
+                emptyCellClassName="py-2.5"
+                renderRow={(row) => (
+                  <>
+                    <td className="max-w-0 truncate" title={new Date(row.timestamp).toLocaleString()}>
+                      {new Date(row.timestamp).toLocaleString()}
+                    </td>
+                    <td className="max-w-0 truncate" title={row.matricula}>{row.matricula}</td>
+                    <td className="max-w-0 truncate" title={row.nome_funcionario}>{row.nome_funcionario}</td>
+                    <td className="max-w-0 truncate" title={row.setor ?? "-"}>{row.setor ?? "-"}</td>
+                    <td className="max-w-0 truncate" title={row.item_codigo}>{row.item_codigo}</td>
+                  </>
                 )}
-              </CardContent>
-            </Card>
+              />
 
-            <Card className="h-full">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Devolucoes ({devolucoesFiltradas.length})</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="overflow-x-auto min-h-[320px]">
-                  <table className="w-full min-w-[700px] text-base">
-                    <thead>
-                      <tr className="border-b text-left">
-                        <th className="p-2">Data/Hora</th><th className="p-2">Matricula</th><th className="p-2">Nome</th><th className="p-2">Setor</th><th className="p-2">Item</th><th className="p-2">Operador</th><th className="p-2 text-right">Acoes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Array.from({ length: ITENS_POR_PAGINA }).map((_, index) => {
-                        const row = devolucoesPaginadas[index];
-                        if (!row) {
-                          return (
-                            <tr key={`devolucao-vazia-${index}`} className="h-[44px] border-b">
-                              <td className="p-2" colSpan={7} />
-                            </tr>
-                          );
-                        }
-                        return (
-                          <tr key={row.id} className="h-[44px] border-b">
-                            <td className="p-2">{new Date(row.timestamp).toLocaleString()}</td>
-                            <td className="p-2 font-mono">{row.matricula}</td>
-                            <td className="p-2">{row.nome_funcionario}</td>
-                            <td className="p-2">{row.setor ?? "-"}</td>
-                            <td className="p-2 font-mono">{row.item_codigo}</td>
-                            <td className="p-2">{row.operador_nome}</td>
-                            <td className="p-2">
-                              <div className="flex justify-end gap-2">
-                                <Button size="icon" variant="ghost" disabled aria-label="Editar" title="Editar">
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button size="icon" variant="ghost" disabled aria-label="Apagar" title="Apagar">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                {totalPaginasDevolucoes > 1 && (
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs text-muted-foreground">
-                      {inicioDevolucoes}-{fimDevolucoes} de {devolucoesFiltradas.length} . Pagina {paginaDevolucoes} de {totalPaginasDevolucoes}
-                    </p>
-                    <div className="flex min-w-[220px] justify-end gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="min-w-24"
-                        onClick={() => setPaginaDevolucoes((p) => Math.max(1, p - 1))}
-                        disabled={paginaDevolucoes === 1}
-                      >
-                        Anterior
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="min-w-24"
-                        onClick={() => setPaginaDevolucoes((p) => Math.min(totalPaginasDevolucoes, p + 1))}
-                        disabled={paginaDevolucoes === totalPaginasDevolucoes}
-                      >
-                        Proxima
-                      </Button>
-                    </div>
+              {totalPaginasSolicitacoes > 1 ? (
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    {inicioSolicitacoes}-{fimSolicitacoes} de {solicitacoesFiltradas.length} . Pagina {paginaSolicitacoes} de {totalPaginasSolicitacoes}
+                  </p>
+                  <div className="flex min-w-[220px] justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="min-w-24"
+                      onClick={() => setPaginaSolicitacoes((p) => Math.max(1, p - 1))}
+                      disabled={paginaSolicitacoes === 1}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="min-w-24"
+                      onClick={() => setPaginaSolicitacoes((p) => Math.min(totalPaginasSolicitacoes, p + 1))}
+                      disabled={paginaSolicitacoes === totalPaginasSolicitacoes}
+                    >
+                      Proxima
+                    </Button>
                   </div>
+                </div>
+              ) : null}
+            </SectionCard>
+
+            <SectionCard title={`Devolucoes (${devolucoesFiltradas.length})`}>
+              <DataTable
+                columns={[
+                  {
+                    key: "timestamp",
+                    title: "Data/Hora",
+                    align: "center",
+                    width: "20%",
+                    className: "font-mono tabular-nums",
+                  },
+                  {
+                    key: "matricula",
+                    title: "Matricula",
+                    align: "center",
+                    width: "20%",
+                    className: "font-mono tabular-nums",
+                  },
+                  { key: "nome", title: "Nome", align: "center", width: "20%" },
+                  { key: "setor", title: "Setor", align: "center", width: "20%" },
+                  { key: "item", title: "Item", align: "center", width: "20%", className: "font-mono tabular-nums" },
+                ]}
+                rows={devolucoesPaginadas}
+                getRowKey={(row) => row.id}
+                loading={loading}
+                emptyMessage="Sem devolucoes para os filtros atuais."
+                minWidthClassName="min-w-0"
+                containerClassName="overflow-x-hidden"
+                emptyCellClassName="py-2.5"
+                renderRow={(row) => (
+                  <>
+                    <td className="max-w-0 truncate" title={new Date(row.timestamp).toLocaleString()}>
+                      {new Date(row.timestamp).toLocaleString()}
+                    </td>
+                    <td className="max-w-0 truncate" title={row.matricula}>{row.matricula}</td>
+                    <td className="max-w-0 truncate" title={row.nome_funcionario}>{row.nome_funcionario}</td>
+                    <td className="max-w-0 truncate" title={row.setor ?? "-"}>{row.setor ?? "-"}</td>
+                    <td className="max-w-0 truncate" title={row.item_codigo}>{row.item_codigo}</td>
+                  </>
                 )}
-              </CardContent>
-            </Card>
+              />
+
+              {totalPaginasDevolucoes > 1 ? (
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground">
+                    {inicioDevolucoes}-{fimDevolucoes} de {devolucoesFiltradas.length} . Pagina {paginaDevolucoes} de {totalPaginasDevolucoes}
+                  </p>
+                  <div className="flex min-w-[220px] justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="min-w-24"
+                      onClick={() => setPaginaDevolucoes((p) => Math.max(1, p - 1))}
+                      disabled={paginaDevolucoes === 1}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="min-w-24"
+                      onClick={() => setPaginaDevolucoes((p) => Math.min(totalPaginasDevolucoes, p + 1))}
+                      disabled={paginaDevolucoes === totalPaginasDevolucoes}
+                    >
+                      Proxima
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </SectionCard>
           </div>
         </>
-      )}
-
+      ) : null}
     </div>
   );
 }
-
-

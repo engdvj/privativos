@@ -1,25 +1,35 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/toast";
-import { Loader2, Pencil, RefreshCw, Save, Trash2 } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
+import { DataTable } from "@/components/ui/data-table";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { FormField } from "@/components/ui/form-field";
+import { SectionCard } from "@/components/ui/section-card";
+import { StatusPill } from "@/components/ui/status-pill";
+import { TableActions } from "@/components/ui/table-actions";
+import { useToast } from "@/components/ui/use-toast";
+import { Pencil, Save, Settings2 } from "lucide-react";
 import type { ConfiguracaoRow } from "../types";
+
+const MAX_KITS_KEY = "MAX_KITS_POR_FUNCIONARIO";
+
 export function ConfiguracoesTab() {
   const [rows, setRows] = useState<ConfiguracaoRow[]>([]);
-  const [maxKits, setMaxKits] = useState("2");
+  const [busca, setBusca] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [openEditModal, setOpenEditModal] = useState(false);
+  const [maxKits, setMaxKits] = useState("2");
   const { success, error } = useToast();
 
-  async function carregar() {
+  const carregar = useCallback(async () => {
     setLoading(true);
     try {
       const data = await api.get<ConfiguracaoRow[]>("/admin/configuracoes");
       setRows(data);
-      const atual = data.find((row) => row.chave === "MAX_KITS_POR_FUNCIONARIO");
+      const atual = data.find((row) => row.chave === MAX_KITS_KEY);
       if (atual?.valor) {
         setMaxKits(atual.valor);
       }
@@ -28,16 +38,24 @@ export function ConfiguracoesTab() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [error]);
 
   useEffect(() => {
-    carregar();
-  }, []);
+    void carregar();
+  }, [carregar]);
+
+  const rowsFiltradas = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (!termo) return true;
+      return [row.chave, row.valor, row.atualizadoPor ?? ""].join(" ").toLowerCase().includes(termo);
+    });
+  }, [rows, busca]);
 
   async function salvarMaxKits() {
     const valor = Number(maxKits);
     if (!Number.isInteger(valor) || valor <= 0) {
-      error("MAX_KITS_POR_FUNCIONARIO deve ser inteiro positivo");
+      error(`${MAX_KITS_KEY} deve ser inteiro positivo`);
       return;
     }
 
@@ -47,6 +65,7 @@ export function ConfiguracoesTab() {
         max_kits_por_funcionario: valor,
       });
       success("Configuracao atualizada");
+      setOpenEditModal(false);
       await carregar();
     } catch (err) {
       error(err instanceof Error ? err.message : "Erro ao salvar configuracao");
@@ -55,78 +74,107 @@ export function ConfiguracoesTab() {
     }
   }
 
+  function abrirEdicao(row: ConfiguracaoRow) {
+    if (row.chave !== MAX_KITS_KEY) return;
+    setMaxKits(row.valor || "1");
+    setOpenEditModal(true);
+  }
+
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">MAX_KITS_POR_FUNCIONARIO</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="max-kits">Valor</Label>
-              <Input
-                id="max-kits"
-                type="number"
-                min={1}
-                value={maxKits}
-                onChange={(e) => setMaxKits(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={carregar} disabled={loading}>
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              Recarregar
-            </Button>
-            <Button onClick={salvarMaxKits} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+      <SectionCard
+        title="Configuracoes"
+        icon={Settings2}
+        description={`Total filtrado: ${rowsFiltradas.length}`}
+        actions={
+          <FilterBar>
+            <Input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar chave, valor ou operador"
+              className="h-9 w-full sm:w-56"
+            />
+          </FilterBar>
+        }
+      >
+        <DataTable
+          columns={[
+            { key: "chave", title: "Chave", width: "30%", className: "font-mono font-semibold" },
+            { key: "valor", title: "Valor", align: "center", width: "10%", className: "font-mono tabular-nums" },
+            { key: "tipo", title: "Tipo", align: "center", width: "14%" },
+            { key: "atualizado-por", title: "Atualizado por", width: "16%" },
+            { key: "atualizado-em", title: "Atualizado em", width: "18%", className: "font-mono tabular-nums" },
+            { key: "acoes", title: "Acoes", align: "center", width: "12%" },
+          ]}
+          rows={rowsFiltradas}
+          getRowKey={(row) => row.chave}
+          loading={loading}
+          emptyMessage="Nenhuma configuracao encontrada."
+          minWidthClassName="min-w-[980px]"
+          renderRow={(row) => {
+            const isEditavel = row.chave === MAX_KITS_KEY;
+
+            return (
+              <>
+                <td>{row.chave}</td>
+                <td>{row.valor}</td>
+                <td>
+                  <div className="flex justify-center">
+                    <StatusPill tone={isEditavel ? "success" : "neutral"}>
+                      {isEditavel ? "editavel" : "somente leitura"}
+                    </StatusPill>
+                  </div>
+                </td>
+                <td>{row.atualizadoPor ?? "-"}</td>
+                <td>{row.atualizadoEm ? new Date(row.atualizadoEm).toLocaleString() : "-"}</td>
+                <td>
+                  <TableActions className="justify-center">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => abrirEdicao(row)}
+                      disabled={!isEditavel}
+                      aria-label={`Editar configuracao ${row.chave}`}
+                      title={isEditavel ? "Editar" : "Somente leitura"}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </TableActions>
+                </td>
+              </>
+            );
+          }}
+        />
+      </SectionCard>
+
+      <Modal
+        open={openEditModal}
+        onClose={() => setOpenEditModal(false)}
+        title={`Editar Configuracao: ${MAX_KITS_KEY}`}
+        maxWidthClassName="max-w-xl"
+      >
+        <div className="space-y-3">
+          <FormField
+            label="Valor"
+            htmlFor="max-kits"
+            helperText="Informe um inteiro positivo para limitar kits por funcionario."
+          >
+            <Input
+              id="max-kits"
+              type="number"
+              min={1}
+              value={maxKits}
+              onChange={(e) => setMaxKits(e.target.value)}
+            />
+          </FormField>
+          <div className="flex justify-end">
+            <Button onClick={salvarMaxKits} loading={saving}>
+              <Save className="h-4 w-4" />
               Salvar
             </Button>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Outras Configuracoes</CardTitle>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <table className="w-full min-w-[700px] text-sm">
-            <thead>
-              <tr className="border-b text-left">
-                <th className="p-2">Chave</th>
-                <th className="p-2">Valor</th>
-                <th className="p-2">Atualizado por</th>
-                <th className="p-2">Atualizado em</th>
-                <th className="p-2 text-right">Acoes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.chave} className="border-b">
-                  <td className="p-2 font-mono">{row.chave}</td>
-                  <td className="p-2">{row.valor}</td>
-                  <td className="p-2">{row.atualizadoPor ?? "-"}</td>
-                  <td className="p-2">{row.atualizadoEm ? new Date(row.atualizadoEm).toLocaleString() : "-"}</td>
-                  <td className="p-2">
-                    <div className="flex justify-end gap-2">
-                      <Button size="icon" variant="ghost" disabled aria-label="Editar" title="Editar">
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button size="icon" variant="ghost" disabled aria-label="Apagar" title="Apagar">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+        </div>
+      </Modal>
     </div>
   );
 }
-
-

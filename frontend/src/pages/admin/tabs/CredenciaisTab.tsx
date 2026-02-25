@@ -1,16 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
-import { useToast } from "@/components/ui/toast";
-import { KeyRound, Loader2, Pencil, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DataTable } from "@/components/ui/data-table";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { FormField } from "@/components/ui/form-field";
+import { SectionCard } from "@/components/ui/section-card";
+import { StatusPill } from "@/components/ui/status-pill";
+import { TableActions } from "@/components/ui/table-actions";
+import { useToast } from "@/components/ui/use-toast";
+import { KeyRound, Pencil, Plus, Save, Trash2 } from "lucide-react";
 import type { CredencialDraft, CredencialRow, PerfilAcesso } from "../types";
+
 export function CredenciaisTab() {
   const [rows, setRows] = useState<CredencialRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -21,6 +26,7 @@ export function CredenciaisTab() {
   const [busca, setBusca] = useState("");
   const [filtroPerfil, setFiltroPerfil] = useState<"todos" | PerfilAcesso>("todos");
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "inativo">("todos");
+  const [credencialParaExcluir, setCredencialParaExcluir] = useState<CredencialRow | null>(null);
   const [edicao, setEdicao] = useState<CredencialDraft>({
     nome_completo: "",
     perfil: "setor",
@@ -37,7 +43,7 @@ export function CredenciaisTab() {
     senha: "",
   });
 
-  async function carregar() {
+  const carregar = useCallback(async () => {
     setLoading(true);
     try {
       const data = await api.get<CredencialRow[]>("/admin/credenciais");
@@ -47,11 +53,11 @@ export function CredenciaisTab() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [error]);
 
   useEffect(() => {
-    carregar();
-  }, []);
+    void carregar();
+  }, [carregar]);
 
   const rowsFiltradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -156,9 +162,6 @@ export function CredenciaisTab() {
   }
 
   async function apagar(row: CredencialRow) {
-    const ok = window.confirm(`Apagar credencial ${row.usuario}?`);
-    if (!ok) return;
-
     try {
       await api.del(`/admin/credenciais/${row.usuario}`);
       success(`Credencial ${row.usuario} apagada`);
@@ -170,133 +173,119 @@ export function CredenciaisTab() {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center justify-between text-lg">
-            <span className="flex items-center gap-2"><KeyRound className="h-5 w-5 text-primary" />Credenciais</span>
-            <div className="flex items-center gap-2">
-              <Input
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar usuario, nome ou perfil"
-                className="h-8 w-56"
-              />
-              <Select value={filtroPerfil} onValueChange={(value) => setFiltroPerfil(value as "todos" | PerfilAcesso)}>
-                <SelectTrigger className="h-8 w-40">
-                  <SelectValue placeholder="Perfil" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos perfis</SelectItem>
-                  <SelectItem value="setor">setor</SelectItem>
-                  <SelectItem value="admin">admin</SelectItem>
-                  <SelectItem value="superadmin">superadmin</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={filtroStatus} onValueChange={(value) => setFiltroStatus(value as "todos" | "ativo" | "inativo")}>
-                <SelectTrigger className="h-8 w-36">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos status</SelectItem>
-                  <SelectItem value="ativo">Ativo</SelectItem>
-                  <SelectItem value="inativo">Inativo</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button size="icon" onClick={() => setOpenCreateModal(true)} aria-label="Nova credencial">
-                <Plus className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="sm" onClick={carregar} disabled={loading}>
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                Atualizar
-              </Button>
-            </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {rowsFiltradas.length === 0 && !loading ? (
-            <p className="text-sm text-muted-foreground">Nenhuma credencial encontrada.</p>
-          ) : (
-            <div className="overflow-x-auto px-2">
-              <table className="w-full min-w-[920px] table-auto text-sm">
-                <thead>
-                  <tr className="border-b text-left">
-                    <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Usuario</th>
-                    <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome completo</th>
-                    <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Perfil</th>
-                    <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</th>
-                    <th scope="col" className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Acoes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rowsFiltradas.map((row) => (
-                    <tr key={row.id} className="border-b transition-colors odd:bg-muted/10 hover:bg-muted/40">
-                      <td className="px-4 py-3 font-mono font-semibold">{row.usuario}</td>
-                      <td className="px-4 py-3">{row.nomeCompleto}</td>
-                      <td className="px-4 py-3">
-                        <Badge variant="outline">{row.perfil}</Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge
-                          className={row.ativo ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}
-                          variant="outline"
-                        >
-                          {row.ativo ? "ativo" : "inativo"}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => abrirEdicao(row)}
-                            aria-label={`Editar credencial ${row.usuario}`}
-                            title="Editar"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => {
-                              void apagar(row);
-                            }}
-                            className="text-red-700 hover:bg-red-50 hover:text-red-800"
-                            aria-label={`Apagar credencial ${row.usuario}`}
-                            title="Apagar"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      <SectionCard
+        title="Credenciais"
+        icon={KeyRound}
+        description={`Total filtrado: ${rowsFiltradas.length}`}
+        actions={
+          <FilterBar>
+            <Input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar usuario, nome ou perfil"
+              className="h-9 w-full sm:w-56"
+            />
+            <Select value={filtroPerfil} onValueChange={(value) => setFiltroPerfil(value as "todos" | PerfilAcesso)}>
+              <SelectTrigger className="h-9 w-full sm:w-40">
+                <SelectValue placeholder="Perfil" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos perfis</SelectItem>
+                <SelectItem value="setor">setor</SelectItem>
+                <SelectItem value="admin">admin</SelectItem>
+                <SelectItem value="superadmin">superadmin</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filtroStatus} onValueChange={(value) => setFiltroStatus(value as "todos" | "ativo" | "inativo")}> 
+              <SelectTrigger className="h-9 w-full sm:w-36">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos status</SelectItem>
+                <SelectItem value="ativo">Ativo</SelectItem>
+                <SelectItem value="inativo">Inativo</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button size="icon" onClick={() => setOpenCreateModal(true)} aria-label="Nova credencial" title="Nova credencial">
+              <Plus className="h-4 w-4" />
+            </Button>
+          </FilterBar>
+        }
+      >
+        <DataTable
+          columns={[
+            { key: "usuario", title: "Usuario", width: "20%" },
+            { key: "nome", title: "Nome completo", width: "42%" },
+            { key: "perfil", title: "Perfil", align: "center", width: "14%" },
+            { key: "status", title: "Status", align: "center", width: "12%" },
+            { key: "acoes", title: "Acoes", align: "center", width: "12%" },
+          ]}
+          rows={rowsFiltradas}
+          getRowKey={(row) => row.id}
+          loading={loading}
+          emptyMessage="Nenhuma credencial encontrada."
+          minWidthClassName="min-w-[920px]"
+          renderRow={(row) => (
+            <>
+              <td className="font-mono font-semibold">{row.usuario}</td>
+              <td>{row.nomeCompleto}</td>
+              <td>
+                <div className="flex justify-center">
+                  <StatusPill tone="info">{row.perfil}</StatusPill>
+                </div>
+              </td>
+              <td>
+                <div className="flex justify-center">
+                  <StatusPill tone={row.ativo ? "success" : "danger"}>
+                    {row.ativo ? "ativo" : "inativo"}
+                  </StatusPill>
+                </div>
+              </td>
+              <td>
+                <TableActions className="justify-center">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => abrirEdicao(row)}
+                    aria-label={`Editar credencial ${row.usuario}`}
+                    title="Editar"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setCredencialParaExcluir(row)}
+                    className="text-destructive hover:bg-destructive/12 hover:text-destructive"
+                    aria-label={`Apagar credencial ${row.usuario}`}
+                    title="Apagar"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TableActions>
+              </td>
+            </>
           )}
-        </CardContent>
-      </Card>
+        />
+      </SectionCard>
 
-      <Modal open={openCreateModal} onClose={() => setOpenCreateModal(false)} title="Nova Credencial">
+      <Modal open={openCreateModal} onClose={() => setOpenCreateModal(false)} title="Nova Credencial" maxWidthClassName="max-w-3xl">
         <div className="grid gap-3 md:grid-cols-2">
-          <div className="space-y-1">
-            <Label htmlFor="novo-usuario">Usuario</Label>
+          <FormField label="Usuario" htmlFor="novo-usuario">
             <Input
               id="novo-usuario"
               value={novo.usuario}
               onChange={(e) => setNovo((p) => ({ ...p, usuario: e.target.value }))}
             />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="novo-nome">Nome completo</Label>
+          </FormField>
+          <FormField label="Nome completo" htmlFor="novo-nome">
             <Input
               id="novo-nome"
               value={novo.nome_completo}
               onChange={(e) => setNovo((p) => ({ ...p, nome_completo: e.target.value }))}
             />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="novo-perfil">Perfil</Label>
+          </FormField>
+          <FormField label="Perfil" htmlFor="novo-perfil">
             <Select
               value={novo.perfil}
               onValueChange={(value) => setNovo((p) => ({ ...p, perfil: value as PerfilAcesso }))}
@@ -310,20 +299,19 @@ export function CredenciaisTab() {
                 <SelectItem value="superadmin">superadmin</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="nova-senha">Senha</Label>
+          </FormField>
+          <FormField label="Senha" htmlFor="nova-senha">
             <Input
               id="nova-senha"
               type="password"
               value={novo.senha}
               onChange={(e) => setNovo((p) => ({ ...p, senha: e.target.value }))}
             />
-          </div>
+          </FormField>
         </div>
         <div className="mt-4 flex justify-end">
-          <Button onClick={criar} disabled={creating}>
-            {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          <Button onClick={criar} loading={creating}>
+            <Plus className="h-4 w-4" />
             Criar
           </Button>
         </div>
@@ -333,18 +321,17 @@ export function CredenciaisTab() {
         open={Boolean(editandoUsuario)}
         onClose={fecharEdicao}
         title={editandoUsuario ? `Editar Credencial: ${editandoUsuario}` : "Editar Credencial"}
+        maxWidthClassName="max-w-3xl"
       >
         <div className="grid gap-3 md:grid-cols-2">
-          <div className="space-y-1 md:col-span-2">
-            <Label htmlFor="edicao-nome">Nome completo</Label>
+          <FormField label="Nome completo" htmlFor="edicao-nome" className="md:col-span-2">
             <Input
               id="edicao-nome"
               value={edicao.nome_completo}
               onChange={(e) => setEdicao((p) => ({ ...p, nome_completo: e.target.value }))}
             />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="edicao-perfil">Perfil</Label>
+          </FormField>
+          <FormField label="Perfil" htmlFor="edicao-perfil">
             <Select
               value={edicao.perfil}
               onValueChange={(value) => setEdicao((p) => ({ ...p, perfil: value as PerfilAcesso }))}
@@ -358,18 +345,17 @@ export function CredenciaisTab() {
                 <SelectItem value="superadmin">superadmin</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="edicao-senha">Nova senha (opcional)</Label>
+          </FormField>
+          <FormField label="Nova senha (opcional)" htmlFor="edicao-senha">
             <Input
               id="edicao-senha"
               type="password"
               value={edicao.senha}
               onChange={(e) => setEdicao((p) => ({ ...p, senha: e.target.value }))}
             />
-          </div>
+          </FormField>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+        <div className="mt-3 flex items-center gap-4 text-sm text-muted-foreground">
           <label className="flex items-center gap-2">
             <Checkbox
               checked={edicao.ativo}
@@ -379,18 +365,29 @@ export function CredenciaisTab() {
           </label>
         </div>
         <div className="mt-4 flex justify-end">
-          <Button onClick={salvarEdicao} disabled={savingUsuario === editandoUsuario}>
-            {savingUsuario === editandoUsuario ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
+          <Button onClick={salvarEdicao} loading={savingUsuario === editandoUsuario}>
+            <Save className="h-4 w-4" />
             Salvar
           </Button>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={Boolean(credencialParaExcluir)}
+        onClose={() => setCredencialParaExcluir(null)}
+        title="Apagar credencial"
+        description={
+          credencialParaExcluir
+            ? `Tem certeza que deseja apagar a credencial ${credencialParaExcluir.usuario}?`
+            : undefined
+        }
+        confirmLabel="Apagar"
+        onConfirm={async () => {
+          if (!credencialParaExcluir) return;
+          await apagar(credencialParaExcluir);
+          setCredencialParaExcluir(null);
+        }}
+      />
     </div>
   );
 }
-
-

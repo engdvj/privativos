@@ -1,81 +1,86 @@
-import { useEffect, useState } from "react";
-import { Clock3, Mail, Moon, Phone, Sun } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Clock3, Mail, Phone } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 
-export function Footer() {
+interface FooterProps {
+  leading?: ReactNode;
+}
+
+const SUPPORT_EMAIL = "chvcti@saude.ba.gov.br";
+const SUPPORT_PHONE_DISPLAY = "(77) 3229-2420";
+const SUPPORT_PHONE_LINK = "+557732292420";
+const SUPPORT_HOURS = "Segunda a sexta, 9h as 18h";
+
+export function Footer({ leading }: FooterProps) {
   const [contactOpen, setContactOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme");
-    const shouldUseDark = savedTheme === "dark";
-    document.documentElement.classList.toggle("dark", shouldUseDark);
-    setDarkMode(shouldUseDark);
-  }, []);
-
-  function toggleTheme() {
-    const nextDarkMode = !darkMode;
-    setDarkMode(nextDarkMode);
-    document.documentElement.classList.toggle("dark", nextDarkMode);
-    localStorage.setItem("theme", nextDarkMode ? "dark" : "light");
-  }
+  const currentYear = new Date().getFullYear();
 
   return (
     <>
-      <footer className="border-t border-slate-200/80 bg-white/85 px-4 py-4 backdrop-blur-sm dark:border-slate-700/80 dark:bg-slate-900/85 sm:px-6">
-        <div className="mx-auto flex w-full max-w-[1400px] flex-col items-start justify-between gap-3 text-xs tracking-[0.18em] text-slate-600 dark:text-slate-300 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-3">
-            <span className="font-semibold uppercase text-slate-800 dark:text-slate-100">Controle de Privativos</span>
-            <span className="text-slate-300 dark:text-slate-600">|</span>
+      <footer className="border-t border-border/60 bg-surface-2/80 px-4 py-4 backdrop-blur-md sm:px-6">
+        <div className="mx-auto w-full max-w-7xl">
+          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
+            <div className="justify-self-start">
+              {leading ? <div className="flex items-center">{leading}</div> : <span className="block h-8 w-8" aria-hidden />}
+            </div>
+
+            <p
+              className="truncate text-center text-xs text-muted-foreground"
+              title={`Controle de Privativos (c) ${currentYear} Secretaria da Saude da Bahia. Todos os direitos reservados.`}
+            >
+              Controle de Privativos (c) {currentYear} Secretaria da Saude da Bahia.
+            </p>
+
             <button
               type="button"
-              className="uppercase transition-colors hover:text-slate-900 dark:hover:text-white"
+              className="justify-self-end rounded-full border border-border/70 bg-background/55 px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary/45 hover:text-foreground"
               onClick={() => setContactOpen(true)}
             >
               Contato
             </button>
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 px-3 py-1 uppercase tracking-[0.18em] text-slate-700 transition-colors hover:border-slate-500 hover:text-slate-900 dark:border-slate-600 dark:text-slate-200 dark:hover:border-slate-400 dark:hover:text-white"
-            >
-              {darkMode ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-              {darkMode ? "Modo Claro" : "Modo Escuro"}
-            </button>
           </div>
-          <p className="uppercase">(c) 2026 todos os direitos reservados.</p>
         </div>
       </footer>
 
-      <Modal open={contactOpen} onClose={() => setContactOpen(false)} title="CONTATO">
-        <div className="space-y-4">
-          <p className="text-lg text-slate-600 dark:text-slate-300">
-            Estamos aqui para ajudar. Escolha o canal de sua preferencia.
-          </p>
-
-          <div className="space-y-3">
-            <div className="flex items-start gap-3 rounded-md border border-slate-200 p-4 dark:border-slate-700">
-              <Mail className="mt-0.5 h-5 w-5 text-slate-700 dark:text-slate-200" />
-              <div>
-                <p className="font-medium">Email</p>
-                <p className="text-slate-600 dark:text-slate-300">chvcti@saude.ba.gov.br</p>
-              </div>
+      <Modal
+        open={contactOpen}
+        onClose={() => setContactOpen(false)}
+        title="Contato"
+        description="Estamos aqui para ajudar. Escolha o canal de sua preferencia."
+        maxWidthClassName="max-w-2xl"
+      >
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-surface-1 px-4 py-3">
+            <Mail className="mt-0.5 h-5 w-5 text-primary" />
+            <div>
+              <p className="font-medium">Email</p>
+              <a
+                href={`mailto:${SUPPORT_EMAIL}`}
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {SUPPORT_EMAIL}
+              </a>
             </div>
+          </div>
 
-            <div className="flex items-start gap-3 rounded-md border border-slate-200 p-4 dark:border-slate-700">
-              <Phone className="mt-0.5 h-5 w-5 text-slate-700 dark:text-slate-200" />
-              <div>
-                <p className="font-medium">Telefone</p>
-                <p className="text-slate-600 dark:text-slate-300">(77) 3229-2420</p>
-              </div>
+          <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-surface-1 px-4 py-3">
+            <Phone className="mt-0.5 h-5 w-5 text-primary" />
+            <div>
+              <p className="font-medium">Telefone</p>
+              <a
+                href={`tel:${SUPPORT_PHONE_LINK}`}
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {SUPPORT_PHONE_DISPLAY}
+              </a>
             </div>
+          </div>
 
-            <div className="flex items-start gap-3 rounded-md border border-slate-200 p-4 dark:border-slate-700">
-              <Clock3 className="mt-0.5 h-5 w-5 text-slate-700 dark:text-slate-200" />
-              <div>
-                <p className="font-medium">Horario de Atendimento</p>
-                <p className="text-slate-600 dark:text-slate-300">Segunda a Sexta, 9h as 18h</p>
-              </div>
+          <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-surface-1 px-4 py-3">
+            <Clock3 className="mt-0.5 h-5 w-5 text-primary" />
+            <div>
+              <p className="font-medium">Horario de atendimento</p>
+              <p className="text-muted-foreground">{SUPPORT_HOURS}</p>
             </div>
           </div>
         </div>

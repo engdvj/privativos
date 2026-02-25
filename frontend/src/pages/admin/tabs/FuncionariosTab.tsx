@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
-import { useToast } from "@/components/ui/toast";
-import { Loader2, Pencil, Plus, RefreshCw, Trash2, Users } from "lucide-react";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DataTable } from "@/components/ui/data-table";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { FormField } from "@/components/ui/form-field";
+import { SectionCard } from "@/components/ui/section-card";
+import { StatusPill } from "@/components/ui/status-pill";
+import { TableActions } from "@/components/ui/table-actions";
+import { useToast } from "@/components/ui/use-toast";
+import { Pencil, Plus, Trash2, Users } from "lucide-react";
 import { useGlobalDetail } from "@/components/global-detail/GlobalDetailProvider";
 import type { CatalogoRow, FuncionarioRow } from "../types";
 
@@ -23,6 +27,7 @@ export function FuncionariosTab() {
   const [filtroSetor, setFiltroSetor] = useState("todos");
   const [filtroFuncao, setFiltroFuncao] = useState("todos");
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "inativo">("todos");
+  const [funcionarioParaExcluir, setFuncionarioParaExcluir] = useState<FuncionarioRow | null>(null);
   const { success, error } = useToast();
   const { openFuncionario } = useGlobalDetail();
 
@@ -62,6 +67,7 @@ export function FuncionariosTab() {
         void carregar();
       }
     };
+
     window.addEventListener("global-detail-updated", onUpdated);
     return () => window.removeEventListener("global-detail-updated", onUpdated);
   }, [carregar]);
@@ -109,9 +115,6 @@ export function FuncionariosTab() {
   }
 
   async function apagar(row: FuncionarioRow) {
-    const ok = window.confirm(`Apagar funcionario ${row.matricula} (${row.nome})?`);
-    if (!ok) return;
-
     try {
       await api.del(`/admin/funcionarios/${row.matricula}`);
       success(`Funcionario ${row.matricula} apagado`);
@@ -123,150 +126,132 @@ export function FuncionariosTab() {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center justify-between text-lg">
-            <span className="flex items-center gap-2"><Users className="h-5 w-5 text-primary" />Funcionarios</span>
-            <div className="flex items-center gap-2">
-              <Input
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar matricula, nome, setor ou funcao"
-                className="h-8 w-56"
-              />
-              <Select value={filtroSetor} onValueChange={setFiltroSetor}>
-                <SelectTrigger className="h-8 w-40">
-                  <SelectValue placeholder="Setor" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos setores</SelectItem>
-                  {setores.map((setor) => (
-                    <SelectItem key={setor.id} value={setor.nome}>
-                      {setor.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={filtroFuncao} onValueChange={setFiltroFuncao}>
-                <SelectTrigger className="h-8 w-40">
-                  <SelectValue placeholder="Funcao" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todas funcoes</SelectItem>
-                  {funcoes.map((funcao) => (
-                    <SelectItem key={funcao.id} value={funcao.nome}>
-                      {funcao.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={filtroStatus} onValueChange={(value) => setFiltroStatus(value as "todos" | "ativo" | "inativo")}>
-                <SelectTrigger className="h-8 w-36">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos status</SelectItem>
-                  <SelectItem value="ativo">Ativo</SelectItem>
-                  <SelectItem value="inativo">Inativo</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button size="icon" onClick={() => setOpenCreateModal(true)} aria-label="Novo funcionario">
-                <Plus className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="sm" onClick={carregar} disabled={loading}>
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                Atualizar
-              </Button>
-            </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {rowsFiltradas.length === 0 && !loading ? (
-            <p className="text-sm text-muted-foreground">Nenhum funcionario encontrado.</p>
-          ) : (
-            <div className="overflow-x-auto px-2">
-              <table className="w-full min-w-[980px] table-auto text-sm">
-                <thead>
-                  <tr className="border-b text-left">
-                    <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Matricula</th>
-                    <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nome</th>
-                    <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Setor</th>
-                    <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Funcao</th>
-                    <th scope="col" className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</th>
-                    <th scope="col" className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground">Acoes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rowsFiltradas.map((row) => (
-                    <tr key={row.matricula} className="border-b transition-colors odd:bg-muted/10 hover:bg-muted/40">
-                      <td className="px-4 py-3 font-mono font-semibold">{row.matricula}</td>
-                      <td className="px-4 py-3">{row.nome}</td>
-                      <td className="px-4 py-3">{row.setor}</td>
-                      <td className="px-4 py-3">{row.funcao}</td>
-                      <td className="px-4 py-3">
-                        <Badge
-                          className={row.statusAtivo ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}
-                          variant="outline"
-                        >
-                          {row.statusAtivo ? "ativo" : "inativo"}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => {
-                              void openFuncionario(row.matricula);
-                            }}
-                            aria-label={`Editar funcionario ${row.matricula}`}
-                            title="Editar"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => {
-                              void apagar(row);
-                            }}
-                            className="text-red-700 hover:bg-red-50 hover:text-red-800"
-                            aria-label={`Apagar funcionario ${row.matricula}`}
-                            title="Apagar"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+      <SectionCard
+        title="Funcionarios"
+        icon={Users}
+        description={`Total filtrado: ${rowsFiltradas.length}`}
+        actions={
+          <FilterBar>
+            <Input
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar matricula, nome, setor ou funcao"
+              className="h-9 w-full sm:w-56"
+            />
+            <Select value={filtroSetor} onValueChange={setFiltroSetor}>
+              <SelectTrigger className="h-9 w-full sm:w-40">
+                <SelectValue placeholder="Setor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos setores</SelectItem>
+                {setores.map((setor) => (
+                  <SelectItem key={setor.id} value={setor.nome}>
+                    {setor.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filtroFuncao} onValueChange={setFiltroFuncao}>
+              <SelectTrigger className="h-9 w-full sm:w-40">
+                <SelectValue placeholder="Funcao" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas funcoes</SelectItem>
+                {funcoes.map((funcao) => (
+                  <SelectItem key={funcao.id} value={funcao.nome}>
+                    {funcao.nome}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filtroStatus} onValueChange={(value) => setFiltroStatus(value as "todos" | "ativo" | "inativo")}> 
+              <SelectTrigger className="h-9 w-full sm:w-36">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos status</SelectItem>
+                <SelectItem value="ativo">Ativo</SelectItem>
+                <SelectItem value="inativo">Inativo</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button size="icon" onClick={() => setOpenCreateModal(true)} aria-label="Novo funcionario" title="Novo funcionario">
+              <Plus className="h-4 w-4" />
+            </Button>
+          </FilterBar>
+        }
+      >
+        <DataTable
+          columns={[
+            { key: "matricula", title: "Matricula", width: "14%" },
+            { key: "nome", title: "Nome", width: "30%" },
+            { key: "setor", title: "Setor", width: "18%" },
+            { key: "funcao", title: "Funcao", width: "18%" },
+            { key: "status", title: "Status", align: "center", width: "10%" },
+            { key: "acoes", title: "Acoes", align: "center", width: "10%" },
+          ]}
+          rows={rowsFiltradas}
+          getRowKey={(row) => row.matricula}
+          loading={loading}
+          emptyMessage="Nenhum funcionario encontrado."
+          minWidthClassName="min-w-[980px]"
+          renderRow={(row) => (
+            <>
+              <td className="font-mono font-semibold">{row.matricula}</td>
+              <td>{row.nome}</td>
+              <td>{row.setor}</td>
+              <td>{row.funcao}</td>
+              <td>
+                <StatusPill tone={row.statusAtivo ? "success" : "danger"}>
+                  {row.statusAtivo ? "ativo" : "inativo"}
+                </StatusPill>
+              </td>
+              <td>
+                <TableActions className="justify-center">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => {
+                      void openFuncionario(row.matricula);
+                    }}
+                    aria-label={`Editar funcionario ${row.matricula}`}
+                    title="Editar"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setFuncionarioParaExcluir(row)}
+                    className="text-destructive hover:bg-destructive/12 hover:text-destructive"
+                    aria-label={`Apagar funcionario ${row.matricula}`}
+                    title="Apagar"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TableActions>
+              </td>
+            </>
           )}
-        </CardContent>
-      </Card>
+        />
+      </SectionCard>
 
-      <Modal open={openCreateModal} onClose={() => setOpenCreateModal(false)} title="Novo Funcionario">
+      <Modal open={openCreateModal} onClose={() => setOpenCreateModal(false)} title="Novo Funcionario" maxWidthClassName="max-w-4xl">
         <div className="grid gap-3 md:grid-cols-2">
-          <div className="space-y-1">
-            <Label htmlFor="matricula">Matricula</Label>
+          <FormField label="Matricula" htmlFor="matricula">
             <Input
               id="matricula"
               value={novo.matricula}
               onChange={(e) => setNovo((p) => ({ ...p, matricula: e.target.value }))}
             />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="nome">Nome</Label>
+          </FormField>
+          <FormField label="Nome" htmlFor="nome">
             <Input
               id="nome"
               value={novo.nome}
               onChange={(e) => setNovo((p) => ({ ...p, nome: e.target.value }))}
             />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="setor">Setor</Label>
+          </FormField>
+          <FormField label="Setor" htmlFor="setor">
             <Select value={novo.setor} onValueChange={(value) => setNovo((p) => ({ ...p, setor: value }))}>
               <SelectTrigger id="setor">
                 <SelectValue placeholder="Selecione um setor" />
@@ -279,9 +264,8 @@ export function FuncionariosTab() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="funcao">Funcao</Label>
+          </FormField>
+          <FormField label="Funcao" htmlFor="funcao">
             <Select value={novo.funcao} onValueChange={(value) => setNovo((p) => ({ ...p, funcao: value }))}>
               <SelectTrigger id="funcao">
                 <SelectValue placeholder="Selecione uma funcao" />
@@ -294,15 +278,32 @@ export function FuncionariosTab() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </FormField>
         </div>
         <div className="mt-4 flex justify-end">
-          <Button onClick={criar} disabled={creating}>
-            {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          <Button onClick={criar} loading={creating}>
+            <Plus className="h-4 w-4" />
             Criar
           </Button>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={Boolean(funcionarioParaExcluir)}
+        onClose={() => setFuncionarioParaExcluir(null)}
+        title="Apagar funcionario"
+        description={
+          funcionarioParaExcluir
+            ? `Tem certeza que deseja apagar o funcionario ${funcionarioParaExcluir.matricula} (${funcionarioParaExcluir.nome})?`
+            : undefined
+        }
+        confirmLabel="Apagar"
+        onConfirm={async () => {
+          if (!funcionarioParaExcluir) return;
+          await apagar(funcionarioParaExcluir);
+          setFuncionarioParaExcluir(null);
+        }}
+      />
     </div>
   );
 }

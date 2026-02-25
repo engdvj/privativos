@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/components/ui/toast";
+import { useToast } from "@/components/ui/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -577,8 +577,8 @@ export function SetorPage() {
   return (
     <div className="flex min-h-dvh flex-col bg-background">
       <Header />
-      <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
-        <Card className="border-border/80 bg-white/86 dark:bg-slate-900/55">
+      <main className="mx-auto w-full max-w-4xl flex-1 p-4 sm:p-6">
+        <Card className="border-border/70 bg-surface-2/84">
           <CardHeader>
             <CardTitle className="text-xl">Operacoes</CardTitle>
           </CardHeader>

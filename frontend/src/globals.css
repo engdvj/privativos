@@ -3,75 +3,115 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --color-background: hsl(225 46% 97%);
-  --color-foreground: hsl(230 36% 16%);
-  --color-card: hsl(0 0% 100% / 0.92);
-  --color-card-foreground: hsl(238 47% 13%);
+  --font-sans: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+  --font-display: "Manrope", "Trebuchet MS", "Segoe UI", sans-serif;
+
+  --color-background: hsl(204 38% 97%);
+  --color-foreground: hsl(210 30% 14%);
+  --color-card: hsl(0 0% 100% / 0.84);
+  --color-card-foreground: hsl(210 30% 14%);
   --color-popover: hsl(0 0% 100% / 0.96);
-  --color-popover-foreground: hsl(238 47% 13%);
-  --color-primary: hsl(240 82% 62%);
+  --color-popover-foreground: hsl(210 30% 14%);
+
+  --color-primary: hsl(198 78% 43%);
   --color-primary-foreground: hsl(0 0% 100%);
-  --color-secondary: hsl(230 60% 95%);
-  --color-secondary-foreground: hsl(238 47% 13%);
-  --color-muted: hsl(227 42% 94%);
-  --color-muted-foreground: hsl(232 12% 43%);
-  --color-accent: hsl(231 80% 94%);
-  --color-accent-foreground: hsl(238 47% 13%);
-  --color-destructive: hsl(0 84.2% 60.2%);
-  --color-destructive-foreground: hsl(210 40% 98%);
-  --color-border: hsl(228 32% 86%);
-  --color-input: hsl(228 32% 86%);
-  --color-ring: hsl(240 82% 62%);
-  --color-success: hsl(142.1 76.2% 36.3%);
-  --color-success-foreground: hsl(355.7 100% 97.3%);
-  --color-warning: hsl(38 92% 50%);
-  --color-warning-foreground: hsl(48 96% 89%);
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
+  --color-secondary: hsl(39 92% 94%);
+  --color-secondary-foreground: hsl(26 48% 20%);
+  --color-muted: hsl(204 24% 92%);
+  --color-muted-foreground: hsl(214 14% 37%);
+  --color-accent: hsl(190 54% 90%);
+  --color-accent-foreground: hsl(199 58% 24%);
+
+  --color-border: hsl(205 25% 83%);
+  --color-input: hsl(205 25% 83%);
+  --color-ring: hsl(198 78% 43%);
+
+  --color-destructive: hsl(357 76% 54%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+  --color-success: hsl(150 57% 40%);
+  --color-success-foreground: hsl(0 0% 100%);
+  --color-warning: hsl(32 95% 52%);
+  --color-warning-foreground: hsl(25 95% 10%);
+
+  --color-surface-1: hsl(0 0% 100% / 0.72);
+  --color-surface-2: hsl(0 0% 100% / 0.9);
+
+  --radius-sm: 0.45rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+
+  --shadow-soft: 0 10px 30px -22px hsl(210 40% 20% / 0.45);
+  --shadow-pop: 0 22px 48px -28px hsl(204 58% 32% / 0.4);
 }
 
 @layer base {
   .dark {
-    --color-background: hsl(222 20% 10%);
-    --color-foreground: hsl(220 18% 92%);
-    --color-card: hsl(222 16% 14%);
-    --color-card-foreground: hsl(220 20% 92%);
-    --color-popover: hsl(222 16% 13%);
-    --color-popover-foreground: hsl(220 20% 92%);
-    --color-primary: hsl(232 74% 66%);
-    --color-primary-foreground: hsl(220 35% 10%);
-    --color-secondary: hsl(222 14% 18%);
-    --color-secondary-foreground: hsl(220 20% 92%);
-    --color-muted: hsl(222 14% 18%);
-    --color-muted-foreground: hsl(220 12% 67%);
-    --color-accent: hsl(222 14% 22%);
-    --color-accent-foreground: hsl(220 20% 94%);
-    --color-border: hsl(222 12% 26%);
-    --color-input: hsl(222 12% 26%);
-    --color-ring: hsl(232 74% 66%);
+    --color-background: hsl(208 28% 10%);
+    --color-foreground: hsl(208 24% 92%);
+    --color-card: hsl(208 24% 14% / 0.86);
+    --color-card-foreground: hsl(208 24% 92%);
+    --color-popover: hsl(208 24% 12% / 0.98);
+    --color-popover-foreground: hsl(208 24% 92%);
+
+    --color-primary: hsl(193 79% 52%);
+    --color-primary-foreground: hsl(208 44% 10%);
+    --color-secondary: hsl(208 22% 18%);
+    --color-secondary-foreground: hsl(205 28% 92%);
+    --color-muted: hsl(208 20% 19%);
+    --color-muted-foreground: hsl(208 16% 70%);
+    --color-accent: hsl(198 28% 24%);
+    --color-accent-foreground: hsl(188 64% 88%);
+
+    --color-border: hsl(208 16% 30%);
+    --color-input: hsl(208 16% 30%);
+    --color-ring: hsl(193 79% 52%);
+
+    --color-surface-1: hsl(208 24% 14% / 0.7);
+    --color-surface-2: hsl(208 24% 16% / 0.9);
   }
 
   * {
     @apply border-border;
   }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
     background-image:
-      radial-gradient(1200px 500px at 10% -10%, hsl(232 94% 91% / 0.65), transparent 60%),
-      radial-gradient(900px 460px at 95% 0%, hsl(214 85% 89% / 0.55), transparent 58%);
-    overflow-x: hidden;
-    font-family: "Trebuchet MS", "Segoe UI", Tahoma, sans-serif;
+      radial-gradient(900px 430px at -8% -12%, hsl(193 88% 86% / 0.75), transparent 60%),
+      radial-gradient(780px 390px at 110% 0%, hsl(38 100% 83% / 0.65), transparent 56%),
+      linear-gradient(180deg, hsl(0 0% 100% / 0.4), hsl(204 42% 96% / 0.82));
+    background-attachment: fixed;
+    overflow-x: clip;
   }
 
   .dark body {
-    background-image: none;
-    background-color: hsl(222 20% 10%);
+    background-image:
+      radial-gradient(840px 420px at -5% -10%, hsl(193 84% 24% / 0.45), transparent 62%),
+      radial-gradient(700px 350px at 104% -2%, hsl(38 74% 30% / 0.26), transparent 58%),
+      linear-gradient(180deg, hsl(208 24% 12%), hsl(208 30% 9%));
   }
 
-  #root {
-    min-height: 100vh;
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.015em;
+  }
+
+  table {
+    border-collapse: separate;
+    border-spacing: 0;
   }
 
   table thead th {
@@ -80,7 +120,7 @@
 
   table thead th,
   table tbody td {
-    @apply px-3 py-2.5;
+    @apply px-3.5 py-3 align-middle;
   }
 
   table tbody tr {
@@ -88,6 +128,66 @@
   }
 
   table tbody tr:hover {
-    @apply bg-accent/40;
+    @apply bg-accent/45;
+  }
+}
+
+@layer components {
+  .ui-data-table {
+    --table-cell-space-x: 0.75rem;
+    --table-edge-space-x: 1rem;
+  }
+
+  .ui-data-table > thead > tr > th,
+  .ui-data-table > tbody > tr > td {
+    padding-inline: var(--table-cell-space-x);
+  }
+
+  .ui-data-table > thead > tr > th:first-child,
+  .ui-data-table > tbody > tr > td:first-child {
+    padding-inline-start: var(--table-edge-space-x);
+  }
+
+  .ui-data-table > thead > tr > th:last-child,
+  .ui-data-table > tbody > tr > td:last-child,
+  .ui-data-table > tbody > tr > td[colspan] {
+    padding-inline-end: var(--table-edge-space-x);
+  }
+
+  .ui-data-table > tbody > tr > td[colspan] {
+    padding-inline-start: var(--table-edge-space-x);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 8px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  .animate-fade-up {
+    animation: fade-up 280ms ease-out both;
+  }
+}
+
+@media (max-width: 768px) {
+  body {
+    background-image:
+      radial-gradient(620px 300px at -20% -10%, hsl(193 88% 86% / 0.52), transparent 60%),
+      radial-gradient(520px 260px at 120% -6%, hsl(38 100% 83% / 0.48), transparent 56%),
+      linear-gradient(180deg, hsl(0 0% 100% / 0.56), hsl(204 42% 96% / 0.88));
+  }
+}
+
+@media (min-width: 640px) {
+  .ui-data-table {
+    --table-cell-space-x: 1rem;
+    --table-edge-space-x: 1.25rem;
   }
 }
