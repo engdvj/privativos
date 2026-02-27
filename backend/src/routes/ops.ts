@@ -299,6 +299,37 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.post(
+    "/ops/limpar-fila",
+    {
+      preHandler: [authenticate, authorize(["setor"])],
+    },
+    async (request, reply) => {
+      const schema = z.object({
+        matricula: z.string().min(1).max(20),
+      });
+
+      const parsed = schema.safeParse(request.body);
+
+      if (!parsed.success) {
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      }
+
+      await Promise.all([
+        queueService.limparOperacao(parsed.data.matricula, "emprestimo"),
+        queueService.limparOperacao(parsed.data.matricula, "devolucao"),
+      ]);
+
+      app.log.info({
+        evento: "ops.limpar_fila",
+        matricula: parsed.data.matricula,
+        operador_nome: request.user?.nomeCompleto,
+      });
+
+      return reply.status(200).send({ sucesso: true });
+    },
+  );
+
+  app.post(
     "/ops/confirmar",
     {
       preHandler: [authenticate, authorize(["setor"])],
@@ -344,6 +375,88 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         itens: result.itens_devolvidos,
         operador_nome: payload.operador_nome,
       });
+      return reply.status(200).send(result);
+    },
+  );
+
+  app.post(
+    "/ops/emprestimo-direto",
+    {
+      preHandler: [authenticate, authorize(["setor"])],
+    },
+    async (request, reply) => {
+      const schema = z.object({
+        matricula: z.string().min(1).max(20),
+        quantidade: z.coerce.number().int().positive(),
+      });
+
+      const parsed = schema.safeParse(request.body);
+
+      if (!parsed.success) {
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      }
+
+      const operador = request.user?.nomeCompleto;
+
+      if (!operador) {
+        throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
+      }
+
+      const result = await loanService.registrarEmprestimo({
+        matricula: parsed.data.matricula,
+        operadorNome: operador,
+        quantidade: parsed.data.quantidade,
+      });
+
+      app.log.info({
+        evento: "loan.created_direto",
+        matricula: parsed.data.matricula,
+        itens: result.itens_emprestados,
+        operador_nome: operador,
+      });
+
+      return reply.status(200).send(result);
+    },
+  );
+
+  app.post(
+    "/ops/devolucao-direta",
+    {
+      preHandler: [authenticate, authorize(["setor"])],
+    },
+    async (request, reply) => {
+      const schema = z.object({
+        matricula: z.string().min(1).max(20),
+        item_codigos: z.array(z.string().min(1).max(50)).min(1),
+      });
+
+      const parsed = schema.safeParse(request.body);
+
+      if (!parsed.success) {
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      }
+
+      const operador = request.user?.nomeCompleto;
+
+      if (!operador) {
+        throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
+      }
+
+      const itemCodigos = [...new Set(parsed.data.item_codigos)];
+
+      const result = await returnService.registrarDevolucao({
+        matricula: parsed.data.matricula,
+        operadorNome: operador,
+        itemCodigos,
+      });
+
+      app.log.info({
+        evento: "return.created_direto",
+        matricula: parsed.data.matricula,
+        itens: result.itens_devolvidos,
+        operador_nome: operador,
+      });
+
       return reply.status(200).send(result);
     },
   );

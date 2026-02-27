@@ -13,6 +13,15 @@ const solicitanteSchema = z.object({
   matricula: z.string().min(1).max(20),
 });
 
+const atualizarPerfilSchema = z.object({
+  nomeCompleto: z.string().min(1).max(150).optional(),
+  senhaNova: z.string().min(6).optional(),
+});
+
+const atualizarTemaSchema = z.object({
+  tema: z.enum(["light", "dark"]),
+});
+
 const authService = new AuthService();
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
@@ -97,5 +106,90 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
 
     return reply.status(200).send(session);
+  });
+
+  app.get("/auth/perfil", async (request, reply) => {
+    const token = getBearerToken(request.headers.authorization);
+
+    if (!token) {
+      throw new AppError(401, "UNAUTHENTICATED", "Nao autenticado");
+    }
+
+    const session = await authService.validarSessao(token);
+
+    if (!session || session.tipo !== "setor_admin") {
+      throw new AppError(401, "INVALID_SESSION", "Sessao invalida");
+    }
+
+    const perfil = await authService.obterPerfilUsuario(session.dados.usuario);
+    return reply.status(200).send(perfil);
+  });
+
+  app.put("/auth/perfil", async (request, reply) => {
+    const token = getBearerToken(request.headers.authorization);
+
+    if (!token) {
+      throw new AppError(401, "UNAUTHENTICATED", "Nao autenticado");
+    }
+
+    const session = await authService.validarSessao(token);
+
+    if (!session || session.tipo !== "setor_admin") {
+      throw new AppError(401, "INVALID_SESSION", "Sessao invalida");
+    }
+
+    const parsed = atualizarPerfilSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+    }
+
+    const perfil = await authService.atualizarPerfil({
+      usuario: session.dados.usuario,
+      ...parsed.data,
+    });
+
+    app.log.info({
+      evento: "auth.perfil_atualizado",
+      usuario: session.dados.usuario,
+      campos: Object.keys(parsed.data),
+      ip: request.ip,
+    });
+
+    return reply.status(200).send(perfil);
+  });
+
+  app.put("/auth/tema", async (request, reply) => {
+    const token = getBearerToken(request.headers.authorization);
+
+    if (!token) {
+      throw new AppError(401, "UNAUTHENTICATED", "Nao autenticado");
+    }
+
+    const session = await authService.validarSessao(token);
+
+    if (!session || session.tipo !== "setor_admin") {
+      throw new AppError(401, "INVALID_SESSION", "Sessao invalida");
+    }
+
+    const parsed = atualizarTemaSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+    }
+
+    const resultado = await authService.atualizarTema(
+      session.dados.usuario,
+      parsed.data.tema,
+    );
+
+    app.log.info({
+      evento: "auth.tema_atualizado",
+      usuario: session.dados.usuario,
+      tema: parsed.data.tema,
+      ip: request.ip,
+    });
+
+    return reply.status(200).send(resultado);
   });
 };

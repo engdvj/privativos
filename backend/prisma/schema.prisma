@@ -111,6 +111,7 @@ model Credencial {
   nomeCompleto     String    @map("nome_completo") @db.VarChar(150)
   ativo            Boolean   @default(true)
   deveAlterarSenha Boolean   @default(true) @map("deve_alterar_senha")
+  temaPreferido    String    @default("light") @map("tema_preferido") @db.VarChar(10)
   criadoEm         DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
   criadoPor        String    @map("criado_por") @db.VarChar(150)
   atualizadoPor    String?   @map("atualizado_por") @db.VarChar(150)

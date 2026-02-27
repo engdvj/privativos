@@ -19,6 +19,7 @@ export class AuthService {
         senhaHash: true,
         perfil: true,
         nomeCompleto: true,
+        temaPreferido: true,
       },
     });
 
@@ -51,6 +52,7 @@ export class AuthService {
       token,
       perfil: session.perfil,
       nome: session.nomeCompleto,
+      tema_preferido: credencial.temaPreferido,
     };
   }
 
@@ -115,6 +117,126 @@ export class AuthService {
     ]);
   }
 
+  async obterPerfilUsuario(usuario: string) {
+    const credencial = await prisma.credencial.findFirst({
+      where: {
+        usuario,
+        ativo: true,
+      },
+      select: {
+        usuario: true,
+        nomeCompleto: true,
+        perfil: true,
+        deveAlterarSenha: true,
+        temaPreferido: true,
+      },
+    });
+
+    if (!credencial) {
+      throw new AppError(404, "USER_NOT_FOUND", "Usuario nao encontrado");
+    }
+
+    return credencial;
+  }
+
+  async atualizarPerfil(input: {
+    usuario: string;
+    nomeCompleto?: string;
+    senhaNova?: string;
+  }) {
+    const credencial = await prisma.credencial.findFirst({
+      where: {
+        usuario: input.usuario,
+        ativo: true,
+      },
+    });
+
+    if (!credencial) {
+      throw new AppError(404, "USER_NOT_FOUND", "Usuario nao encontrado");
+    }
+    if (input.senhaNova && input.senhaNova.length < 6) {
+      throw new AppError(400, "SENHA_FRACA", "Senha deve ter no minimo 6 caracteres");
+    }
+
+    const dadosAtualizacao: {
+      nomeCompleto?: string;
+      senhaHash?: string;
+      deveAlterarSenha?: boolean;
+      atualizadoEm: Date;
+      atualizadoPor: string;
+    } = {
+      atualizadoEm: new Date(),
+      atualizadoPor: input.usuario,
+    };
+
+    if (input.nomeCompleto) {
+      dadosAtualizacao.nomeCompleto = input.nomeCompleto;
+    }
+
+    if (input.senhaNova) {
+      dadosAtualizacao.senhaHash = await bcrypt.hash(input.senhaNova, env.BCRYPT_ROUNDS);
+      dadosAtualizacao.deveAlterarSenha = false;
+    }
+
+    const atualizado = await prisma.credencial.update({
+      where: { usuario: input.usuario },
+      data: dadosAtualizacao,
+      select: {
+        usuario: true,
+        nomeCompleto: true,
+        perfil: true,
+        deveAlterarSenha: true,
+        temaPreferido: true,
+      },
+    });
+
+    // Atualiza a sessão no Redis com o novo nome
+    if (input.nomeCompleto) {
+      const sessoes = await redis.keys(`sess:*`);
+      for (const key of sessoes) {
+        const sessaoRaw = await redis.get(key);
+        if (sessaoRaw) {
+          const sessao = JSON.parse(sessaoRaw) as SessionPayload;
+          if (sessao.usuario === input.usuario) {
+            sessao.nomeCompleto = atualizado.nomeCompleto;
+            const ttl = await redis.ttl(key);
+            await redis.set(key, JSON.stringify(sessao), "EX", ttl > 0 ? ttl : env.SESSION_TTL_SECONDS);
+          }
+        }
+      }
+    }
+
+    return atualizado;
+  }
+
+  async atualizarTema(usuario: string, tema: string) {
+    if (tema !== "light" && tema !== "dark") {
+      throw new AppError(400, "INVALID_THEME", "Tema invalido. Use 'light' ou 'dark'");
+    }
+
+    const credencial = await prisma.credencial.findFirst({
+      where: {
+        usuario,
+        ativo: true,
+      },
+    });
+
+    if (!credencial) {
+      throw new AppError(404, "USER_NOT_FOUND", "Usuario nao encontrado");
+    }
+
+    await prisma.credencial.update({
+      where: { usuario },
+      data: {
+        temaPreferido: tema,
+        atualizadoEm: new Date(),
+        atualizadoPor: usuario,
+      },
+    });
+
+    return { tema_preferido: tema };
+  }
+
   private sessionKey(token: string) {
     return `sess:${token}`;
   }
@@ -123,3 +245,4 @@ export class AuthService {
     return `sess:sol:${token}`;
   }
 }
+
