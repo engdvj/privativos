@@ -12,6 +12,7 @@ interface LoginResponse {
   token: string;
   perfil: string;
   nome: string;
+  tema_preferido?: string;
 }
 
 export function LoginPage() {
@@ -56,7 +57,7 @@ export function LoginPage() {
         senha,
       });
 
-      api.saveSession(data.token, data.perfil, data.nome);
+      api.saveSession(data.token, data.perfil, data.nome, data.tema_preferido);
 
       if (data.perfil === "setor") {
         navigate("/setor");
@@ -71,18 +72,18 @@ export function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-dvh overflow-hidden bg-[linear-gradient(160deg,#e2ecff_0%,#f7fbff_28%,#ffe8d6_58%,#d9f2ff_100%)]">
+    <div className="relative min-h-dvh overflow-hidden bg-[linear-gradient(160deg,#e2ecff_0%,#f7fbff_28%,#ffe8d6_58%,#d9f2ff_100%)] animate-in fade-in-0">
       <main className="relative flex min-h-dvh items-center justify-center px-4 py-10 sm:px-6">
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute inset-0 bg-[radial-gradient(900px_460px_at_8%_0%,rgba(14,116,255,0.34),transparent_58%),radial-gradient(780px_460px_at_90%_100%,rgba(249,115,22,0.3),transparent_54%),radial-gradient(600px_320px_at_50%_80%,rgba(16,185,129,0.25),transparent_62%)]" />
-          <div className="absolute top-5 left-6 h-40 w-40 rounded-full bg-blue-500/25 blur-[90px]" />
-          <div className="absolute right-8 top-20 h-36 w-36 rounded-full bg-emerald-400/20 blur-[90px]" />
-          <div className="absolute bottom-8 left-[12%] h-48 w-48 rounded-full bg-orange-400/20 blur-[110px]" />
+          <div className="absolute inset-0 bg-[radial-gradient(900px_460px_at_8%_0%,rgba(14,116,255,0.34),transparent_58%),radial-gradient(780px_460px_at_90%_100%,rgba(249,115,22,0.3),transparent_54%),radial-gradient(600px_320px_at_50%_80%,rgba(16,185,129,0.25),transparent_62%)] animate-fade-up" />
+          <div className="absolute top-5 left-6 h-40 w-40 rounded-full bg-blue-500/25 blur-[90px] animate-fade-up" />
+          <div className="absolute right-8 top-20 h-36 w-36 rounded-full bg-emerald-400/20 blur-[90px] animate-fade-up" />
+          <div className="absolute bottom-8 left-[12%] h-48 w-48 rounded-full bg-orange-400/20 blur-[110px] animate-fade-up" />
         </div>
 
-        <Card className="relative w-full max-w-md border-border/70 bg-surface-2/90 shadow-[var(--shadow-pop)] backdrop-blur-xl">
+        <Card className="relative w-full max-w-md border-border/70 bg-surface-2/90 shadow-[var(--shadow-pop)] backdrop-blur-xl animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2">
           <CardHeader className="pb-3 text-center">
-            <div className="mb-2 flex justify-center">
+            <div className="mb-2 flex justify-center animate-in fade-in-0">
               <img src="/privativos.png" alt="Controle de Privativos" className="h-16 w-16 rounded-2xl shadow-sm object-cover" />
             </div>
             <CardTitle className="text-2xl">Entrar no sistema</CardTitle>

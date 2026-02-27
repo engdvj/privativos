@@ -180,14 +180,17 @@ export function AdminPage() {
       <Header />
 
       <main className="min-h-0 flex-1 overflow-hidden">
-        <div className="grid h-full min-h-0 md:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]" style={layoutStyle}>
+        <div
+          className="grid h-full min-h-0 transition-[grid-template-columns] duration-300 ease-[var(--motion-ease-standard)] motion-reduce:transition-none md:grid-cols-[var(--sidebar-width)_minmax(0,1fr)]"
+          style={layoutStyle}
+        >
           <div className="relative h-full min-h-0">
-            <aside className="flex h-full min-h-0 flex-col border-r border-border/65 bg-surface-2/70 backdrop-blur">
+            <aside className="flex h-full min-h-0 flex-col border-r border-border/65 bg-surface-2/70 backdrop-blur transition-colors duration-200">
               <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 pt-4">
                 {menuSections.map((section) => (
-                  <div key={section.title}>
+                  <div key={section.title} className="animate-in fade-in-0">
                     {!isIconOnly ? (
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground animate-in fade-in-0">
                         {section.title}
                       </p>
                     ) : null}
@@ -223,14 +226,16 @@ export function AdminPage() {
           </div>
 
           <section className="min-h-0 min-w-0 overflow-y-auto p-4 md:p-6">
-            {currentTab === "dashboard" ? <DashboardTab /> : null}
-            {currentTab === "funcionarios" ? <FuncionariosTab /> : null}
-            {currentTab === "setores" ? <SetoresTab /> : null}
-            {currentTab === "funcoes" ? <FuncoesTab /> : null}
-            {currentTab === "itens" ? <ItensTab /> : null}
-            {isSuperadmin && currentTab === "credenciais" ? <CredenciaisTab /> : null}
-            {isSuperadmin && currentTab === "auditoria" ? <AuditoriaTab /> : null}
-            {isSuperadmin && currentTab === "configuracoes" ? <ConfiguracoesTab /> : null}
+            <div key={currentTab} className="animate-in fade-in-0 slide-in-from-bottom-2">
+              {currentTab === "dashboard" ? <DashboardTab /> : null}
+              {currentTab === "funcionarios" ? <FuncionariosTab /> : null}
+              {currentTab === "setores" ? <SetoresTab /> : null}
+              {currentTab === "funcoes" ? <FuncoesTab /> : null}
+              {currentTab === "itens" ? <ItensTab /> : null}
+              {isSuperadmin && currentTab === "credenciais" ? <CredenciaisTab /> : null}
+              {isSuperadmin && currentTab === "auditoria" ? <AuditoriaTab /> : null}
+              {isSuperadmin && currentTab === "configuracoes" ? <ConfiguracoesTab /> : null}
+            </div>
           </section>
         </div>
       </main>

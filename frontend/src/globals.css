@@ -43,6 +43,17 @@
 
   --shadow-soft: 0 10px 30px -22px hsl(210 40% 20% / 0.45);
   --shadow-pop: 0 22px 48px -28px hsl(204 58% 32% / 0.4);
+
+  --motion-duration-fast: 120ms;
+  --motion-duration-base: 180ms;
+  --motion-duration-slow: 280ms;
+  --motion-duration-xl: 420ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --motion-distance-sm: 6px;
+  --motion-distance-md: 12px;
+  --motion-distance-lg: 20px;
 }
 
 @layer base {
@@ -81,6 +92,12 @@
     min-height: 100%;
   }
 
+  html {
+    overflow-y: scroll;
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
@@ -89,7 +106,14 @@
       radial-gradient(780px 390px at 110% 0%, hsl(38 100% 83% / 0.65), transparent 56%),
       linear-gradient(180deg, hsl(0 0% 100% / 0.4), hsl(204 42% 96% / 0.82));
     background-attachment: fixed;
-    overflow-x: clip;
+    overflow-x: hidden;
+    max-width: 100vw;
+    position: relative;
+  }
+
+  #root {
+    overflow-x: hidden;
+    max-width: 100vw;
   }
 
   .dark body {
@@ -120,7 +144,7 @@
 
   table thead th,
   table tbody td {
-    @apply px-3.5 py-3 align-middle;
+    @apply py-3 align-middle;
   }
 
   table tbody tr {
@@ -134,45 +158,143 @@
 
 @layer components {
   .ui-data-table {
-    --table-cell-space-x: 0.75rem;
-    --table-edge-space-x: 1rem;
+    --table-inline-gap: 1.25rem;
   }
 
   .ui-data-table > thead > tr > th,
   .ui-data-table > tbody > tr > td {
-    padding-inline: var(--table-cell-space-x);
+    padding-inline: calc(var(--table-inline-gap) / 2);
   }
 
   .ui-data-table > thead > tr > th:first-child,
   .ui-data-table > tbody > tr > td:first-child {
-    padding-inline-start: var(--table-edge-space-x);
+    padding-inline-start: var(--table-inline-gap);
   }
 
   .ui-data-table > thead > tr > th:last-child,
   .ui-data-table > tbody > tr > td:last-child,
   .ui-data-table > tbody > tr > td[colspan] {
-    padding-inline-end: var(--table-edge-space-x);
-  }
-
-  .ui-data-table > tbody > tr > td[colspan] {
-    padding-inline-start: var(--table-edge-space-x);
+    padding-inline-end: var(--table-inline-gap);
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  @keyframes fade-up {
-    from {
-      opacity: 0;
-      transform: translate3d(0, 8px, 0);
-    }
-    to {
-      opacity: 1;
-      transform: translate3d(0, 0, 0);
-    }
+@keyframes motion-fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--motion-distance-md), 0);
   }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
 
-  .animate-fade-up {
-    animation: fade-up 280ms ease-out both;
+@keyframes motion-enter {
+  from {
+    opacity: var(--motion-enter-opacity, 0);
+    transform:
+      translate3d(var(--motion-enter-x, 0), var(--motion-enter-y, 0), 0)
+      scale3d(var(--motion-enter-scale, 1), var(--motion-enter-scale, 1), 1);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
+  }
+}
+
+@keyframes motion-exit {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale3d(1, 1, 1);
+  }
+  to {
+    opacity: var(--motion-exit-opacity, 0);
+    transform:
+      translate3d(var(--motion-exit-x, 0), var(--motion-exit-y, 0), 0)
+      scale3d(var(--motion-exit-scale, 0.95), var(--motion-exit-scale, 0.95), 1);
+  }
+}
+
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@utility animate-fade-up {
+  animation: motion-fade-up var(--motion-duration-slow) var(--motion-ease-standard) both;
+}
+
+@utility animate-in {
+  animation: motion-enter var(--motion-duration-slow) var(--motion-ease-standard) both;
+}
+
+@utility animate-out {
+  animation: motion-exit var(--motion-duration-base) var(--motion-ease-exit) both;
+}
+
+@utility fade-in-0 {
+  --motion-enter-opacity: 0;
+}
+
+@utility fade-in-50 {
+  --motion-enter-opacity: 0.5;
+}
+
+@utility fade-out-0 {
+  --motion-exit-opacity: 0;
+}
+
+@utility zoom-in-50 {
+  --motion-enter-scale: 0.5;
+}
+
+@utility zoom-in-95 {
+  --motion-enter-scale: 0.95;
+}
+
+@utility zoom-out-95 {
+  --motion-exit-scale: 0.95;
+}
+
+@utility slide-in-from-top-2 {
+  --motion-enter-y: calc(-1 * var(--motion-distance-md));
+}
+
+@utility slide-in-from-bottom-2 {
+  --motion-enter-y: var(--motion-distance-md);
+}
+
+@utility slide-in-from-left-2 {
+  --motion-enter-x: calc(-1 * var(--motion-distance-md));
+}
+
+@utility slide-in-from-right-2 {
+  --motion-enter-x: var(--motion-distance-md);
+}
+
+@utility slide-in-from-bottom-4 {
+  --motion-enter-y: 1rem;
+}
+
+@utility slide-in-from-bottom-8 {
+  --motion-enter-y: 2rem;
+}
+
+@utility animate-pulse-slow {
+  animation: pulse-slow 3s var(--motion-ease-emphasized) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-in,
+  .animate-out,
+  .animate-pulse-slow {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
 
@@ -187,7 +309,6 @@
 
 @media (min-width: 640px) {
   .ui-data-table {
-    --table-cell-space-x: 1rem;
-    --table-edge-space-x: 1.25rem;
+    --table-inline-gap: 1.5rem;
   }
 }

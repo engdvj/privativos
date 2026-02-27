@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Clock3, Mail, Phone } from "lucide-react";
+import { Clock3, HeadphonesIcon, Mail, Phone } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 
 interface FooterProps {
@@ -9,7 +9,7 @@ interface FooterProps {
 const SUPPORT_EMAIL = "chvcti@saude.ba.gov.br";
 const SUPPORT_PHONE_DISPLAY = "(77) 3229-2420";
 const SUPPORT_PHONE_LINK = "+557732292420";
-const SUPPORT_HOURS = "Segunda a sexta, 9h as 18h";
+const SUPPORT_HOURS = "Segunda a sexta, 9h às 18h";
 
 export function Footer({ leading }: FooterProps) {
   const [contactOpen, setContactOpen] = useState(false);
@@ -17,70 +17,60 @@ export function Footer({ leading }: FooterProps) {
 
   return (
     <>
-      <footer className="border-t border-border/60 bg-surface-2/80 px-4 py-4 backdrop-blur-md sm:px-6">
-        <div className="mx-auto w-full max-w-7xl">
-          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
-            <div className="justify-self-start">
-              {leading ? <div className="flex items-center">{leading}</div> : <span className="block h-8 w-8" aria-hidden />}
-            </div>
+      <footer className="border-t border-border/60 bg-surface-2/80 px-4 py-3 backdrop-blur-md sm:px-6">
+        <div className="flex w-full items-center gap-3">
+          {leading && <div className="flex shrink-0 items-center">{leading}</div>}
 
-            <p
-              className="truncate text-center text-xs text-muted-foreground"
-              title={`Controle de Privativos (c) ${currentYear} Secretaria da Saude da Bahia. Todos os direitos reservados.`}
-            >
-              Controle de Privativos (c) {currentYear} Secretaria da Saude da Bahia.
-            </p>
+          <p className="min-w-0 flex-1 truncate text-center text-[11px] text-muted-foreground sm:text-xs">
+            © {currentYear} Secretaria da Saúde da Bahia — Controle de Privativos
+          </p>
 
-            <button
-              type="button"
-              className="justify-self-end rounded-full border border-border/70 bg-background/55 px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary/45 hover:text-foreground"
-              onClick={() => setContactOpen(true)}
-            >
-              Contato
-            </button>
-          </div>
+          <button
+            type="button"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:text-xs"
+            onClick={() => setContactOpen(true)}
+          >
+            <HeadphonesIcon className="h-3.5 w-3.5" />
+            Suporte
+          </button>
         </div>
       </footer>
 
       <Modal
         open={contactOpen}
         onClose={() => setContactOpen(false)}
-        title="Contato"
-        description="Estamos aqui para ajudar. Escolha o canal de sua preferencia."
-        maxWidthClassName="max-w-2xl"
+        title="Suporte"
+        description="Estamos aqui para ajudar. Escolha o canal de sua preferência."
+        maxWidthClassName="max-w-md"
       >
         <div className="space-y-3">
-          <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-surface-1 px-4 py-3">
-            <Mail className="mt-0.5 h-5 w-5 text-primary" />
-            <div>
-              <p className="font-medium">Email</p>
-              <a
-                href={`mailto:${SUPPORT_EMAIL}`}
-                className="text-muted-foreground transition-colors hover:text-foreground"
-              >
-                {SUPPORT_EMAIL}
-              </a>
+          <a
+            href={`mailto:${SUPPORT_EMAIL}`}
+            className="flex items-center gap-3 rounded-xl border border-border/70 bg-surface-1 px-4 py-3 transition-colors hover:border-primary/40 hover:bg-primary/5"
+          >
+            <Mail className="h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Email</p>
+              <p className="truncate text-xs text-muted-foreground">{SUPPORT_EMAIL}</p>
             </div>
-          </div>
+          </a>
 
-          <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-surface-1 px-4 py-3">
-            <Phone className="mt-0.5 h-5 w-5 text-primary" />
-            <div>
-              <p className="font-medium">Telefone</p>
-              <a
-                href={`tel:${SUPPORT_PHONE_LINK}`}
-                className="text-muted-foreground transition-colors hover:text-foreground"
-              >
-                {SUPPORT_PHONE_DISPLAY}
-              </a>
+          <a
+            href={`tel:${SUPPORT_PHONE_LINK}`}
+            className="flex items-center gap-3 rounded-xl border border-border/70 bg-surface-1 px-4 py-3 transition-colors hover:border-primary/40 hover:bg-primary/5"
+          >
+            <Phone className="h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Telefone</p>
+              <p className="text-xs text-muted-foreground">{SUPPORT_PHONE_DISPLAY}</p>
             </div>
-          </div>
+          </a>
 
-          <div className="flex items-start gap-3 rounded-xl border border-border/70 bg-surface-1 px-4 py-3">
-            <Clock3 className="mt-0.5 h-5 w-5 text-primary" />
-            <div>
-              <p className="font-medium">Horario de atendimento</p>
-              <p className="text-muted-foreground">{SUPPORT_HOURS}</p>
+          <div className="flex items-center gap-3 rounded-xl border border-border/70 bg-surface-1 px-4 py-3">
+            <Clock3 className="h-4 w-4 shrink-0 text-primary" />
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Horário de atendimento</p>
+              <p className="text-xs text-muted-foreground">{SUPPORT_HOURS}</p>
             </div>
           </div>
         </div>

@@ -182,12 +182,12 @@ export function FuncionariosTab() {
       >
         <DataTable
           columns={[
-            { key: "matricula", title: "Matricula", width: "14%" },
-            { key: "nome", title: "Nome", width: "30%" },
-            { key: "setor", title: "Setor", width: "18%" },
-            { key: "funcao", title: "Funcao", width: "18%" },
-            { key: "status", title: "Status", align: "center", width: "10%" },
-            { key: "acoes", title: "Acoes", align: "center", width: "10%" },
+            { key: "matricula", title: "Matricula" },
+            { key: "nome", title: "Nome" },
+            { key: "setor", title: "Setor" },
+            { key: "funcao", title: "Funcao" },
+            { key: "status", title: "Status", align: "center" },
+            { key: "acoes", title: "Acoes", align: "center" },
           ]}
           rows={rowsFiltradas}
           getRowKey={(row) => row.matricula}

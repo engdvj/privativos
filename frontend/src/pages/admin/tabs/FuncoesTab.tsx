@@ -149,9 +149,9 @@ export function FuncoesTab() {
       >
         <DataTable
           columns={[
-            { key: "nome", title: "Nome", align: "center", width: "33%" },
+            { key: "nome", title: "Nome", width: "33%" },
             { key: "status", title: "Status", align: "center", width: "33%" },
-            { key: "acoes", title: "Acoes", align: "center", width: "33%" },
+            { key: "acoes", title: "Acoes", align: "center", width: "34%" },
           ]}
           rows={rowsFiltradas}
           getRowKey={(row) => row.id}
@@ -168,7 +168,7 @@ export function FuncoesTab() {
                 </div>
               </td>
               <td>
-                <TableActions className="justify-center">
+                <TableActions className="justify-end">
                   <Button
                     size="icon"
                     variant="ghost"

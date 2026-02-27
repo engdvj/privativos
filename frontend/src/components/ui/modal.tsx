@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useId, useRef } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +20,8 @@ const FOCUSABLE_SELECTOR = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 
+const EXIT_ANIMATION_MS = 180;
+
 export function Modal({
   open,
   title,
@@ -31,15 +33,85 @@ export function Modal({
   const titleId = useId();
   const descriptionId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const closeTimerRef = useRef<number | null>(null);
+  const [mounted, setMounted] = useState(open);
+  const [visible, setVisible] = useState(open);
 
   useEffect(() => {
-    if (!open) return;
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+
+    if (open) {
+      let visibleFrameId = 0;
+      const mountFrameId = window.requestAnimationFrame(() => {
+        setMounted(true);
+        visibleFrameId = window.requestAnimationFrame(() => {
+          setVisible(true);
+        });
+      });
+      return () => {
+        window.cancelAnimationFrame(mountFrameId);
+        window.cancelAnimationFrame(visibleFrameId);
+      };
+    }
+
+    if (!mounted) return;
+
+    const closeFrameId = window.requestAnimationFrame(() => {
+      setVisible(false);
+    });
+
+    closeTimerRef.current = window.setTimeout(() => {
+      setMounted(false);
+      closeTimerRef.current = null;
+    }, EXIT_ANIMATION_MS);
+
+    return () => {
+      window.cancelAnimationFrame(closeFrameId);
+      if (closeTimerRef.current !== null) {
+        window.clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+    };
+  }, [open, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     return () => {
       document.body.style.overflow = previousOverflow;
+    };
+  }, [mounted]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const focusable = panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
+    const autoFocusTarget = panel.querySelector<HTMLElement>("[data-autofocus]");
+    const firstField = panel.querySelector<HTMLElement>(
+      "input:not([disabled]), textarea:not([disabled]), select:not([disabled])",
+    );
+    const firstFocusable = autoFocusTarget ?? firstField ?? focusable[0] ?? panel;
+
+    const timeoutId = window.setTimeout(() => {
+      firstFocusable.focus();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
     };
   }, [open]);
 
@@ -49,17 +121,10 @@ export function Modal({
     const panel = panelRef.current;
     if (!panel) return;
 
-    const focusable = panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
-    const firstFocusable = focusable[0] ?? panel;
-
-    window.setTimeout(() => {
-      firstFocusable.focus();
-    }, 0);
-
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -89,15 +154,23 @@ export function Modal({
     return () => {
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open, onClose]);
+  }, [open]);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4 sm:p-6">
+    <div
+      className={cn(
+        "fixed inset-0 z-50 grid place-items-center p-4 sm:p-6",
+        open ? "pointer-events-auto" : "pointer-events-none",
+      )}
+    >
       <button
         type="button"
-        className="absolute inset-0 bg-slate-950/45 backdrop-blur-[3px]"
+        className={cn(
+          "absolute inset-0 bg-slate-950/45 backdrop-blur-[3px]",
+          visible ? "animate-in fade-in-0" : "animate-out fade-out-0",
+        )}
         aria-label="Fechar modal"
         onClick={onClose}
       />
@@ -110,7 +183,10 @@ export function Modal({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          "animate-fade-up relative w-full rounded-2xl border border-border/70 bg-card p-5 shadow-lg backdrop-blur sm:p-6",
+          "relative w-full rounded-2xl border border-border/70 bg-card p-5 shadow-lg backdrop-blur sm:p-6",
+          visible
+            ? "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2"
+            : "animate-out fade-out-0 zoom-out-95",
           maxWidthClassName,
         )}
       >

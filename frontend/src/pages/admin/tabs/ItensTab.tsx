@@ -150,11 +150,11 @@ export function ItensTab() {
       >
         <DataTable
           columns={[
-            { key: "codigo", title: "Codigo", width: "14%" },
-            { key: "descricao", title: "Descricao", width: "42%" },
-            { key: "status", title: "Status", align: "center", width: "16%" },
-            { key: "ativo", title: "Ativo", align: "center", width: "14%" },
-            { key: "acoes", title: "Acoes", align: "center", width: "14%" },
+            { key: "codigo", title: "Codigo" },
+            { key: "descricao", title: "Descricao" },
+            { key: "status", title: "Status", align: "center" },
+            { key: "ativo", title: "Ativo", align: "center" },
+            { key: "acoes", title: "Acoes", align: "center" },
           ]}
           rows={rowsFiltradas}
           getRowKey={(row) => row.codigo}

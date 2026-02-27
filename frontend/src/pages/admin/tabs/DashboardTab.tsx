@@ -227,97 +227,76 @@ export function DashboardTab() {
 
           <div className="grid gap-4 2xl:grid-cols-2">
             <SectionCard title={`Solicitacoes (${solicitacoesFiltradas.length})`}>
-              <DataTable
-                columns={[
-                  {
-                    key: "timestamp",
-                    title: "Data/Hora",
-                    align: "center",
-                    width: "20%",
-                    className: "font-mono tabular-nums",
-                  },
-                  {
-                    key: "matricula",
-                    title: "Matricula",
-                    align: "center",
-                    width: "20%",
-                    className: "font-mono tabular-nums",
-                  },
-                  { key: "nome", title: "Nome", align: "center", width: "20%" },
-                  { key: "setor", title: "Setor", align: "center", width: "20%" },
-                  { key: "item", title: "Item", align: "center", width: "20%", className: "font-mono tabular-nums" },
-                ]}
-                rows={solicitacoesPaginadas}
-                getRowKey={(row) => row.id}
-                loading={loading}
-                emptyMessage="Sem solicitacoes para os filtros atuais."
-                minWidthClassName="min-w-0"
-                containerClassName="overflow-x-hidden"
-                emptyCellClassName="py-2.5"
-                renderRow={(row) => (
-                  <>
-                    <td className="max-w-0 truncate" title={new Date(row.timestamp).toLocaleString()}>
-                      {new Date(row.timestamp).toLocaleString()}
-                    </td>
-                    <td className="max-w-0 truncate" title={row.matricula}>{row.matricula}</td>
-                    <td className="max-w-0 truncate" title={row.nome_funcionario}>{row.nome_funcionario}</td>
-                    <td className="max-w-0 truncate" title={row.setor ?? "-"}>{row.setor ?? "-"}</td>
-                    <td className="max-w-0 truncate" title={row.item_codigo}>{row.item_codigo}</td>
-                  </>
-                )}
-              />
+              <div className="min-h-[280px]">
+                <DataTable
+                  columns={[
+                    { key: "timestamp", title: "Data/Hora", align: "center", className: "font-mono tabular-nums" },
+                    { key: "matricula", title: "Matricula", align: "center", className: "font-mono tabular-nums" },
+                    { key: "nome", title: "Nome", align: "center" },
+                    { key: "setor", title: "Setor", align: "center" },
+                    { key: "item", title: "Item", align: "center", className: "font-mono tabular-nums" },
+                  ]}
+                  rows={solicitacoesPaginadas}
+                  getRowKey={(row) => row.id}
+                  loading={loading}
+                  emptyMessage="Sem solicitacoes para os filtros atuais."
+                  minWidthClassName="min-w-0"
+                  containerClassName="overflow-x-hidden"
+                  emptyCellClassName="py-2.5"
+                  renderRow={(row) => (
+                    <>
+                      <td className="max-w-0" title={new Date(row.timestamp).toLocaleString()}>
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="text-xs leading-tight">{new Date(row.timestamp).toLocaleDateString()}</span>
+                          <span className="text-[10px] leading-tight text-muted-foreground">{new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </td>
+                      <td className="max-w-0 truncate" title={row.matricula}>{row.matricula}</td>
+                      <td className="max-w-0 truncate" title={row.nome_funcionario}>{row.nome_funcionario}</td>
+                      <td className="max-w-0 truncate" title={row.setor ?? "-"}>{row.setor ?? "-"}</td>
+                      <td className="max-w-0 truncate" title={row.item_codigo}>{row.item_codigo}</td>
+                    </>
+                  )}
+                />
+              </div>
 
-              {totalPaginasSolicitacoes > 1 ? (
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <p className="text-xs text-muted-foreground">
-                    {inicioSolicitacoes}-{fimSolicitacoes} de {solicitacoesFiltradas.length} . Pagina {paginaSolicitacoes} de {totalPaginasSolicitacoes}
-                  </p>
-                  <div className="flex min-w-[220px] justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="min-w-24"
-                      onClick={() => setPaginaSolicitacoes((p) => Math.max(1, p - 1))}
-                      disabled={paginaSolicitacoes === 1}
-                    >
-                      Anterior
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="min-w-24"
-                      onClick={() => setPaginaSolicitacoes((p) => Math.min(totalPaginasSolicitacoes, p + 1))}
-                      disabled={paginaSolicitacoes === totalPaginasSolicitacoes}
-                    >
-                      Proxima
-                    </Button>
-                  </div>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  {inicioSolicitacoes}-{fimSolicitacoes} de {solicitacoesFiltradas.length} . Pagina {paginaSolicitacoes} de {totalPaginasSolicitacoes}
+                </p>
+                <div className="flex min-w-[220px] justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="min-w-24"
+                    onClick={() => setPaginaSolicitacoes((p) => Math.max(1, p - 1))}
+                    disabled={paginaSolicitacoes === 1}
+                  >
+                    Anterior
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="min-w-24"
+                    onClick={() => setPaginaSolicitacoes((p) => Math.min(totalPaginasSolicitacoes, p + 1))}
+                    disabled={paginaSolicitacoes === totalPaginasSolicitacoes}
+                  >
+                    Proxima
+                  </Button>
                 </div>
-              ) : null}
+              </div>
             </SectionCard>
 
             <SectionCard title={`Devolucoes (${devolucoesFiltradas.length})`}>
               <DataTable
                 columns={[
-                  {
-                    key: "timestamp",
-                    title: "Data/Hora",
-                    align: "center",
-                    width: "20%",
-                    className: "font-mono tabular-nums",
-                  },
-                  {
-                    key: "matricula",
-                    title: "Matricula",
-                    align: "center",
-                    width: "20%",
-                    className: "font-mono tabular-nums",
-                  },
-                  { key: "nome", title: "Nome", align: "center", width: "20%" },
-                  { key: "setor", title: "Setor", align: "center", width: "20%" },
-                  { key: "item", title: "Item", align: "center", width: "20%", className: "font-mono tabular-nums" },
+                  { key: "timestamp", title: "Data/Hora", align: "center", className: "font-mono tabular-nums" },
+                  { key: "matricula", title: "Matricula", align: "center", className: "font-mono tabular-nums" },
+                  { key: "nome", title: "Nome", align: "center" },
+                  { key: "setor", title: "Setor", align: "center" },
+                  { key: "item", title: "Item", align: "center", className: "font-mono tabular-nums" },
                 ]}
                 rows={devolucoesPaginadas}
                 getRowKey={(row) => row.id}
@@ -328,8 +307,11 @@ export function DashboardTab() {
                 emptyCellClassName="py-2.5"
                 renderRow={(row) => (
                   <>
-                    <td className="max-w-0 truncate" title={new Date(row.timestamp).toLocaleString()}>
-                      {new Date(row.timestamp).toLocaleString()}
+                    <td className="max-w-0" title={new Date(row.timestamp).toLocaleString()}>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-xs leading-tight">{new Date(row.timestamp).toLocaleDateString()}</span>
+                        <span className="text-[10px] leading-tight text-muted-foreground">{new Date(row.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
                     </td>
                     <td className="max-w-0 truncate" title={row.matricula}>{row.matricula}</td>
                     <td className="max-w-0 truncate" title={row.nome_funcionario}>{row.nome_funcionario}</td>

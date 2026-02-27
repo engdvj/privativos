@@ -149,9 +149,9 @@ export function SetoresTab() {
       >
         <DataTable
           columns={[
-            { key: "nome", title: "Nome", width: "62%" },
-            { key: "status", title: "Status", align: "center", width: "20%" },
-            { key: "acoes", title: "Acoes", align: "center", width: "18%" },
+            { key: "nome", title: "Nome", width: "33%" },
+            { key: "status", title: "Status", align: "center", width: "33%" },
+            { key: "acoes", title: "Acoes", align: "right", width: "34%" },
           ]}
           rows={rowsFiltradas}
           getRowKey={(row) => row.id}
@@ -168,7 +168,7 @@ export function SetoresTab() {
                 </div>
               </td>
               <td>
-                <TableActions className="justify-center">
+                <TableActions className="justify-end">
                   <Button
                     size="icon"
                     variant="ghost"

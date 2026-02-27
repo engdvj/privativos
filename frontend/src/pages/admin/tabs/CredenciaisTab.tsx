@@ -214,11 +214,11 @@ export function CredenciaisTab() {
       >
         <DataTable
           columns={[
-            { key: "usuario", title: "Usuario", width: "20%" },
-            { key: "nome", title: "Nome completo", width: "42%" },
-            { key: "perfil", title: "Perfil", align: "center", width: "14%" },
-            { key: "status", title: "Status", align: "center", width: "12%" },
-            { key: "acoes", title: "Acoes", align: "center", width: "12%" },
+            { key: "usuario", title: "Usuario" },
+            { key: "nome", title: "Nome completo" },
+            { key: "perfil", title: "Perfil", align: "center" },
+            { key: "status", title: "Status", align: "center" },
+            { key: "acoes", title: "Acoes", align: "center" },
           ]}
           rows={rowsFiltradas}
           getRowKey={(row) => row.id}

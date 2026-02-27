@@ -32,6 +32,7 @@ class ApiClient {
     localStorage.removeItem("token");
     localStorage.removeItem("perfil");
     localStorage.removeItem("nome");
+    localStorage.removeItem("theme");
   }
 
   isAuthenticated(): boolean {
@@ -46,10 +47,20 @@ class ApiClient {
     return localStorage.getItem("nome");
   }
 
-  saveSession(token: string, perfil: string, nome: string) {
+  saveSession(token: string, perfil: string, nome: string, tema?: string) {
     localStorage.setItem("token", token);
     localStorage.setItem("perfil", perfil);
     localStorage.setItem("nome", nome);
+    if (tema) {
+      localStorage.setItem("theme", tema);
+      document.documentElement.classList.toggle("dark", tema === "dark");
+    }
+  }
+
+  async atualizarTema(tema: "light" | "dark"): Promise<void> {
+    await this.put("/auth/tema", { tema });
+    localStorage.setItem("theme", tema);
+    document.documentElement.classList.toggle("dark", tema === "dark");
   }
 
   async validateSetorAdminSession(expectedPerfis?: Perfil | Perfil[]): Promise<boolean> {

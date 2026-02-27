@@ -99,12 +99,12 @@ export function ConfiguracoesTab() {
       >
         <DataTable
           columns={[
-            { key: "chave", title: "Chave", width: "30%", className: "font-mono font-semibold" },
-            { key: "valor", title: "Valor", align: "center", width: "10%", className: "font-mono tabular-nums" },
-            { key: "tipo", title: "Tipo", align: "center", width: "14%" },
-            { key: "atualizado-por", title: "Atualizado por", width: "16%" },
-            { key: "atualizado-em", title: "Atualizado em", width: "18%", className: "font-mono tabular-nums" },
-            { key: "acoes", title: "Acoes", align: "center", width: "12%" },
+            { key: "chave", title: "Chave", className: "font-mono font-semibold" },
+            { key: "valor", title: "Valor", align: "center", className: "font-mono tabular-nums" },
+            { key: "tipo", title: "Tipo", align: "center" },
+            { key: "atualizado-por", title: "Atualizado por" },
+            { key: "atualizado-em", title: "Atualizado em", className: "font-mono tabular-nums" },
+            { key: "acoes", title: "Acoes", align: "center" },
           ]}
           rows={rowsFiltradas}
           getRowKey={(row) => row.chave}

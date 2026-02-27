@@ -129,7 +129,7 @@ export function DataTable<T>({
         <tbody>
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={columns.length} className={cn("px-4 py-8 sm:px-5", emptyCellClassName)}>
+              <td colSpan={columns.length} className={cn("py-8", emptyCellClassName)}>
                 {loading ? (
                   <p className="text-center text-xs text-muted-foreground">{loadingMessage}</p>
                 ) : (

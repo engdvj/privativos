@@ -70,11 +70,11 @@ export function AuditoriaTab() {
 
         <DataTable
           columns={[
-            { key: "timestamp", title: "Data/Hora", width: "22%", className: "font-mono tabular-nums" },
-            { key: "operador", title: "Operador", width: "24%" },
-            { key: "entidade", title: "Entidade", width: "18%" },
-            { key: "operacao", title: "Operacao", align: "center", width: "18%" },
-            { key: "registro", title: "Registro", align: "center", width: "18%", className: "font-mono tabular-nums" },
+            { key: "timestamp", title: "Data/Hora", className: "font-mono tabular-nums" },
+            { key: "operador", title: "Operador" },
+            { key: "entidade", title: "Entidade" },
+            { key: "operacao", title: "Operacao", align: "center" },
+            { key: "registro", title: "Registro", align: "center", className: "font-mono tabular-nums" },
           ]}
           rows={filtrados}
           getRowKey={(row) => row.id}

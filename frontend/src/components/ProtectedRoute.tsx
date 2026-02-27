@@ -25,7 +25,15 @@ export function ProtectedRoute({ perfis, children }: ProtectedRouteProps) {
   }, [perfis]);
 
   if (validated === null) {
-    return <div className="min-h-screen bg-background" />;
+    return (
+      <div className="min-h-screen bg-background p-6">
+        <div className="mx-auto max-w-5xl space-y-4 animate-in fade-in-0">
+          <div className="h-12 rounded-2xl bg-muted animate-pulse-slow" />
+          <div className="h-40 rounded-2xl bg-muted/80 animate-pulse-slow" />
+          <div className="h-64 rounded-2xl bg-muted/65 animate-pulse-slow" />
+        </div>
+      </div>
+    );
   }
 
   if (!validated) {
