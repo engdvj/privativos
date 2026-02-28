@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { BACKUP_FORMAT_VERSION, RESET_DB_TARGETS } from "../constants/manutencao.js";
 import { AppError } from "../errors/app-error.js";
 import { authenticate, authorize } from "../middleware/auth.js";
 import { AdminService } from "../services/admin-service.js";
@@ -9,29 +10,63 @@ import { ExportService } from "../services/export-service.js";
 const adminService = new AdminService();
 const dashboardService = new DashboardService();
 const exportService = new ExportService();
+const tamanhoSchema = z
+  .string()
+  .min(1)
+  .max(20)
+  .transform((value) => value.trim().toUpperCase());
+const unidadesSchema = z.array(z.string().min(1).max(100)).min(1);
+const setoresSchema = z.array(z.string().min(1).max(100)).min(1);
+const funcoesSchema = z.array(z.string().min(1).max(100)).min(1);
 
-const funcionarioCreateSchema = z.object({
-  matricula: z.string().min(1).max(20),
-  nome: z.string().min(1).max(150),
-  setor: z.string().min(1).max(100),
-  funcao: z.string().min(1).max(100),
-});
+const funcionarioCreateSchema = z
+  .object({
+    matricula: z.string().min(1).max(20),
+    nome: z.string().min(1).max(150),
+    unidade: z.string().min(1).max(100).optional(),
+    unidade_principal: z.string().min(1).max(100).optional(),
+    unidades: unidadesSchema.optional(),
+    setor: z.string().min(1).max(100).optional(),
+    setor_principal: z.string().min(1).max(100).optional(),
+    setores: setoresSchema.optional(),
+    funcao: z.string().min(1).max(100).optional(),
+    funcao_principal: z.string().min(1).max(100).optional(),
+    funcoes: funcoesSchema.optional(),
+  })
+  .refine((data) => Boolean(data.unidade_principal || data.unidade || data.unidades?.length), {
+    message: "Informe ao menos uma unidade",
+  })
+  .refine((data) => Boolean(data.setor_principal || data.setor || data.setores?.length), {
+    message: "Informe ao menos um setor",
+  })
+  .refine((data) => Boolean(data.funcao_principal || data.funcao || data.funcoes?.length), {
+    message: "Informe ao menos uma funcao",
+  });
 
 const funcionarioUpdateSchema = z.object({
   nome: z.string().min(1).max(150).optional(),
+  unidade: z.string().min(1).max(100).optional(),
+  unidade_principal: z.string().min(1).max(100).optional(),
+  unidades: unidadesSchema.optional(),
   setor: z.string().min(1).max(100).optional(),
+  setor_principal: z.string().min(1).max(100).optional(),
+  setores: setoresSchema.optional(),
   funcao: z.string().min(1).max(100).optional(),
+  funcao_principal: z.string().min(1).max(100).optional(),
+  funcoes: funcoesSchema.optional(),
   status_ativo: z.boolean().optional(),
 });
 
 const itemCreateSchema = z.object({
   codigo: z.string().min(1).max(50),
   descricao: z.string().min(1).max(200),
+  tamanho: tamanhoSchema,
   status: z.enum(["disponivel", "emprestado", "inativo"]).optional(),
 });
 
 const itemUpdateSchema = z.object({
   descricao: z.string().min(1).max(200).optional(),
+  tamanho: tamanhoSchema.optional(),
   status: z.enum(["disponivel", "emprestado", "inativo"]).optional(),
   status_ativo: z.boolean().optional(),
 });
@@ -55,6 +90,140 @@ const configUpdateSchema = z.object({
   max_kits_por_funcionario: z.coerce.number().int().positive(),
 });
 
+const configResetSchema = z.object({
+  chaves: z.array(z.string().min(1).max(100)).optional(),
+});
+
+const resetDbTargetSchema = z.enum(RESET_DB_TARGETS);
+const dateLikeSchema = z.union([z.string(), z.date()]);
+
+const maintenanceResetSchema = z.object({
+  alvos: z.array(resetDbTargetSchema).optional(),
+  preservar_usuario_atual: z.boolean().optional(),
+});
+
+const backupDataSchema = z.object({
+  configuracoes: z.array(
+    z.object({
+      chave: z.string().min(1).max(100),
+      valor: z.string().min(1).max(255),
+      atualizadoPor: z.string().max(150).nullable().optional(),
+      atualizadoEm: dateLikeSchema.nullable().optional(),
+    }),
+  ),
+  credenciais: z.array(
+    z.object({
+      usuario: z.string().min(1).max(100),
+      senhaHash: z.string().min(1).max(255),
+      perfil: z.enum(["setor", "admin", "superadmin"]),
+      nomeCompleto: z.string().min(1).max(150),
+      ativo: z.boolean(),
+      deveAlterarSenha: z.boolean(),
+      temaPreferido: z.string().min(1).max(10).default("light"),
+      criadoEm: dateLikeSchema,
+      criadoPor: z.string().min(1).max(150),
+      atualizadoPor: z.string().max(150).nullable().optional(),
+      atualizadoEm: dateLikeSchema.nullable().optional(),
+    }),
+  ),
+  setores: z.array(
+    z.object({
+      nome: z.string().min(1).max(100),
+      statusAtivo: z.boolean(),
+      criadoEm: dateLikeSchema,
+      atualizadoPor: z.string().max(150).nullable().optional(),
+      atualizadoEm: dateLikeSchema.nullable().optional(),
+    }),
+  ),
+  unidades: z.array(
+    z.object({
+      nome: z.string().min(1).max(100),
+      statusAtivo: z.boolean(),
+      criadoEm: dateLikeSchema,
+      atualizadoPor: z.string().max(150).nullable().optional(),
+      atualizadoEm: dateLikeSchema.nullable().optional(),
+    }),
+  ),
+  funcoes: z.array(
+    z.object({
+      nome: z.string().min(1).max(100),
+      statusAtivo: z.boolean(),
+      criadoEm: dateLikeSchema,
+      atualizadoPor: z.string().max(150).nullable().optional(),
+      atualizadoEm: dateLikeSchema.nullable().optional(),
+    }),
+  ),
+  funcionarios: z.array(
+    z.object({
+      matricula: z.string().min(1).max(20),
+      nome: z.string().min(1).max(150),
+      unidade: z.string().min(1).max(100).optional(),
+      unidades: z.array(z.string().min(1).max(100)).optional(),
+      setor: z.string().min(1).max(100).optional(),
+      setores: z.array(z.string().min(1).max(100)).optional(),
+      funcao: z.string().min(1).max(100),
+      funcoes: z.array(z.string().min(1).max(100)).optional(),
+      statusAtivo: z.boolean(),
+      criadoEm: dateLikeSchema,
+      atualizadoPor: z.string().max(150).nullable().optional(),
+      atualizadoEm: dateLikeSchema.nullable().optional(),
+    }),
+  ),
+  itens: z.array(
+    z.object({
+      codigo: z.string().min(1).max(50),
+      descricao: z.string().min(1).max(200),
+      tamanho: z.string().min(1).max(20),
+      status: z.enum(["disponivel", "emprestado", "inativo"]),
+      solicitanteMatricula: z.string().max(20).nullable().optional(),
+      dataEmprestimo: dateLikeSchema.nullable().optional(),
+      statusAtivo: z.boolean(),
+      criadoEm: dateLikeSchema,
+      atualizadoPor: z.string().max(150).nullable().optional(),
+      atualizadoEm: dateLikeSchema.nullable().optional(),
+    }),
+  ),
+  solicitacoes: z.array(
+    z.object({
+      timestamp: dateLikeSchema,
+      matricula: z.string().min(1).max(20),
+      nomeFuncionario: z.string().min(1).max(150),
+      itemCodigo: z.string().min(1).max(50),
+      operadorNome: z.string().min(1).max(150),
+    }),
+  ),
+  devolucoes: z.array(
+    z.object({
+      timestamp: dateLikeSchema,
+      matricula: z.string().min(1).max(20),
+      nomeFuncionario: z.string().min(1).max(150),
+      itemCodigo: z.string().min(1).max(50),
+      operadorNome: z.string().min(1).max(150),
+    }),
+  ),
+  auditoria: z.array(
+    z.object({
+      timestamp: dateLikeSchema,
+      operador: z.string().min(1).max(150),
+      entidade: z.string().min(1).max(50),
+      operacao: z.string().min(1).max(20),
+      registroId: z.string().min(1).max(100),
+      dadosAntes: z.unknown().optional().nullable(),
+      dadosDepois: z.unknown().optional().nullable(),
+    }),
+  ),
+});
+
+const maintenanceRestoreSchema = z.object({
+  backup: z.object({
+    versao_formato: z.coerce.number().int().positive(),
+    gerado_em: dateLikeSchema.optional(),
+    gerado_por: z.string().min(1).max(150).optional(),
+    dados: backupDataSchema,
+  }),
+  preservar_usuario_atual: z.boolean().optional(),
+});
+
 const catalogoCreateSchema = z.object({
   nome: z.string().min(1).max(100),
 });
@@ -67,8 +236,15 @@ const catalogoUpdateSchema = z.object({
 const dashboardFiltrosSchema = z.object({
   data_inicio: z.string().min(1).optional(),
   data_fim: z.string().min(1).optional(),
+  unidade: z.string().min(1).max(100).optional(),
   setor: z.string().min(1).max(100).optional(),
   matricula: z.string().min(1).max(20).optional(),
+});
+
+const setorFuncionariosQuerySchema = z.object({
+  pagina: z.coerce.number().int().positive().default(1),
+  limite: z.coerce.number().int().min(5).max(100).default(10),
+  include_inactive: z.string().optional(),
 });
 
 function parseBool(value: unknown) {
@@ -105,7 +281,17 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
     }
 
-    const row = await adminService.createFuncionario({ ...parsed.data, operador });
+    const row = await adminService.createFuncionario({
+      matricula: parsed.data.matricula,
+      nome: parsed.data.nome,
+      unidade: parsed.data.unidade_principal ?? parsed.data.unidade,
+      unidades: parsed.data.unidades,
+      setor: parsed.data.setor_principal ?? parsed.data.setor,
+      setores: parsed.data.setores,
+      funcao: parsed.data.funcao_principal ?? parsed.data.funcao,
+      funcoes: parsed.data.funcoes,
+      operador,
+    });
     return reply.status(201).send(row);
   });
 
@@ -124,8 +310,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
 
     const row = await adminService.updateFuncionario(params.matricula, {
       nome: parsed.data.nome,
-      setor: parsed.data.setor,
-      funcao: parsed.data.funcao,
+      unidade: parsed.data.unidade_principal ?? parsed.data.unidade,
+      unidades: parsed.data.unidades,
+      setor: parsed.data.setor_principal ?? parsed.data.setor,
+      setores: parsed.data.setores,
+      funcao: parsed.data.funcao_principal ?? parsed.data.funcao,
+      funcoes: parsed.data.funcoes,
       statusAtivo: parsed.data.status_ativo,
       operador,
     });
@@ -147,6 +337,85 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const includeInactive = parseBool((request.query as Record<string, unknown>)?.include_inactive);
     const rows = await adminService.listSetores(includeInactive);
     return reply.status(200).send(rows);
+  });
+
+  app.get("/admin/unidades", async (request, reply) => {
+    const includeInactive = parseBool((request.query as Record<string, unknown>)?.include_inactive);
+    const rows = await adminService.listUnidades(includeInactive);
+    return reply.status(200).send(rows);
+  });
+
+  app.get("/admin/unidades/:id/funcionarios", async (request, reply) => {
+    const params = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
+    const query = setorFuncionariosQuerySchema.parse(request.query ?? {});
+    const includeInactive = parseBool(query.include_inactive);
+
+    const result = await adminService.listFuncionariosPorUnidade(params.id, {
+      pagina: query.pagina,
+      limite: query.limite,
+      includeInactive,
+    });
+
+    return reply.status(200).send(result);
+  });
+
+  app.post("/admin/unidades", async (request, reply) => {
+    const parsed = catalogoCreateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+    }
+
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+
+    const row = await adminService.createUnidade({ nome: parsed.data.nome, operador });
+    return reply.status(201).send(row);
+  });
+
+  app.put("/admin/unidades/:id", async (request, reply) => {
+    const params = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
+    const parsed = catalogoUpdateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+    }
+
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+
+    const row = await adminService.updateUnidade(params.id, {
+      nome: parsed.data.nome,
+      statusAtivo: parsed.data.status_ativo,
+      operador,
+    });
+    return reply.status(200).send(row);
+  });
+
+  app.delete("/admin/unidades/:id", async (request, reply) => {
+    const params = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+    await adminService.deleteUnidade(params.id, operador);
+    return reply.status(204).send();
+  });
+
+  app.get("/admin/setores/:id/funcionarios", async (request, reply) => {
+    const params = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
+    const query = setorFuncionariosQuerySchema.parse(request.query ?? {});
+    const includeInactive = parseBool(query.include_inactive);
+
+    const result = await adminService.listFuncionariosPorSetor(params.id, {
+      pagina: query.pagina,
+      limite: query.limite,
+      includeInactive,
+    });
+
+    return reply.status(200).send(result);
   });
 
   app.post("/admin/setores", async (request, reply) => {
@@ -281,6 +550,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
 
     const row = await adminService.updateItem(params.codigo, {
       descricao: parsed.data.descricao,
+      tamanho: parsed.data.tamanho,
       status: parsed.data.status,
       statusAtivo: parsed.data.status_ativo,
       operador,
@@ -391,6 +661,85 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
 
     const row = await adminService.setMaxKitsPorFuncionario(parsed.data.max_kits_por_funcionario, operador);
     return reply.status(200).send(row);
+  });
+
+  app.post("/admin/configuracoes/reset", async (request, reply) => {
+    ensureSuperadmin(request);
+    const parsed = configResetSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+    }
+
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+
+    const rows = await adminService.resetConfiguracoes(parsed.data.chaves, operador);
+    return reply.status(200).send(rows);
+  });
+
+  app.get("/admin/manutencao/backup", async (request, reply) => {
+    ensureSuperadmin(request);
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+
+    const backup = await adminService.gerarBackupBanco(operador);
+    return reply.status(200).send(backup);
+  });
+
+  app.post("/admin/manutencao/reset", async (request, reply) => {
+    ensureSuperadmin(request);
+    const parsed = maintenanceResetSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+    }
+
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+
+    const result = await adminService.resetBanco({
+      alvos: parsed.data.alvos,
+      preservarUsuarioAtual: parsed.data.preservar_usuario_atual,
+      usuarioAtual: request.user?.usuario,
+      operador,
+    });
+
+    return reply.status(200).send(result);
+  });
+
+  app.post("/admin/manutencao/restaurar", async (request, reply) => {
+    ensureSuperadmin(request);
+    const parsed = maintenanceRestoreSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+    }
+
+    if (parsed.data.backup.versao_formato !== BACKUP_FORMAT_VERSION) {
+      throw new AppError(
+        400,
+        "INVALID_PAYLOAD",
+        `Versao de backup invalida. Esperado ${BACKUP_FORMAT_VERSION}.`,
+      );
+    }
+
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+
+    const result = await adminService.restaurarBanco({
+      backup: parsed.data.backup,
+      preservarUsuarioAtual: parsed.data.preservar_usuario_atual,
+      usuarioAtual: request.user?.usuario,
+      operador,
+    });
+
+    return reply.status(200).send(result);
   });
 
   app.get("/admin/auditoria", async (request, reply) => {

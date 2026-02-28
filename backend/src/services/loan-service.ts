@@ -10,7 +10,14 @@ export class LoanService {
     matricula: string;
     operadorNome: string;
     quantidade: number;
+    tamanho: string;
   }) {
+    const tamanho = input.tamanho.trim().toUpperCase();
+
+    if (!tamanho) {
+      throw new AppError(400, "INVALID_ITEM_SIZE", "Tamanho do item invalido");
+    }
+
     const funcionario = await prisma.funcionario.findFirst({
       where: {
         matricula: input.matricula,
@@ -50,13 +57,18 @@ export class LoanService {
         FROM itens
         WHERE status = 'disponivel'
           AND status_ativo = true
+          AND tamanho = ${tamanho}
         ORDER BY codigo ASC
         FOR UPDATE SKIP LOCKED
         LIMIT ${input.quantidade}
       `;
 
       if (disponiveis.length !== input.quantidade) {
-        throw new AppError(409, "INSUFFICIENT_ITEMS", "Nao ha itens suficientes disponiveis");
+        throw new AppError(
+          409,
+          "INSUFFICIENT_ITEMS",
+          "Nao ha itens suficientes disponiveis para o tamanho informado",
+        );
       }
 
       const now = new Date();

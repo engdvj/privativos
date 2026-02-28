@@ -5,6 +5,7 @@ import { redis } from "../lib/redis.js";
 export interface DashboardFiltros {
   data_inicio?: string;
   data_fim?: string;
+  unidade?: string;
   setor?: string;
   matricula?: string;
 }
@@ -25,6 +26,7 @@ interface DashboardResponse {
       nome_funcionario: string;
       item_codigo: string;
       operador_nome: string;
+      unidade: string | null;
       setor: string | null;
     }>;
     devolucoes: Array<{
@@ -34,6 +36,7 @@ interface DashboardResponse {
       nome_funcionario: string;
       item_codigo: string;
       operador_nome: string;
+      unidade: string | null;
       setor: string | null;
     }>;
   };
@@ -101,11 +104,46 @@ export class DashboardService {
     const funcionarios = matriculas.size
       ? await prisma.funcionario.findMany({
           where: { matricula: { in: Array.from(matriculas) } },
-          select: { matricula: true, setor: true },
+          select: {
+            matricula: true,
+            unidade: true,
+            setor: true,
+            unidades: {
+              include: {
+                unidade: {
+                  select: { nome: true },
+                },
+              },
+              orderBy: {
+                unidade: { nome: "asc" },
+              },
+            },
+            setores: {
+              include: {
+                setor: {
+                  select: { nome: true },
+                },
+              },
+              orderBy: {
+                setor: { nome: "asc" },
+              },
+            },
+          },
         })
       : [];
 
-    const setorByMatricula = new Map(funcionarios.map((f) => [f.matricula, f.setor]));
+    const setoresByMatricula = new Map(
+      funcionarios.map((funcionario) => [
+        funcionario.matricula,
+        this.extractSetores(funcionario.setor, funcionario.setores.map((item) => item.setor.nome)),
+      ]),
+    );
+    const unidadesByMatricula = new Map(
+      funcionarios.map((funcionario) => [
+        funcionario.matricula,
+        this.extractUnidades(funcionario.unidade, funcionario.unidades.map((item) => item.unidade.nome)),
+      ]),
+    );
 
     let solicitacoesRows = solicitacoes.map((s) => ({
       id: s.id,
@@ -114,7 +152,8 @@ export class DashboardService {
       nome_funcionario: s.nomeFuncionario,
       item_codigo: s.itemCodigo,
       operador_nome: s.operadorNome,
-      setor: setorByMatricula.get(s.matricula) ?? null,
+      unidade: this.formatUnidadeLabel(unidadesByMatricula.get(s.matricula) ?? []),
+      setor: this.formatSetorLabel(setoresByMatricula.get(s.matricula) ?? []),
     }));
 
     let devolucoesRows = devolucoes.map((d) => ({
@@ -124,12 +163,26 @@ export class DashboardService {
       nome_funcionario: d.nomeFuncionario,
       item_codigo: d.itemCodigo,
       operador_nome: d.operadorNome,
-      setor: setorByMatricula.get(d.matricula) ?? null,
+      unidade: this.formatUnidadeLabel(unidadesByMatricula.get(d.matricula) ?? []),
+      setor: this.formatSetorLabel(setoresByMatricula.get(d.matricula) ?? []),
     }));
 
+    if (normalized.unidade) {
+      solicitacoesRows = solicitacoesRows.filter((row) =>
+        (unidadesByMatricula.get(row.matricula) ?? []).includes(normalized.unidade),
+      );
+      devolucoesRows = devolucoesRows.filter((row) =>
+        (unidadesByMatricula.get(row.matricula) ?? []).includes(normalized.unidade),
+      );
+    }
+
     if (normalized.setor) {
-      solicitacoesRows = solicitacoesRows.filter((s) => s.setor === normalized.setor);
-      devolucoesRows = devolucoesRows.filter((d) => d.setor === normalized.setor);
+      solicitacoesRows = solicitacoesRows.filter((row) =>
+        (setoresByMatricula.get(row.matricula) ?? []).includes(normalized.setor),
+      );
+      devolucoesRows = devolucoesRows.filter((row) =>
+        (setoresByMatricula.get(row.matricula) ?? []).includes(normalized.setor),
+      );
     }
 
     const data: DashboardResponse = {
@@ -157,15 +210,28 @@ export class DashboardService {
     const cached = await redis.get(cacheKey);
 
     if (cached) {
-      return JSON.parse(cached) as { setores: string[]; funcionarios: Array<{ matricula: string; nome: string }> };
+      const parsed = JSON.parse(cached) as Partial<{
+        unidades: string[];
+        setores: string[];
+        funcionarios: Array<{ matricula: string; nome: string }>;
+      }>;
+      return {
+        unidades: Array.isArray(parsed.unidades) ? parsed.unidades : [],
+        setores: Array.isArray(parsed.setores) ? parsed.setores : [],
+        funcionarios: Array.isArray(parsed.funcionarios) ? parsed.funcionarios : [],
+      };
     }
 
-    const [setoresRaw, funcionariosRaw] = await Promise.all([
-      prisma.funcionario.findMany({
+    const [unidadesRaw, setoresRaw, funcionariosRaw] = await Promise.all([
+      prisma.unidade.findMany({
         where: { statusAtivo: true },
-        distinct: ["setor"],
-        select: { setor: true },
-        orderBy: { setor: "asc" },
+        select: { nome: true },
+        orderBy: { nome: "asc" },
+      }),
+      prisma.setor.findMany({
+        where: { statusAtivo: true },
+        select: { nome: true },
+        orderBy: { nome: "asc" },
       }),
       prisma.funcionario.findMany({
         where: { statusAtivo: true },
@@ -175,7 +241,8 @@ export class DashboardService {
     ]);
 
     const payload = {
-      setores: setoresRaw.map((s) => s.setor),
+      unidades: unidadesRaw.map((u) => u.nome),
+      setores: setoresRaw.map((s) => s.nome),
       funcionarios: funcionariosRaw,
     };
 
@@ -202,6 +269,52 @@ export class DashboardService {
     await redis.del("dashboard:filters");
   }
 
+  private extractSetores(setorPrincipal: string, setoresRelacionados: string[]) {
+    const vistos = new Set<string>();
+    const setores: string[] = [];
+
+    for (const nome of [setorPrincipal, ...setoresRelacionados]) {
+      const normalizado = nome.trim();
+      if (!normalizado || vistos.has(normalizado)) {
+        continue;
+      }
+      vistos.add(normalizado);
+      setores.push(normalizado);
+    }
+
+    return setores;
+  }
+
+  private extractUnidades(unidadePrincipal: string, unidadesRelacionadas: string[]) {
+    const vistos = new Set<string>();
+    const unidades: string[] = [];
+
+    for (const nome of [unidadePrincipal, ...unidadesRelacionadas]) {
+      const normalizado = nome.trim();
+      if (!normalizado || vistos.has(normalizado)) {
+        continue;
+      }
+      vistos.add(normalizado);
+      unidades.push(normalizado);
+    }
+
+    return unidades;
+  }
+
+  private formatSetorLabel(setores: string[]) {
+    if (setores.length === 0) {
+      return null;
+    }
+    return setores.join(", ");
+  }
+
+  private formatUnidadeLabel(unidades: string[]) {
+    if (unidades.length === 0) {
+      return null;
+    }
+    return unidades.join(", ");
+  }
+
   private cacheKey(filters: Required<DashboardFiltros>) {
     const payload = JSON.stringify(filters);
     const hash = createHash("sha256").update(payload).digest("hex");
@@ -212,6 +325,7 @@ export class DashboardService {
     return {
       data_inicio: input.data_inicio ?? "",
       data_fim: input.data_fim ?? "",
+      unidade: input.unidade ?? "",
       setor: input.setor ?? "",
       matricula: input.matricula ?? "",
     };

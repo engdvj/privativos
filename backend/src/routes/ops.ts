@@ -11,11 +11,17 @@ import { ValidationQueueService } from "../services/validation-queue-service.js"
 const queueService = new ValidationQueueService();
 const loanService = new LoanService();
 const returnService = new ReturnService();
+const tamanhoSchema = z
+  .string()
+  .min(1)
+  .max(20)
+  .transform((value) => value.trim().toUpperCase());
 
 const gerarCodigoSchema = z.object({
   matricula: z.string().min(1).max(20),
   tipo: z.enum(["emprestimo", "devolucao"]),
   quantidade: z.coerce.number().int().positive(),
+  tamanho: tamanhoSchema.optional(),
   item_codigos: z.array(z.string().min(1).max(50)).optional(),
 });
 
@@ -135,6 +141,75 @@ function montarCiclosHistorico(
   });
 }
 
+function extrairSetoresFuncionario(setorPrincipal: string, setoresRelacionados: string[]) {
+  const vistos = new Set<string>();
+  const setores: string[] = [];
+
+  for (const nome of [setorPrincipal, ...setoresRelacionados]) {
+    const normalizado = nome.trim();
+    if (!normalizado || vistos.has(normalizado)) {
+      continue;
+    }
+    vistos.add(normalizado);
+    setores.push(normalizado);
+  }
+
+  return setores;
+}
+
+function extrairUnidadesFuncionario(unidadePrincipal: string, unidadesRelacionadas: string[]) {
+  const vistos = new Set<string>();
+  const unidades: string[] = [];
+
+  for (const nome of [unidadePrincipal, ...unidadesRelacionadas]) {
+    const normalizado = nome.trim();
+    if (!normalizado || vistos.has(normalizado)) {
+      continue;
+    }
+    vistos.add(normalizado);
+    unidades.push(normalizado);
+  }
+
+  return unidades;
+}
+
+function formatarSetorLabel(setores: string[]) {
+  if (setores.length === 0) {
+    return "-";
+  }
+  return setores.join(", ");
+}
+
+function formatarUnidadeLabel(unidades: string[]) {
+  if (unidades.length === 0) {
+    return "-";
+  }
+  return unidades.join(", ");
+}
+
+function extrairFuncoesFuncionario(funcaoPrincipal: string, funcoesRelacionadas: string[]) {
+  const vistos = new Set<string>();
+  const funcoes: string[] = [];
+
+  for (const nome of [funcaoPrincipal, ...funcoesRelacionadas]) {
+    const normalizado = nome.trim();
+    if (!normalizado || vistos.has(normalizado)) {
+      continue;
+    }
+    vistos.add(normalizado);
+    funcoes.push(normalizado);
+  }
+
+  return funcoes;
+}
+
+function formatarFuncaoLabel(funcoes: string[]) {
+  if (funcoes.length === 0) {
+    return "-";
+  }
+  return funcoes.join(", ");
+}
+
 export const opsRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/ops/stream",
@@ -169,6 +244,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
           codigo: pending.payload.codigo,
           tipo: pending.tipo,
           quantidade: pending.payload.quantidade,
+          tamanho: pending.payload.tamanho ?? null,
           item_codigos: pending.payload.item_codigos,
         });
       }
@@ -206,6 +282,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         tipo: pending.tipo,
         codigo: pending.payload.codigo,
         quantidade: pending.payload.quantidade,
+        tamanho: pending.payload.tamanho ?? null,
         item_codigos: pending.payload.item_codigos,
       });
     },
@@ -241,6 +318,10 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
       }
 
+      if (parsed.data.tipo === "emprestimo" && !parsed.data.tamanho) {
+        throw new AppError(400, "INVALID_ITEM_SIZE", "Emprestimo exige tamanho");
+      }
+
       if (parsed.data.tipo === "devolucao") {
         const itemCodigos = [...new Set(parsed.data.item_codigos ?? [])];
         if (itemCodigos.length === 0) {
@@ -259,6 +340,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         matricula: parsed.data.matricula,
         tipo: parsed.data.tipo,
         quantidade: parsed.data.quantidade,
+        tamanho: parsed.data.tamanho,
         itemCodigos: parsed.data.item_codigos,
         operadorNome: operador,
       });
@@ -268,6 +350,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         matricula: parsed.data.matricula,
         tipo: parsed.data.tipo,
         quantidade: parsed.data.quantidade,
+        tamanho: parsed.data.tamanho ?? null,
         operador_nome: operador,
       });
 
@@ -344,10 +427,15 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       const payload = await queueService.consumirCodigo(parsed.data);
 
       if (parsed.data.tipo === "emprestimo") {
+        if (!payload.tamanho) {
+          throw new AppError(409, "INVALID_ITEM_SIZE", "Codigo pendente sem tamanho informado");
+        }
+
         const result = await loanService.registrarEmprestimo({
           matricula: parsed.data.matricula,
           operadorNome: payload.operador_nome,
           quantidade: payload.quantidade,
+          tamanho: payload.tamanho,
         });
 
         await queueService.limparOperacao(parsed.data.matricula, parsed.data.tipo);
@@ -356,6 +444,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
           evento: "loan.created",
           matricula: parsed.data.matricula,
           itens: result.itens_emprestados,
+          tamanho: payload.tamanho,
           operador_nome: payload.operador_nome,
         });
         return reply.status(200).send(result);
@@ -388,6 +477,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       const schema = z.object({
         matricula: z.string().min(1).max(20),
         quantidade: z.coerce.number().int().positive(),
+        tamanho: tamanhoSchema,
       });
 
       const parsed = schema.safeParse(request.body);
@@ -406,12 +496,14 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         matricula: parsed.data.matricula,
         operadorNome: operador,
         quantidade: parsed.data.quantidade,
+        tamanho: parsed.data.tamanho,
       });
 
       app.log.info({
         evento: "loan.created_direto",
         matricula: parsed.data.matricula,
         itens: result.itens_emprestados,
+        tamanho: parsed.data.tamanho,
         operador_nome: operador,
       });
 
@@ -462,6 +554,35 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.get(
+    "/ops/tamanhos-disponiveis",
+    {
+      preHandler: [authenticate, authorize(["setor"])],
+    },
+    async (_request, reply) => {
+      const rows = await prisma.item.groupBy({
+        by: ["tamanho"],
+        where: {
+          status: "disponivel",
+          statusAtivo: true,
+        },
+        _count: {
+          _all: true,
+        },
+        orderBy: {
+          tamanho: "asc",
+        },
+      });
+
+      return reply.status(200).send(
+        rows.map((row) => ({
+          tamanho: row.tamanho,
+          disponiveis: row._count._all,
+        })),
+      );
+    },
+  );
+
+  app.get(
     "/ops/itens-emprestados/:matricula",
     {
       preHandler: [authenticate, authorize(["setor"])],
@@ -478,6 +599,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         select: {
           codigo: true,
           descricao: true,
+          tamanho: true,
         },
         orderBy: { codigo: "asc" },
       });
@@ -501,7 +623,39 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         },
         select: {
           nome: true,
+          unidade: true,
           setor: true,
+          funcao: true,
+          unidades: {
+            include: {
+              unidade: {
+                select: { nome: true },
+              },
+            },
+            orderBy: {
+              unidade: { nome: "asc" },
+            },
+          },
+          setores: {
+            include: {
+              setor: {
+                select: { nome: true },
+              },
+            },
+            orderBy: {
+              setor: { nome: "asc" },
+            },
+          },
+          funcoes: {
+            include: {
+              funcao: {
+                select: { nome: true },
+              },
+            },
+            orderBy: {
+              funcao: { nome: "asc" },
+            },
+          },
         },
       });
 
@@ -522,9 +676,27 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         select: { valor: true },
       });
 
+      const setoresFuncionario = extrairSetoresFuncionario(
+        funcionario.setor,
+        funcionario.setores.map((item) => item.setor.nome),
+      );
+      const unidadesFuncionario = extrairUnidadesFuncionario(
+        funcionario.unidade,
+        funcionario.unidades.map((item) => item.unidade.nome),
+      );
+      const funcoesFuncionario = extrairFuncoesFuncionario(
+        funcionario.funcao,
+        funcionario.funcoes.map((item) => item.funcao.nome),
+      );
+
       return reply.status(200).send({
         nome: funcionario.nome,
-        setor: funcionario.setor,
+        unidade: formatarUnidadeLabel(unidadesFuncionario),
+        unidades: unidadesFuncionario,
+        setor: formatarSetorLabel(setoresFuncionario),
+        setores: setoresFuncionario,
+        funcao: funcionario.funcao,
+        funcoes: funcoesFuncionario,
         kits_em_uso: kitsEmUso,
         max_kits: Number(maxConfig?.valor ?? 2),
       });
@@ -552,8 +724,39 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
           select: {
             matricula: true,
             nome: true,
+            unidade: true,
             setor: true,
             funcao: true,
+            unidades: {
+              include: {
+                unidade: {
+                  select: { nome: true },
+                },
+              },
+              orderBy: {
+                unidade: { nome: "asc" },
+              },
+            },
+            funcoes: {
+              include: {
+                funcao: {
+                  select: { nome: true },
+                },
+              },
+              orderBy: {
+                funcao: { nome: "asc" },
+              },
+            },
+            setores: {
+              include: {
+                setor: {
+                  select: { nome: true },
+                },
+              },
+              orderBy: {
+                setor: { nome: "asc" },
+              },
+            },
           },
           orderBy: [{ nome: "asc" }, { matricula: "asc" }],
           take: 6,
@@ -563,11 +766,13 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
             OR: [
               { codigo: { contains: termo, mode: "insensitive" } },
               { descricao: { contains: termo, mode: "insensitive" } },
+              { tamanho: { contains: termo, mode: "insensitive" } },
             ],
           },
           select: {
             codigo: true,
             descricao: true,
+            tamanho: true,
             status: true,
             solicitanteMatricula: true,
           },
@@ -577,17 +782,32 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       ]);
 
       const sugestoes = [
-        ...funcionarios.map((funcionario) => ({
-          tipo: "funcionario" as const,
-          chave: funcionario.matricula,
-          titulo: funcionario.nome,
-          subtitulo: `Matricula ${funcionario.matricula} | ${funcionario.setor} | ${funcionario.funcao}`,
-        })),
+        ...funcionarios.map((funcionario) => {
+          const setoresFuncionario = extrairSetoresFuncionario(
+            funcionario.setor,
+            funcionario.setores.map((item) => item.setor.nome),
+          );
+          const unidadesFuncionario = extrairUnidadesFuncionario(
+            funcionario.unidade,
+            funcionario.unidades.map((item) => item.unidade.nome),
+          );
+          const funcoesFuncionario = extrairFuncoesFuncionario(
+            funcionario.funcao,
+            funcionario.funcoes.map((item) => item.funcao.nome),
+          );
+
+          return {
+            tipo: "funcionario" as const,
+            chave: funcionario.matricula,
+            titulo: funcionario.nome,
+            subtitulo: `Matricula ${funcionario.matricula} | ${formatarUnidadeLabel(unidadesFuncionario)} | ${formatarSetorLabel(setoresFuncionario)} | ${formatarFuncaoLabel(funcoesFuncionario)}`,
+          };
+        }),
         ...kits.map((kit) => ({
           tipo: "kit" as const,
           chave: kit.codigo,
           titulo: `Kit ${kit.codigo}`,
-          subtitulo: `${kit.descricao} | Status: ${kit.status}${kit.solicitanteMatricula ? ` | Matricula atual: ${kit.solicitanteMatricula}` : ""}`,
+          subtitulo: `${kit.descricao} | Tam: ${kit.tamanho} | Status: ${kit.status}${kit.solicitanteMatricula ? ` | Matricula atual: ${kit.solicitanteMatricula}` : ""}`,
         })),
       ];
 
@@ -614,6 +834,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         select: {
           codigo: true,
           descricao: true,
+          tamanho: true,
           status: true,
           statusAtivo: true,
           solicitanteMatricula: true,
@@ -655,6 +876,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
           kit: {
             codigo: kit.codigo,
             descricao: kit.descricao,
+            tamanho: kit.tamanho,
             status: kit.status,
             status_ativo: kit.statusAtivo,
             solicitante_matricula: kit.solicitanteMatricula,
@@ -700,9 +922,40 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         select: {
           matricula: true,
           nome: true,
+          unidade: true,
           setor: true,
           funcao: true,
           statusAtivo: true,
+          unidades: {
+            include: {
+              unidade: {
+                select: { nome: true },
+              },
+            },
+            orderBy: {
+              unidade: { nome: "asc" },
+            },
+          },
+          setores: {
+            include: {
+              setor: {
+                select: { nome: true },
+              },
+            },
+            orderBy: {
+              setor: { nome: "asc" },
+            },
+          },
+          funcoes: {
+            include: {
+              funcao: {
+                select: { nome: true },
+              },
+            },
+            orderBy: {
+              funcao: { nome: "asc" },
+            },
+          },
         },
         orderBy: [{ nome: "asc" }, { matricula: "asc" }],
         take: 8,
@@ -723,16 +976,47 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(200).send({
           tipo: "sugestoes_funcionario",
           consulta: termo,
-          sugestoes: funcionarios.map((funcionario) => ({
-            matricula: funcionario.matricula,
-            nome: funcionario.nome,
-            setor: funcionario.setor,
-            funcao: funcionario.funcao,
-          })),
+          sugestoes: funcionarios.map((funcionario) => {
+            const setoresFuncionario = extrairSetoresFuncionario(
+              funcionario.setor,
+              funcionario.setores.map((item) => item.setor.nome),
+            );
+            const unidadesFuncionario = extrairUnidadesFuncionario(
+              funcionario.unidade,
+              funcionario.unidades.map((item) => item.unidade.nome),
+            );
+            const funcoesFuncionario = extrairFuncoesFuncionario(
+              funcionario.funcao,
+              funcionario.funcoes.map((item) => item.funcao.nome),
+            );
+
+            return {
+              matricula: funcionario.matricula,
+              nome: funcionario.nome,
+              unidade: formatarUnidadeLabel(unidadesFuncionario),
+              unidades: unidadesFuncionario,
+              setor: formatarSetorLabel(setoresFuncionario),
+              setores: setoresFuncionario,
+              funcao: funcionario.funcao,
+              funcoes: funcoesFuncionario,
+            };
+          }),
         });
       }
 
       const funcionario = funcionarioExato ?? funcionarios[0];
+      const setoresFuncionario = extrairSetoresFuncionario(
+        funcionario.setor,
+        funcionario.setores.map((item) => item.setor.nome),
+      );
+      const unidadesFuncionario = extrairUnidadesFuncionario(
+        funcionario.unidade,
+        funcionario.unidades.map((item) => item.unidade.nome),
+      );
+      const funcoesFuncionario = extrairFuncoesFuncionario(
+        funcionario.funcao,
+        funcionario.funcoes.map((item) => item.funcao.nome),
+      );
 
       const [itensEmprestados, solicitacoes, devolucoes] = await Promise.all([
         prisma.item.findMany({
@@ -744,6 +1028,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
           select: {
             codigo: true,
             descricao: true,
+            tamanho: true,
             dataEmprestimo: true,
           },
           orderBy: { codigo: "asc" },
@@ -780,13 +1065,18 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         funcionario: {
           matricula: funcionario.matricula,
           nome: funcionario.nome,
-          setor: funcionario.setor,
+          unidade: formatarUnidadeLabel(unidadesFuncionario),
+          unidades: unidadesFuncionario,
+          setor: formatarSetorLabel(setoresFuncionario),
+          setores: setoresFuncionario,
           funcao: funcionario.funcao,
+          funcoes: funcoesFuncionario,
           status_ativo: funcionario.statusAtivo,
         },
         itens_emprestados: itensEmprestados.map((item) => ({
           codigo: item.codigo,
           descricao: item.descricao,
+          tamanho: item.tamanho,
           data_emprestimo: item.dataEmprestimo,
         })),
         historico: {

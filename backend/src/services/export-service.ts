@@ -8,7 +8,7 @@ export class ExportService {
     const data = await this.dashboardService.getData(filtros);
 
     const workbook = new ExcelJS.Workbook();
-    workbook.creator = "Controle de Privativos";
+    workbook.creator = "Privativos";
     workbook.created = new Date();
 
     const resumo = workbook.addWorksheet("Resumo");
@@ -31,6 +31,7 @@ export class ExportService {
       { header: "Timestamp", key: "timestamp", width: 28 },
       { header: "Matricula", key: "matricula", width: 16 },
       { header: "Nome", key: "nome_funcionario", width: 28 },
+      { header: "Unidade", key: "unidade", width: 24 },
       { header: "Setor", key: "setor", width: 20 },
       { header: "Item", key: "item_codigo", width: 16 },
       { header: "Operador", key: "operador_nome", width: 28 },
@@ -48,6 +49,7 @@ export class ExportService {
       { header: "Timestamp", key: "timestamp", width: 28 },
       { header: "Matricula", key: "matricula", width: 16 },
       { header: "Nome", key: "nome_funcionario", width: 28 },
+      { header: "Unidade", key: "unidade", width: 24 },
       { header: "Setor", key: "setor", width: 20 },
       { header: "Item", key: "item_codigo", width: 16 },
       { header: "Operador", key: "operador_nome", width: 28 },
