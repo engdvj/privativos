@@ -41,28 +41,26 @@ export function QuantitySelector({
   };
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       {label && (
-        <label className="text-xs font-medium text-muted-foreground">
+        <label className="block text-xs font-medium leading-none text-muted-foreground">
           {label}
         </label>
       )}
-      <div className="relative inline-flex items-center gap-0 rounded-xl border border-border/70 bg-gradient-to-br from-surface-2 to-surface-2/50 p-1 shadow-sm transition-shadow hover:shadow-md">
-        {/* Botão de Decremento */}
+      <div className="inline-flex items-center gap-0.5 rounded-full border border-border/70 bg-surface-1 px-1 py-1 shadow-sm">
         <Button
           type="button"
           variant="ghost"
           size="icon"
           onClick={handleDecrement}
           disabled={!canDecrement || disabled}
-          className="h-9 w-9 rounded-lg hover:bg-primary/10 hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95"
+          className="h-8 w-8 rounded-full hover:bg-primary/10 hover:text-primary disabled:opacity-45 transition-all active:scale-95"
           aria-label="Diminuir quantidade"
         >
-          <Minus className="h-4 w-4" />
+          <Minus className="h-3.5 w-3.5" />
         </Button>
 
-        {/* Display do Valor */}
-        <div className="relative flex items-center justify-center px-2">
+        <div className="flex min-w-10 items-center justify-center px-1">
           <input
             type="number"
             value={value}
@@ -70,31 +68,23 @@ export function QuantitySelector({
             min={min}
             max={max}
             disabled={disabled}
-            className="w-14 bg-transparent text-center text-lg font-bold tabular-nums text-foreground focus:outline-none disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            className="w-10 bg-transparent text-center text-base font-semibold tabular-nums text-foreground focus:outline-none disabled:opacity-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             aria-label="Quantidade"
           />
         </div>
 
-        {/* Botão de Incremento */}
         <Button
           type="button"
           variant="ghost"
           size="icon"
           onClick={handleIncrement}
           disabled={!canIncrement || disabled}
-          className="h-9 w-9 rounded-lg hover:bg-primary/10 hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95"
+          className="h-8 w-8 rounded-full hover:bg-primary/10 hover:text-primary disabled:opacity-45 transition-all active:scale-95"
           aria-label="Aumentar quantidade"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-3.5 w-3.5" />
         </Button>
       </div>
-
-      {/* Indicador de Máximo */}
-      {max > 1 && (
-        <p className="text-xs text-muted-foreground text-center">
-          Máx: <span className="font-semibold text-foreground">{max}</span>
-        </p>
-      )}
     </div>
   );
 }

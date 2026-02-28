@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DataTable } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { FormField } from "@/components/ui/form-field";
 import { SectionCard } from "@/components/ui/section-card";
@@ -15,6 +16,35 @@ import { useToast } from "@/components/ui/use-toast";
 import { Package, Pencil, Plus, Trash2 } from "lucide-react";
 import { useGlobalDetail } from "@/components/global-detail/GlobalDetailProvider";
 import type { ItemRow, ItemStatus } from "../types";
+
+const NOVO_TAMANHO_OPTION = "__novo_tamanho__";
+const TAMANHOS_PADRAO = ["UNICO", "PP", "P", "M", "G", "GG", "XG"];
+const FILTRO_INPUT_CLASS =
+  "h-8 rounded-xl border-border/80 bg-background/85 text-xs dark:border-border/90 dark:bg-background/70";
+const FILTRO_SELECT_CLASS =
+  "h-8 rounded-xl border-border/80 bg-background/85 text-xs dark:border-border/90 dark:bg-background/70";
+const TABELA_CONTAINER_CLASS =
+  "overflow-hidden border-border/65 bg-background/72 shadow-[var(--shadow-soft)] dark:border-border/85 dark:bg-background/58";
+const TABELA_DENSE_CLASS = `${TABELA_CONTAINER_CLASS} [--table-inline-gap:0.95rem]`;
+const FILTRO_BAR_CLASS = "gap-1.5 md:flex-nowrap md:items-end";
+const SECTION_HEADER_CLASS = "gap-2 px-3 pb-2 pt-3 sm:px-4 sm:pb-2 sm:pt-4";
+const SECTION_CONTENT_CLASS = "space-y-2.5 px-3 pb-3 pt-0 sm:px-4 sm:pb-4";
+
+function normalizarTamanho(valor: string) {
+  return valor.trim().toUpperCase();
+}
+
+function montarOpcoesTamanho(tamanhosExistentes: string[]) {
+  const extras = [...new Set(
+    tamanhosExistentes
+      .map(normalizarTamanho)
+      .filter(Boolean),
+  )]
+    .filter((tamanho) => !TAMANHOS_PADRAO.includes(tamanho))
+    .sort((a, b) => a.localeCompare(b));
+
+  return [...TAMANHOS_PADRAO, ...extras];
+}
 
 export function ItensTab() {
   const [rows, setRows] = useState<ItemRow[]>([]);
@@ -33,6 +63,8 @@ export function ItensTab() {
     descricao: "",
     status: "disponivel" as ItemStatus,
   });
+  const [tamanhoSelecionado, setTamanhoSelecionado] = useState("UNICO");
+  const [novoTamanho, setNovoTamanho] = useState("");
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -62,9 +94,26 @@ export function ItensTab() {
     return () => window.removeEventListener("global-detail-updated", onUpdated);
   }, [carregar]);
 
+  const opcoesTamanho = useMemo(() => montarOpcoesTamanho(rows.map((row) => row.tamanho)), [rows]);
+
+  function abrirModalCriacao() {
+    setNovo({
+      codigo: "",
+      descricao: "",
+      status: "disponivel",
+    });
+    setTamanhoSelecionado("UNICO");
+    setNovoTamanho("");
+    setOpenCreateModal(true);
+  }
+
   async function criar() {
-    if (!novo.codigo || !novo.descricao) {
-      error("Preencha codigo e descricao para criar item");
+    const tamanhoFinal = tamanhoSelecionado === NOVO_TAMANHO_OPTION
+      ? normalizarTamanho(novoTamanho)
+      : normalizarTamanho(tamanhoSelecionado);
+
+    if (!novo.codigo || !novo.descricao || !tamanhoFinal) {
+      error("Preencha codigo, descricao e tamanho para criar item");
       return;
     }
 
@@ -73,9 +122,12 @@ export function ItensTab() {
       await api.post("/admin/itens", {
         codigo: novo.codigo.trim(),
         descricao: novo.descricao.trim(),
+        tamanho: tamanhoFinal,
         status: novo.status,
       });
       setNovo({ codigo: "", descricao: "", status: "disponivel" });
+      setTamanhoSelecionado("UNICO");
+      setNovoTamanho("");
       setOpenCreateModal(false);
       success("Item criado com sucesso");
       await carregar();
@@ -100,29 +152,51 @@ export function ItensTab() {
     const termo = busca.trim().toLowerCase();
     return rows.filter((row) => {
       const matchTexto =
-        !termo || [row.codigo, row.descricao, row.status, row.statusAtivo ? "ativo" : "inativo"].join(" ").toLowerCase().includes(termo);
+        !termo || [row.codigo, row.descricao, row.tamanho, row.status, row.statusAtivo ? "ativo" : "inativo"].join(" ").toLowerCase().includes(termo);
       const matchStatus = filtroStatusItem === "todos" || row.status === filtroStatusItem;
       const matchAtivo = filtroAtivo === "todos" || (filtroAtivo === "ativo" ? row.statusAtivo : !row.statusAtivo);
       return matchTexto && matchStatus && matchAtivo;
     });
   }, [rows, busca, filtroStatusItem, filtroAtivo]);
 
+  const resumoStatus = useMemo(() => {
+    return rowsFiltradas.reduce(
+      (acc, row) => {
+        if (row.status === "disponivel") acc.disponivel += 1;
+        if (row.status === "emprestado") acc.emprestado += 1;
+        if (row.status === "inativo") acc.inativo += 1;
+        return acc;
+      },
+      { disponivel: 0, emprestado: 0, inativo: 0 },
+    );
+  }, [rowsFiltradas]);
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <SectionCard
-        title="Itens"
+        title={<span className="text-sm font-semibold">Itens</span>}
         icon={Package}
-        description={`Total filtrado: ${rowsFiltradas.length}`}
+        description={
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+            <span>Total: {rowsFiltradas.length}</span>
+            <span>Disponiveis: {resumoStatus.disponivel}</span>
+            <span>Emprestados: {resumoStatus.emprestado}</span>
+            <span>Inativos: {resumoStatus.inativo}</span>
+          </div>
+        }
+        className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)] dark:border-border/85 dark:bg-card/90"
+        headerClassName={SECTION_HEADER_CLASS}
+        contentClassName={SECTION_CONTENT_CLASS}
         actions={
-          <FilterBar>
+          <FilterBar className={FILTRO_BAR_CLASS}>
             <Input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar codigo ou descricao"
-              className="h-9 w-full sm:w-56"
+              placeholder="Buscar codigo, descricao ou tamanho"
+              className={`${FILTRO_INPUT_CLASS} w-full sm:w-64`}
             />
             <Select value={filtroStatusItem} onValueChange={(value) => setFiltroStatusItem(value as "todos" | ItemStatus)}>
-              <SelectTrigger className="h-9 w-full sm:w-40">
+              <SelectTrigger className={`${FILTRO_SELECT_CLASS} w-full sm:w-40`}>
                 <SelectValue placeholder="Status do item" />
               </SelectTrigger>
               <SelectContent>
@@ -132,8 +206,8 @@ export function ItensTab() {
                 <SelectItem value="inativo">inativo</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={filtroAtivo} onValueChange={(value) => setFiltroAtivo(value as "todos" | "ativo" | "inativo")}> 
-              <SelectTrigger className="h-9 w-full sm:w-36">
+            <Select value={filtroAtivo} onValueChange={(value) => setFiltroAtivo(value as "todos" | "ativo" | "inativo")}>
+              <SelectTrigger className={`${FILTRO_SELECT_CLASS} w-full sm:w-36`}>
                 <SelectValue placeholder="Ativo" />
               </SelectTrigger>
               <SelectContent>
@@ -142,110 +216,240 @@ export function ItensTab() {
                 <SelectItem value="inativo">Inativo</SelectItem>
               </SelectContent>
             </Select>
-            <Button size="icon" onClick={() => setOpenCreateModal(true)} aria-label="Novo item" title="Novo item">
+            <Button
+              size="icon"
+              className="h-8 w-8 shrink-0 rounded-lg bg-gradient-to-r from-primary to-primary/85 text-primary-foreground"
+              onClick={abrirModalCriacao}
+              aria-label="Novo item"
+              title="Novo item"
+            >
               <Plus className="h-4 w-4" />
             </Button>
           </FilterBar>
         }
       >
-        <DataTable
-          columns={[
-            { key: "codigo", title: "Codigo" },
-            { key: "descricao", title: "Descricao" },
-            { key: "status", title: "Status", align: "center" },
-            { key: "ativo", title: "Ativo", align: "center" },
-            { key: "acoes", title: "Acoes", align: "center" },
-          ]}
-          rows={rowsFiltradas}
-          getRowKey={(row) => row.codigo}
-          loading={loading}
-          emptyMessage="Nenhum item encontrado."
-          minWidthClassName="min-w-[900px]"
-          renderRow={(row) => (
-            <>
-              <td className="font-mono font-semibold">{row.codigo}</td>
-              <td>{row.descricao}</td>
-              <td>
-                <div className="flex justify-center">
-                  <StatusPill tone="info">{row.status}</StatusPill>
-                </div>
-              </td>
-              <td>
-                <div className="flex justify-center">
-                  <StatusPill tone={row.statusAtivo ? "success" : "danger"}>
+        <div className="hidden md:block">
+          <DataTable
+            columns={[
+              {
+                key: "codigo",
+                title: "Codigo",
+                width: "16%",
+                className: "font-mono font-semibold",
+                sortValue: (row) => row.codigo,
+              },
+              { key: "descricao", title: "Descricao", width: "32%", sortValue: (row) => row.descricao },
+              { key: "tamanho", title: "Tamanho", align: "center", width: "13%", sortValue: (row) => row.tamanho },
+              { key: "status", title: "Status", align: "center", width: "13%", sortValue: (row) => row.status },
+              { key: "ativo", title: "Ativo", align: "center", width: "12%", sortValue: (row) => row.statusAtivo },
+              { key: "acoes", title: "Acoes", align: "center", width: "14%" },
+            ]}
+            rows={rowsFiltradas}
+            getRowKey={(row) => row.codigo}
+            onRowClick={(row) => {
+              void openKit(row.codigo);
+            }}
+            loading={loading}
+            emptyMessage="Nenhum item encontrado."
+            minWidthClassName="min-w-[860px]"
+            containerClassName={TABELA_DENSE_CLASS}
+            renderRow={(row) => (
+              <>
+                <td>{row.codigo}</td>
+                <td className="max-w-0 truncate" title={row.descricao}>{row.descricao}</td>
+                <td>
+                  <div className="flex justify-center">
+                    <StatusPill tone="neutral" className="text-[10px]">{row.tamanho}</StatusPill>
+                  </div>
+                </td>
+                <td>
+                  <div className="flex justify-center">
+                    <StatusPill tone="info" className="text-[10px]">{row.status}</StatusPill>
+                  </div>
+                </td>
+                <td>
+                  <div className="flex justify-center">
+                    <StatusPill tone={row.statusAtivo ? "success" : "danger"} className="text-[10px]">
+                      {row.statusAtivo ? "ativo" : "inativo"}
+                    </StatusPill>
+                  </div>
+                </td>
+                <td>
+                  <TableActions className="justify-center">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 rounded-lg"
+                      onClick={() => {
+                        void openKit(row.codigo);
+                      }}
+                      aria-label={`Editar item ${row.codigo}`}
+                      title="Editar"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/12 hover:text-destructive"
+                      onClick={() => setItemParaExcluir(row)}
+                      aria-label={`Apagar item ${row.codigo}`}
+                      title="Apagar"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableActions>
+                </td>
+              </>
+            )}
+          />
+        </div>
+
+        <div className="space-y-2 md:hidden">
+          {loading ? (
+            Array.from({ length: 3 }).map((_, index) => (
+              <div key={`item-skeleton-${index}`} className="rounded-xl border border-border/70 bg-surface-2/80 p-3">
+                <div className="h-3 w-24 animate-pulse rounded bg-muted/70" />
+                <div className="mt-2 h-2.5 w-full animate-pulse rounded bg-muted/60" />
+                <div className="mt-1.5 h-2.5 w-3/4 animate-pulse rounded bg-muted/45" />
+              </div>
+            ))
+          ) : rowsFiltradas.length === 0 ? (
+            <div className="rounded-xl border border-border/70 bg-surface-2/80 px-3 py-5">
+              <EmptyState compact title="Nenhum item encontrado." />
+            </div>
+          ) : (
+            rowsFiltradas.map((row) => (
+              <article
+                key={row.codigo}
+                className="rounded-xl border border-border/70 bg-surface-2/85 p-3 shadow-[var(--shadow-soft)]"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <button
+                    type="button"
+                    className="font-mono text-sm font-semibold text-primary underline-offset-2 hover:underline"
+                    onClick={() => {
+                      void openKit(row.codigo);
+                    }}
+                  >
+                    {row.codigo}
+                  </button>
+                  <StatusPill tone={row.statusAtivo ? "success" : "danger"} className="text-[10px]">
                     {row.statusAtivo ? "ativo" : "inativo"}
                   </StatusPill>
                 </div>
-              </td>
-              <td>
-                <TableActions className="justify-center">
+                <p className="mt-1 text-sm font-medium text-foreground">{row.descricao}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <StatusPill tone="neutral" className="text-[10px]">{row.tamanho}</StatusPill>
+                  <StatusPill tone="info" className="text-[10px]">{row.status}</StatusPill>
+                </div>
+                <div className="mt-2 flex justify-end gap-1.5">
                   <Button
                     size="icon"
                     variant="ghost"
+                    className="h-8 w-8 rounded-lg"
                     onClick={() => {
                       void openKit(row.codigo);
                     }}
                     aria-label={`Editar item ${row.codigo}`}
-                    title="Editar"
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
                   <Button
                     size="icon"
                     variant="ghost"
+                    className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/12 hover:text-destructive"
                     onClick={() => setItemParaExcluir(row)}
-                    className="text-destructive hover:bg-destructive/12 hover:text-destructive"
                     aria-label={`Apagar item ${row.codigo}`}
-                    title="Apagar"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
-                </TableActions>
-              </td>
-            </>
+                </div>
+              </article>
+            ))
           )}
-        />
+        </div>
       </SectionCard>
 
-      <Modal open={openCreateModal} onClose={() => setOpenCreateModal(false)} title="Novo Item" maxWidthClassName="max-w-2xl">
-        <div className="grid gap-3 md:grid-cols-3">
-          <FormField label="Codigo" htmlFor="novo-item-codigo">
-            <Input
-              id="novo-item-codigo"
-              value={novo.codigo}
-              onChange={(e) => setNovo((p) => ({ ...p, codigo: e.target.value }))}
-              placeholder="Codigo"
-            />
-          </FormField>
-          <FormField label="Descricao" htmlFor="novo-item-descricao">
-            <Input
-              id="novo-item-descricao"
-              value={novo.descricao}
-              onChange={(e) => setNovo((p) => ({ ...p, descricao: e.target.value }))}
-              placeholder="Descricao"
-            />
-          </FormField>
-          <FormField label="Status" htmlFor="novo-item-status">
-            <Select
-              value={novo.status}
-              onValueChange={(value) => setNovo((p) => ({ ...p, status: value as ItemStatus }))}
-            >
-              <SelectTrigger id="novo-item-status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="disponivel">disponivel</SelectItem>
-                <SelectItem value="emprestado">emprestado</SelectItem>
-                <SelectItem value="inativo">inativo</SelectItem>
-              </SelectContent>
-            </Select>
-          </FormField>
-        </div>
-        <div className="mt-4 flex justify-end">
-          <Button onClick={criar} loading={creating}>
-            <Plus className="h-4 w-4" />
-            Criar
-          </Button>
+      <Modal
+        open={openCreateModal}
+        onClose={() => setOpenCreateModal(false)}
+        title="Novo Item"
+        description="Cadastre codigo, descricao, tamanho e status inicial."
+        maxWidthClassName="max-w-3xl"
+      >
+        <div className="space-y-3">
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+            <FormField label="Codigo" htmlFor="novo-item-codigo">
+              <Input
+                id="novo-item-codigo"
+                value={novo.codigo}
+                onChange={(e) => setNovo((p) => ({ ...p, codigo: e.target.value }))}
+                placeholder="Codigo"
+                className="h-9 text-xs"
+              />
+            </FormField>
+            <FormField label="Descricao" htmlFor="novo-item-descricao" className="sm:col-span-2 xl:col-span-1">
+              <Input
+                id="novo-item-descricao"
+                value={novo.descricao}
+                onChange={(e) => setNovo((p) => ({ ...p, descricao: e.target.value }))}
+                placeholder="Descricao"
+                className="h-9 text-xs"
+              />
+            </FormField>
+            <FormField label="Tamanho" htmlFor="novo-item-tamanho-select">
+              <Select value={tamanhoSelecionado} onValueChange={setTamanhoSelecionado}>
+                <SelectTrigger id="novo-item-tamanho-select" className="h-9 text-xs">
+                  <SelectValue placeholder="Selecione o tamanho" />
+                </SelectTrigger>
+                <SelectContent>
+                  {opcoesTamanho.map((tamanho) => (
+                    <SelectItem key={tamanho} value={tamanho}>
+                      {tamanho}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={NOVO_TAMANHO_OPTION}>Criar novo tamanho...</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="Status" htmlFor="novo-item-status">
+              <Select
+                value={novo.status}
+                onValueChange={(value) => setNovo((p) => ({ ...p, status: value as ItemStatus }))}
+              >
+                <SelectTrigger id="novo-item-status" className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="disponivel">disponivel</SelectItem>
+                  <SelectItem value="emprestado">emprestado</SelectItem>
+                  <SelectItem value="inativo">inativo</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
+            {tamanhoSelecionado === NOVO_TAMANHO_OPTION && (
+              <FormField label="Novo tamanho" htmlFor="novo-item-tamanho-custom" className="sm:col-span-2">
+                <Input
+                  id="novo-item-tamanho-custom"
+                  value={novoTamanho}
+                  onChange={(e) => setNovoTamanho(e.target.value.toUpperCase())}
+                  placeholder="Ex.: EXG"
+                  maxLength={20}
+                  className="h-9 text-xs"
+                />
+              </FormField>
+            )}
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" className="h-9 text-xs" onClick={() => setOpenCreateModal(false)}>
+              Cancelar
+            </Button>
+            <Button className="h-9 text-xs" onClick={criar} loading={creating}>
+              <Plus className="h-4 w-4" />
+              Criar
+            </Button>
+          </div>
         </div>
       </Modal>
 

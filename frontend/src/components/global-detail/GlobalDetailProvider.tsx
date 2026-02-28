@@ -1,16 +1,31 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Loader2, Save } from "lucide-react";
+import {
+  Loader2,
+  Save,
+  User,
+  Package,
+  Clock,
+  ArrowRightLeft,
+  CalendarDays,
+  UserCog,
+  ChevronRight,
+  Pencil,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/ui/use-toast";
 import { Modal } from "@/components/ui/modal";
-import { Badge } from "@/components/ui/badge";
+import { StatusPill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { ItemStatus } from "@/pages/admin/types";
+
+const NOVO_TAMANHO_OPTION = "__novo_tamanho__";
+const TAMANHOS_PADRAO = ["UNICO", "PP", "P", "M", "G", "GG", "XG"];
 
 interface HistoricoEvento {
   timestamp: string;
@@ -26,6 +41,7 @@ interface BuscaKitResponse {
   kit: {
     codigo: string;
     descricao: string;
+    tamanho: string;
     status: ItemStatus;
     status_ativo: boolean;
     solicitante_matricula: string | null;
@@ -43,13 +59,18 @@ interface BuscaFuncionarioResponse {
   funcionario: {
     matricula: string;
     nome: string;
+    unidade: string;
+    unidades?: string[];
     setor: string;
+    setores?: string[];
     funcao: string;
+    funcoes?: string[];
     status_ativo: boolean;
   };
   itens_emprestados: Array<{
     codigo: string;
     descricao: string;
+    tamanho: string;
     data_emprestimo: string | null;
   }>;
   historico: {
@@ -64,8 +85,12 @@ interface BuscaSugestoesResponse {
   sugestoes: Array<{
     matricula: string;
     nome: string;
+    unidade: string;
+    unidades?: string[];
     setor: string;
+    setores?: string[];
     funcao: string;
+    funcoes?: string[];
   }>;
 }
 
@@ -88,13 +113,18 @@ interface CatalogoRow {
 
 interface FuncionarioEditDraft {
   nome: string;
-  setor: string;
-  funcao: string;
+  unidades: string[];
+  unidadePrincipal: string;
+  setores: string[];
+  setorPrincipal: string;
+  funcoes: string[];
+  funcaoPrincipal: string;
   status_ativo: boolean;
 }
 
 interface KitEditDraft {
   descricao: string;
+  tamanho: string;
   status: ItemStatus;
   status_ativo: boolean;
 }
@@ -139,10 +169,10 @@ function statusKitLabel(status: ItemStatus) {
   return "Inativo";
 }
 
-function statusKitVariant(status: ItemStatus): "default" | "secondary" | "destructive" {
-  if (status === "disponivel") return "secondary";
-  if (status === "emprestado") return "default";
-  return "destructive";
+function statusKitTone(status: ItemStatus): "success" | "info" | "danger" {
+  if (status === "disponivel") return "success";
+  if (status === "emprestado") return "info";
+  return "danger";
 }
 
 function formatDuracaoHoras(horas: number | null) {
@@ -153,77 +183,111 @@ function formatDuracaoHoras(horas: number | null) {
   return `${horasInteiras}h ${minutos}m`;
 }
 
-function montarCiclosHistorico(
-  solicitacoes: HistoricoEvento[],
-  devolucoes: HistoricoEvento[],
-): HistoricoCiclo[] {
-  const pendentes = new Map<string, HistoricoEvento[]>();
-  const ciclos: HistoricoCiclo[] = [];
+function obterUsuarioAssociadoKit(
+  kit: BuscaKitResponse["kit"],
+  historico: BuscaKitResponse["historico"],
+) {
+  if (kit.status !== "emprestado" || !kit.solicitante_matricula) {
+    return null;
+  }
 
-  const eventos = [
-    ...solicitacoes.map((evento) => ({ tipo: "saida" as const, evento })),
-    ...devolucoes.map((evento) => ({ tipo: "entrada" as const, evento })),
-  ].sort((a, b) => new Date(a.evento.timestamp).getTime() - new Date(b.evento.timestamp).getTime());
+  const matricula = kit.solicitante_matricula.trim();
+  if (!matricula) {
+    return null;
+  }
 
-  for (const item of eventos) {
-    const key = `${item.evento.item_codigo}::${item.evento.matricula}`;
-    if (item.tipo === "saida") {
-      const fila = pendentes.get(key) ?? [];
-      fila.push(item.evento);
-      pendentes.set(key, fila);
+  const solicitacoes = historico.solicitacoes
+    .filter((evento) => evento.matricula === matricula)
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  const nome = solicitacoes[0]?.nome_funcionario?.trim();
+  return nome ? `${nome} (${matricula})` : matricula;
+}
+
+function normalizarSetoresFuncionario(setores?: string[] | null, setorPrincipal?: string | null) {
+  const principal = (setorPrincipal ?? "").trim();
+  const principalEhLabelComposto = principal.includes(",") && (setores?.length ?? 0) > 0;
+  const candidatos = principalEhLabelComposto ? [...(setores ?? [])] : [principal, ...(setores ?? [])];
+  const vistos = new Set<string>();
+  const resultado: string[] = [];
+
+  for (const setor of candidatos) {
+    const nome = setor.trim();
+    if (!nome || vistos.has(nome)) {
       continue;
     }
-
-    const fila = pendentes.get(key) ?? [];
-    const saida = fila.shift();
-    if (fila.length > 0) {
-      pendentes.set(key, fila);
-    } else {
-      pendentes.delete(key);
-    }
-
-    if (!saida) continue;
-
-    const duracaoMs = new Date(item.evento.timestamp).getTime() - new Date(saida.timestamp).getTime();
-    ciclos.push({
-      matricula: saida.matricula,
-      nome_funcionario: saida.nome_funcionario,
-      item_codigo: saida.item_codigo,
-      saida_em: saida.timestamp,
-      saida_operador: saida.operador_nome,
-      entrada_em: item.evento.timestamp,
-      entrada_operador: item.evento.operador_nome,
-      duracao_horas: duracaoMs >= 0 ? Number((duracaoMs / 3_600_000).toFixed(2)) : null,
-      em_aberto: false,
-    });
+    vistos.add(nome);
+    resultado.push(nome);
   }
 
-  for (const fila of pendentes.values()) {
-    for (const saida of fila) {
-      ciclos.push({
-        matricula: saida.matricula,
-        nome_funcionario: saida.nome_funcionario,
-        item_codigo: saida.item_codigo,
-        saida_em: saida.timestamp,
-        saida_operador: saida.operador_nome,
-        entrada_em: null,
-        entrada_operador: null,
-        duracao_horas: null,
-        em_aberto: true,
-      });
+  return resultado;
+}
+
+function formatarSetoresFuncionario(setores: string[]) {
+  return setores.join(", ") || "-";
+}
+
+function normalizarUnidadesFuncionario(unidades?: string[] | null, unidadePrincipal?: string | null) {
+  const candidatos = [unidadePrincipal ?? "", ...(unidades ?? [])];
+  const vistos = new Set<string>();
+  const resultado: string[] = [];
+
+  for (const unidade of candidatos) {
+    const nome = unidade.trim();
+    if (!nome || vistos.has(nome)) {
+      continue;
     }
+    vistos.add(nome);
+    resultado.push(nome);
   }
 
-  return ciclos.sort((a, b) => {
-    const aTime = a.saida_em ? new Date(a.saida_em).getTime() : 0;
-    const bTime = b.saida_em ? new Date(b.saida_em).getTime() : 0;
-    return bTime - aTime;
-  });
+  return resultado;
+}
+
+function formatarUnidadesFuncionario(unidades: string[]) {
+  return unidades.join(", ") || "-";
+}
+
+function normalizarFuncoesFuncionario(funcoes?: string[] | null, funcaoPrincipal?: string | null) {
+  const candidatos = [funcaoPrincipal ?? "", ...(funcoes ?? [])];
+  const vistos = new Set<string>();
+  const resultado: string[] = [];
+
+  for (const funcao of candidatos) {
+    const nome = funcao.trim();
+    if (!nome || vistos.has(nome)) {
+      continue;
+    }
+    vistos.add(nome);
+    resultado.push(nome);
+  }
+
+  return resultado;
+}
+
+function formatarFuncoesFuncionario(funcoes: string[]) {
+  return funcoes.join(", ") || "-";
 }
 
 function canEditInModal() {
   const perfil = api.getPerfil();
   return perfil === "admin" || perfil === "superadmin";
+}
+
+function normalizarTamanho(valor: string) {
+  return valor.trim().toUpperCase();
+}
+
+function montarOpcoesTamanho(tamanhosExistentes: string[]) {
+  const extras = [...new Set(
+    tamanhosExistentes
+      .map(normalizarTamanho)
+      .filter(Boolean),
+  )]
+    .filter((tamanho) => !TAMANHOS_PADRAO.includes(tamanho))
+    .sort((a, b) => a.localeCompare(b));
+
+  return [...TAMANHOS_PADRAO, ...extras];
 }
 
 export function GlobalDetailProvider({ children }: { children: ReactNode }) {
@@ -235,19 +299,28 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
   const [resultado, setResultado] = useState<BuscaGlobalResponse | null>(null);
   const [lastQuery, setLastQuery] = useState("");
   const [editMode, setEditMode] = useState(false);
+  const [unidades, setUnidades] = useState<CatalogoRow[]>([]);
   const [setores, setSetores] = useState<CatalogoRow[]>([]);
   const [funcoes, setFuncoes] = useState<CatalogoRow[]>([]);
   const [draftFuncionario, setDraftFuncionario] = useState<FuncionarioEditDraft>({
     nome: "",
-    setor: "",
-    funcao: "",
+    unidades: [],
+    unidadePrincipal: "",
+    setores: [],
+    setorPrincipal: "",
+    funcoes: [],
+    funcaoPrincipal: "",
     status_ativo: true,
   });
   const [draftKit, setDraftKit] = useState<KitEditDraft>({
     descricao: "",
+    tamanho: "UNICO",
     status: "disponivel",
     status_ativo: true,
   });
+  const [opcoesTamanhoKit, setOpcoesTamanhoKit] = useState<string[]>(TAMANHOS_PADRAO);
+  const [criandoNovoTamanhoKit, setCriandoNovoTamanhoKit] = useState(false);
+  const [novoTamanhoKit, setNovoTamanhoKit] = useState("");
   const [historicoModalOpen, setHistoricoModalOpen] = useState(false);
   const [historicoPagina, setHistoricoPagina] = useState(1);
   const [historicoLimite] = useState(20);
@@ -255,33 +328,152 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
   const [historicoCiclos, setHistoricoCiclos] = useState<HistoricoCiclo[]>([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
 
+  const setoresFuncionarioResultado = useMemo(() => {
+    if (!resultado || resultado.tipo !== "funcionario") {
+      return [];
+    }
+
+    return normalizarSetoresFuncionario(
+      resultado.funcionario.setores,
+      resultado.funcionario.setor,
+    );
+  }, [resultado]);
+
+  const unidadesFuncionarioResultado = useMemo(() => {
+    if (!resultado || resultado.tipo !== "funcionario") {
+      return [];
+    }
+
+    return normalizarUnidadesFuncionario(
+      resultado.funcionario.unidades,
+      resultado.funcionario.unidade,
+    );
+  }, [resultado]);
+
+  const funcoesFuncionarioResultado = useMemo(() => {
+    if (!resultado || resultado.tipo !== "funcionario") {
+      return [];
+    }
+
+    return normalizarFuncoesFuncionario(
+      resultado.funcionario.funcoes,
+      resultado.funcionario.funcao,
+    );
+  }, [resultado]);
+
   const hydrateDraftFromResult = useCallback((data: BuscaGlobalResponse) => {
     if (data.tipo === "funcionario") {
+      const unidades = normalizarUnidadesFuncionario(data.funcionario.unidades, data.funcionario.unidade);
+      const setores = normalizarSetoresFuncionario(data.funcionario.setores, data.funcionario.setor);
+      const funcoes = normalizarFuncoesFuncionario(data.funcionario.funcoes, data.funcionario.funcao);
       setDraftFuncionario({
         nome: data.funcionario.nome,
-        setor: data.funcionario.setor,
-        funcao: data.funcionario.funcao,
+        unidades,
+        unidadePrincipal: unidades[0] ?? "",
+        setores,
+        setorPrincipal: setores[0] ?? "",
+        funcoes,
+        funcaoPrincipal: funcoes[0] ?? "",
         status_ativo: data.funcionario.status_ativo,
       });
     }
     if (data.tipo === "kit") {
       setDraftKit({
         descricao: data.kit.descricao,
+        tamanho: data.kit.tamanho || "UNICO",
         status: data.kit.status,
         status_ativo: data.kit.status_ativo,
       });
+      setCriandoNovoTamanhoKit(false);
+      setNovoTamanhoKit("");
     }
   }, []);
 
   const ensureCatalogos = useCallback(async () => {
-    if (setores.length > 0 && funcoes.length > 0) return;
-    const [setoresData, funcoesData] = await Promise.all([
+    if (unidades.length > 0 && setores.length > 0 && funcoes.length > 0) return;
+    const [unidadesData, setoresData, funcoesData] = await Promise.all([
+      api.get<CatalogoRow[]>("/admin/unidades"),
       api.get<CatalogoRow[]>("/admin/setores"),
       api.get<CatalogoRow[]>("/admin/funcoes"),
     ]);
+    setUnidades(unidadesData.filter((row) => row.statusAtivo));
     setSetores(setoresData.filter((row) => row.statusAtivo));
     setFuncoes(funcoesData.filter((row) => row.statusAtivo));
-  }, [setores.length, funcoes.length]);
+  }, [unidades.length, setores.length, funcoes.length]);
+
+  const alternarUnidadeDraft = useCallback((nomeUnidade: string, checked: boolean) => {
+    setDraftFuncionario((prev) => {
+      if (checked) {
+        if (prev.unidades.includes(nomeUnidade)) {
+          return prev;
+        }
+        const unidades = [...prev.unidades, nomeUnidade];
+        return {
+          ...prev,
+          unidades,
+          unidadePrincipal: prev.unidadePrincipal || nomeUnidade,
+        };
+      }
+
+      const unidades = prev.unidades.filter((unidade) => unidade !== nomeUnidade);
+      return {
+        ...prev,
+        unidades,
+        unidadePrincipal: prev.unidadePrincipal === nomeUnidade ? (unidades[0] ?? "") : prev.unidadePrincipal,
+      };
+    });
+  }, []);
+
+  const alternarSetorDraft = useCallback((nomeSetor: string, checked: boolean) => {
+    setDraftFuncionario((prev) => {
+      if (checked) {
+        if (prev.setores.includes(nomeSetor)) {
+          return prev;
+        }
+        const setores = [...prev.setores, nomeSetor];
+        return {
+          ...prev,
+          setores,
+          setorPrincipal: prev.setorPrincipal || nomeSetor,
+        };
+      }
+
+      const setores = prev.setores.filter((setor) => setor !== nomeSetor);
+      return {
+        ...prev,
+        setores,
+        setorPrincipal: prev.setorPrincipal === nomeSetor ? (setores[0] ?? "") : prev.setorPrincipal,
+      };
+    });
+  }, []);
+
+  const alternarFuncaoDraft = useCallback((nomeFuncao: string, checked: boolean) => {
+    setDraftFuncionario((prev) => {
+      if (checked) {
+        if (prev.funcoes.includes(nomeFuncao)) {
+          return prev;
+        }
+        const funcoes = [...prev.funcoes, nomeFuncao];
+        return {
+          ...prev,
+          funcoes,
+          funcaoPrincipal: prev.funcaoPrincipal || nomeFuncao,
+        };
+      }
+
+      const funcoes = prev.funcoes.filter((funcao) => funcao !== nomeFuncao);
+      return {
+        ...prev,
+        funcoes,
+        funcaoPrincipal: prev.funcaoPrincipal === nomeFuncao ? (funcoes[0] ?? "") : prev.funcaoPrincipal,
+      };
+    });
+  }, []);
+
+  const ensureTamanhosKit = useCallback(async () => {
+    const itens = await api.get<Array<{ tamanho: string }>>("/admin/itens?include_inactive=true");
+    setOpcoesTamanhoKit(montarOpcoesTamanho(itens.map((item) => item.tamanho)));
+  }, []);
 
   const fetchByQuery = useCallback(
     async (query: string) => {
@@ -347,8 +539,18 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
         return;
       }
     }
+    if (resultado.tipo === "kit") {
+      try {
+        await ensureTamanhosKit();
+      } catch (err) {
+        error(err instanceof Error ? err.message : "Erro ao carregar tamanhos");
+        return;
+      }
+      setCriandoNovoTamanhoKit(false);
+      setNovoTamanhoKit("");
+    }
     setEditMode(true);
-  }, [resultado, ensureCatalogos, error]);
+  }, [resultado, ensureCatalogos, ensureTamanhosKit, error]);
 
   const refreshCurrent = useCallback(async () => {
     if (!lastQuery) return;
@@ -362,14 +564,52 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
     try {
       let entidadeAtualizada: "funcionario" | "kit" | null = null;
       if (resultado.tipo === "funcionario") {
-        if (!draftFuncionario.nome.trim() || !draftFuncionario.setor.trim() || !draftFuncionario.funcao.trim()) {
-          error("Preencha nome, setor e funcao");
+        if (
+          !draftFuncionario.nome.trim() ||
+          draftFuncionario.unidades.length === 0 ||
+          !draftFuncionario.unidadePrincipal ||
+          draftFuncionario.setores.length === 0 ||
+          !draftFuncionario.setorPrincipal ||
+          draftFuncionario.funcoes.length === 0 ||
+          !draftFuncionario.funcaoPrincipal
+        ) {
+          error("Preencha nome, unidade principal, setor principal e funcao principal");
           return;
         }
+        if (!draftFuncionario.unidades.includes(draftFuncionario.unidadePrincipal)) {
+          error("Unidade principal precisa estar na lista de unidades");
+          return;
+        }
+        if (!draftFuncionario.setores.includes(draftFuncionario.setorPrincipal)) {
+          error("Setor principal precisa estar na lista de setores");
+          return;
+        }
+        if (!draftFuncionario.funcoes.includes(draftFuncionario.funcaoPrincipal)) {
+          error("Funcao principal precisa estar na lista de funcoes");
+          return;
+        }
+        const setoresOrdenados = [
+          draftFuncionario.setorPrincipal,
+          ...draftFuncionario.setores.filter((setor) => setor !== draftFuncionario.setorPrincipal),
+        ];
+        const unidadesOrdenadas = [
+          draftFuncionario.unidadePrincipal,
+          ...draftFuncionario.unidades.filter((unidade) => unidade !== draftFuncionario.unidadePrincipal),
+        ];
+        const funcoesOrdenadas = [
+          draftFuncionario.funcaoPrincipal,
+          ...draftFuncionario.funcoes.filter((funcao) => funcao !== draftFuncionario.funcaoPrincipal),
+        ];
         await api.put(`/admin/funcionarios/${resultado.funcionario.matricula}`, {
           nome: draftFuncionario.nome.trim(),
-          setor: draftFuncionario.setor,
-          funcao: draftFuncionario.funcao,
+          unidade_principal: draftFuncionario.unidadePrincipal,
+          unidade: draftFuncionario.unidadePrincipal,
+          unidades: unidadesOrdenadas,
+          setor_principal: draftFuncionario.setorPrincipal,
+          setores: setoresOrdenados,
+          funcao_principal: draftFuncionario.funcaoPrincipal,
+          funcao: draftFuncionario.funcaoPrincipal,
+          funcoes: funcoesOrdenadas,
           status_ativo: draftFuncionario.status_ativo,
         });
         entidadeAtualizada = "funcionario";
@@ -377,15 +617,21 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
       }
 
       if (resultado.tipo === "kit") {
-        if (!draftKit.descricao.trim()) {
-          error("Informe a descricao do item");
+        const tamanhoFinal = criandoNovoTamanhoKit
+          ? normalizarTamanho(novoTamanhoKit)
+          : normalizarTamanho(draftKit.tamanho);
+
+        if (!draftKit.descricao.trim() || !tamanhoFinal) {
+          error("Informe descricao e tamanho do item");
           return;
         }
         await api.put(`/admin/itens/${resultado.kit.codigo}`, {
           descricao: draftKit.descricao.trim(),
+          tamanho: tamanhoFinal,
           status: draftKit.status,
           status_ativo: draftKit.status_ativo,
         });
+        setDraftKit((prev) => ({ ...prev, tamanho: tamanhoFinal }));
         entidadeAtualizada = "kit";
         success("Item atualizado");
       }
@@ -402,7 +648,17 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
     } finally {
       setSaving(false);
     }
-  }, [resultado, editMode, draftFuncionario, draftKit, error, success, refreshCurrent]);
+  }, [
+    resultado,
+    editMode,
+    draftFuncionario,
+    draftKit,
+    criandoNovoTamanhoKit,
+    novoTamanhoKit,
+    error,
+    success,
+    refreshCurrent,
+  ]);
 
   const historicoTarget = useMemo(() => {
     if (!resultado) return null;
@@ -451,13 +707,6 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
     setHistoricoPagina(1);
   }, [resultado]);
 
-  const ciclosRecentes = useMemo(() => {
-    if (!resultado || (resultado.tipo !== "funcionario" && resultado.tipo !== "kit")) {
-      return [];
-    }
-    return montarCiclosHistorico(resultado.historico.solicitacoes, resultado.historico.devolucoes).slice(0, 5);
-  }, [resultado]);
-
   const contextValue = useMemo<GlobalDetailContextValue>(
     () => ({
       openByQuery,
@@ -467,13 +716,72 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
     [openByQuery, openFuncionario, openKit],
   );
 
+  // --- Modal title, description, icon based on result type ---
+  const modalTitle = resultado?.tipo === "funcionario"
+    ? resultado.funcionario.nome
+    : resultado?.tipo === "kit"
+      ? `Kit ${resultado.kit.codigo}`
+      : "Detalhes";
+
+  const modalDescription = resultado?.tipo === "funcionario"
+    ? `Matricula ${resultado.funcionario.matricula}`
+    : resultado?.tipo === "kit"
+      ? `${resultado.kit.descricao} | Tam: ${resultado.kit.tamanho}`
+      : undefined;
+
+  const modalIcon = resultado?.tipo === "funcionario"
+    ? User
+    : resultado?.tipo === "kit"
+      ? Package
+      : undefined;
+  const detailModalMaxWidth = resultado?.tipo === "funcionario" ? "max-w-3xl" : "max-w-2xl";
+  const kitUsuarioAssociado = useMemo(() => {
+    if (!resultado || resultado.tipo !== "kit") {
+      return null;
+    }
+
+    return obterUsuarioAssociadoKit(resultado.kit, resultado.historico);
+  }, [resultado]);
+  const kitEmprestado = resultado?.tipo === "kit" && resultado.kit.status === "emprestado";
+
+  // --- Footer content for action buttons ---
+  let footerContent: ReactNode = null;
+  if (!loading && !erroBusca && resultado && (resultado.tipo === "funcionario" || resultado.tipo === "kit") && canEditInModal()) {
+    if (!editMode) {
+      footerContent = (
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={() => void handleEnableEdit()}>
+            <Pencil className="h-4 w-4" />
+            Editar
+          </Button>
+        </div>
+      );
+    } else {
+      footerContent = (
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setEditMode(false)} disabled={saving}>
+            Cancelar
+          </Button>
+          <Button onClick={() => void handleSave()} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Salvar
+          </Button>
+        </div>
+      );
+    }
+  }
+
   return (
     <GlobalDetailContext.Provider value={contextValue}>
       {children}
       <Modal
         open={open}
-        title={resultado ? `Detalhes: ${resultado.consulta}` : "Detalhes"}
+        title={modalTitle}
+        description={modalDescription}
+        icon={modalIcon}
+        maxWidthClassName={detailModalMaxWidth}
         onClose={handleClose}
+        footer={footerContent}
       >
         {loading && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -483,13 +791,13 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
         )}
 
         {!loading && erroBusca && (
-          <div className="rounded-md border border-destructive/45 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <div className="rounded-lg border border-destructive/45 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {erroBusca}
           </div>
         )}
 
         {!loading && !erroBusca && resultado?.tipo === "nao_encontrado" && (
-          <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-sm text-muted-foreground">
+          <div className="rounded-lg bg-muted/30 py-3 text-center text-sm text-muted-foreground">
             Nenhum kit, usuario ou matricula encontrado para: <strong>{resultado.consulta}</strong>.
           </div>
         )}
@@ -499,20 +807,29 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
             <p className="text-sm text-muted-foreground">
               Foram encontrados varios usuarios para <strong>{resultado.consulta}</strong>. Selecione um:
             </p>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {resultado.sugestoes.map((sugestao) => (
                 <button
                   key={sugestao.matricula}
                   type="button"
-                  className="w-full rounded-md border border-border/70 px-3 py-2 text-left transition-colors hover:bg-muted/40"
+                  className="group flex w-full items-center gap-3 rounded-lg border border-border/50 bg-surface-1 px-3 py-2.5 text-left transition-all hover:border-primary/30 hover:bg-accent/40"
                   onClick={() => {
                     void openFuncionario(sugestao.matricula);
                   }}
                 >
-                  <div className="font-medium">{sugestao.nome}</div>
-                  <div className="text-sm text-muted-foreground">
-                    Matricula {sugestao.matricula} | {sugestao.setor} | {sugestao.funcao}
+                  <div className="flex-1">
+                    <div className="font-medium text-foreground">{sugestao.nome}</div>
+                    <div className="text-sm text-muted-foreground">
+                      Matricula {sugestao.matricula} | {formatarSetoresFuncionario(
+                        normalizarSetoresFuncionario(sugestao.setores, sugestao.setor),
+                      )} | {formatarUnidadesFuncionario(
+                        normalizarUnidadesFuncionario(sugestao.unidades, sugestao.unidade),
+                      )} | {formatarFuncoesFuncionario(
+                        normalizarFuncoesFuncionario(sugestao.funcoes, sugestao.funcao),
+                      )}
+                    </div>
                   </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
                 </button>
               ))}
             </div>
@@ -520,24 +837,71 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
         )}
 
         {!loading && !erroBusca && resultado?.tipo === "kit" && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {!editMode ? (
-              <div className="rounded-md border border-border/70 p-3">
+              <div className="rounded-2xl border border-border/65 bg-surface-1/85 p-4 sm:p-5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-lg font-semibold text-primary">{resultado.kit.codigo}</span>
-                  <Badge variant={statusKitVariant(resultado.kit.status)}>
+                  <StatusPill tone={statusKitTone(resultado.kit.status)}>
                     {statusKitLabel(resultado.kit.status)}
-                  </Badge>
-                  {!resultado.kit.status_ativo && <Badge variant="destructive">Inativo no cadastro</Badge>}
+                  </StatusPill>
+                  {!resultado.kit.status_ativo && (
+                    <StatusPill tone="danger">Inativo no cadastro</StatusPill>
+                  )}
                 </div>
-                <p className="mt-2 text-sm">{resultado.kit.descricao}</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Matricula atual: {resultado.kit.solicitante_matricula ?? "-"} | Data emprestimo:{" "}
-                  {formatDateTime(resultado.kit.data_emprestimo)}
-                </p>
+                <div className="mt-4 grid gap-2.5 text-sm sm:grid-cols-2">
+                  <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      <Package className="h-3.5 w-3.5 text-primary/70" />
+                      Tamanho
+                    </div>
+                    <p className="mt-1 text-sm font-semibold text-foreground">{resultado.kit.tamanho}</p>
+                  </div>
+                  {kitEmprestado ? (
+                    <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        <User className="h-3.5 w-3.5 text-primary/70" />
+                        Usuario associado
+                      </div>
+                      <p className="mt-1 truncate text-sm font-semibold text-foreground">{kitUsuarioAssociado ?? "-"}</p>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-border/60 bg-background/55 p-3">
+                      <p className="text-sm font-medium text-foreground">Item livre</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Sem usuario associado no momento.</p>
+                    </div>
+                  )}
+                  {kitEmprestado && (
+                    <div className="rounded-xl border border-border/60 bg-background/70 p-3 sm:col-span-2">
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        <CalendarDays className="h-3.5 w-3.5 text-primary/70" />
+                        Emprestimo
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-foreground">
+                        {formatDateTime(resultado.kit.data_emprestimo)}
+                      </p>
+                    </div>
+                  )}
+                  {!kitEmprestado && resultado.kit.data_emprestimo && (
+                    <div className="rounded-xl border border-border/60 bg-background/70 p-3 sm:col-span-2">
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                        <CalendarDays className="h-3.5 w-3.5 text-primary/70" />
+                        Ultimo emprestimo registrado
+                      </div>
+                      <p className="mt-1 text-sm font-semibold text-foreground">
+                        {formatDateTime(resultado.kit.data_emprestimo)}
+                      </p>
+                    </div>
+                  )}
+                  {!kitEmprestado && !resultado.kit.data_emprestimo && (
+                    <div className="rounded-xl border border-dashed border-border/60 bg-background/55 p-3 sm:col-span-2">
+                      <p className="text-sm font-medium text-foreground">Disponivel para emprestimo</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Ainda sem registro de emprestimo em aberto.</p>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
-              <div className="space-y-3 rounded-md border border-border/70 p-3">
+              <div className="space-y-3 rounded-2xl border border-border/65 bg-surface-1/85 p-4 sm:p-5">
                 <div className="space-y-1">
                   <Label htmlFor="detalhe-kit-descricao">Descricao</Label>
                   <Input
@@ -548,6 +912,45 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                     }
                   />
                 </div>
+                <div className="space-y-1">
+                  <Label htmlFor="detalhe-kit-tamanho-select">Tamanho</Label>
+                  <Select
+                    value={criandoNovoTamanhoKit ? NOVO_TAMANHO_OPTION : draftKit.tamanho}
+                    onValueChange={(value) => {
+                      if (value === NOVO_TAMANHO_OPTION) {
+                        setCriandoNovoTamanhoKit(true);
+                        setNovoTamanhoKit("");
+                        return;
+                      }
+                      setCriandoNovoTamanhoKit(false);
+                      setDraftKit((prev) => ({ ...prev, tamanho: value }));
+                    }}
+                  >
+                    <SelectTrigger id="detalhe-kit-tamanho-select">
+                      <SelectValue placeholder="Selecione o tamanho" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {opcoesTamanhoKit.map((tamanho) => (
+                        <SelectItem key={tamanho} value={tamanho}>
+                          {tamanho}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value={NOVO_TAMANHO_OPTION}>Criar novo tamanho...</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {criandoNovoTamanhoKit && (
+                  <div className="space-y-1">
+                    <Label htmlFor="detalhe-kit-tamanho-novo">Novo tamanho</Label>
+                    <Input
+                      id="detalhe-kit-tamanho-novo"
+                      value={novoTamanhoKit}
+                      onChange={(event) => setNovoTamanhoKit(event.target.value.toUpperCase())}
+                      maxLength={20}
+                      placeholder="Ex.: EXG"
+                    />
+                  </div>
+                )}
                 <div className="space-y-1">
                   <Label htmlFor="detalhe-kit-status">Status</Label>
                   <Select
@@ -578,60 +981,70 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
               </div>
             )}
 
-            <div className="space-y-2 rounded-md border border-border/70 p-3">
-              <p className="text-sm font-semibold">Historico recente (saida x entrada)</p>
-              <HistoricoCiclosSection ciclos={ciclosRecentes} />
-              <div className="flex justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    void abrirHistoricoDetalhado();
-                  }}
-                >
-                  Ver historico completo
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              {canEditInModal() && !editMode && (
-                <Button variant="outline" onClick={() => void handleEnableEdit()}>
-                  Editar
-                </Button>
-              )}
-              {canEditInModal() && editMode && (
-                <>
-                  <Button variant="outline" onClick={() => setEditMode(false)} disabled={saving}>
-                    Cancelar
-                  </Button>
-                  <Button onClick={() => void handleSave()} disabled={saving}>
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                    Salvar
-                  </Button>
-                </>
-              )}
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void abrirHistoricoDetalhado();
+                }}
+              >
+                Ver historico completo
+              </Button>
             </div>
           </div>
         )}
 
         {!loading && !erroBusca && resultado?.tipo === "funcionario" && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {!editMode ? (
-              <div className="rounded-md border border-border/70 p-3">
+              <div className="rounded-2xl border border-border/65 bg-surface-1/85 p-4 sm:p-5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold">{resultado.funcionario.nome}</span>
-                  <Badge variant="outline">Matricula {resultado.funcionario.matricula}</Badge>
-                  <Badge variant={resultado.funcionario.status_ativo ? "secondary" : "destructive"}>
+                  <StatusPill tone={resultado.funcionario.status_ativo ? "success" : "danger"}>
                     {resultado.funcionario.status_ativo ? "Ativo" : "Inativo"}
-                  </Badge>
+                  </StatusPill>
                 </div>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Setor: {resultado.funcionario.setor} | Funcao: {resultado.funcionario.funcao}
-                </p>
+                <div className="mt-4 grid gap-2.5 text-sm sm:grid-cols-2">
+                  <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      <User className="h-3.5 w-3.5 text-primary/70" />
+                      Matricula
+                    </div>
+                    <p className="mt-1 font-mono text-sm font-semibold text-foreground">
+                      {resultado.funcionario.matricula}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      <ArrowRightLeft className="h-3.5 w-3.5 text-primary/70" />
+                      Unidades
+                    </div>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {formatarUnidadesFuncionario(unidadesFuncionarioResultado)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      <UserCog className="h-3.5 w-3.5 text-primary/70" />
+                      Funcoes
+                    </div>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {formatarFuncoesFuncionario(funcoesFuncionarioResultado)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-background/70 p-3 sm:col-span-2">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      <ArrowRightLeft className="h-3.5 w-3.5 text-primary/70" />
+                      Setores
+                    </div>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {formatarSetoresFuncionario(setoresFuncionarioResultado)}
+                    </p>
+                  </div>
+                </div>
               </div>
             ) : (
-              <div className="space-y-3 rounded-md border border-border/70 p-3">
+              <div className="space-y-3 rounded-2xl border border-border/65 bg-surface-1/85 p-4 sm:p-5">
                 <div className="space-y-1">
                   <Label htmlFor="detalhe-func-nome">Nome</Label>
                   <Input
@@ -642,42 +1055,113 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                     }
                   />
                 </div>
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-3">
                   <div className="space-y-1">
-                    <Label htmlFor="detalhe-func-setor">Setor</Label>
+                    <Label>Unidades</Label>
+                    <div className="max-h-44 space-y-2 overflow-y-auto rounded-lg border border-border/70 bg-background p-3">
+                      {unidades.map((unidade) => (
+                        <label key={unidade.id} className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={draftFuncionario.unidades.includes(unidade.nome)}
+                            onCheckedChange={(checked) =>
+                              alternarUnidadeDraft(unidade.nome, Boolean(checked))
+                            }
+                          />
+                          <span>{unidade.nome}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Selecionadas: {draftFuncionario.unidades.length}
+                    </p>
                     <Select
-                      value={draftFuncionario.setor}
+                      value={draftFuncionario.unidadePrincipal}
                       onValueChange={(value) =>
-                        setDraftFuncionario((prev) => ({ ...prev, setor: value }))
+                        setDraftFuncionario((prev) => ({ ...prev, unidadePrincipal: value }))
                       }
+                      disabled={draftFuncionario.unidades.length === 0}
                     >
-                      <SelectTrigger id="detalhe-func-setor">
-                        <SelectValue />
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a unidade principal" />
                       </SelectTrigger>
                       <SelectContent>
-                        {setores.map((setor) => (
-                          <SelectItem key={setor.id} value={setor.nome}>
-                            {setor.nome}
+                        {draftFuncionario.unidades.map((unidadeNome) => (
+                          <SelectItem key={unidadeNome} value={unidadeNome}>
+                            {unidadeNome}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="detalhe-func-funcao">Funcao</Label>
+                    <Label>Setores</Label>
+                    <div className="max-h-44 space-y-2 overflow-y-auto rounded-lg border border-border/70 bg-background p-3">
+                      {setores.map((setor) => (
+                        <label key={setor.id} className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={draftFuncionario.setores.includes(setor.nome)}
+                            onCheckedChange={(checked) =>
+                              alternarSetorDraft(setor.nome, Boolean(checked))
+                            }
+                          />
+                          <span>{setor.nome}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Selecionados: {draftFuncionario.setores.length}
+                    </p>
                     <Select
-                      value={draftFuncionario.funcao}
+                      value={draftFuncionario.setorPrincipal}
                       onValueChange={(value) =>
-                        setDraftFuncionario((prev) => ({ ...prev, funcao: value }))
+                        setDraftFuncionario((prev) => ({ ...prev, setorPrincipal: value }))
                       }
+                      disabled={draftFuncionario.setores.length === 0}
                     >
-                      <SelectTrigger id="detalhe-func-funcao">
-                        <SelectValue />
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o setor principal" />
                       </SelectTrigger>
                       <SelectContent>
-                        {funcoes.map((funcao) => (
-                          <SelectItem key={funcao.id} value={funcao.nome}>
-                            {funcao.nome}
+                        {draftFuncionario.setores.map((setorNome) => (
+                          <SelectItem key={setorNome} value={setorNome}>
+                            {setorNome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Funcoes</Label>
+                    <div className="max-h-44 space-y-2 overflow-y-auto rounded-lg border border-border/70 bg-background p-3">
+                      {funcoes.map((funcao) => (
+                        <label key={funcao.id} className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={draftFuncionario.funcoes.includes(funcao.nome)}
+                            onCheckedChange={(checked) =>
+                              alternarFuncaoDraft(funcao.nome, Boolean(checked))
+                            }
+                          />
+                          <span>{funcao.nome}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Selecionadas: {draftFuncionario.funcoes.length}
+                    </p>
+                    <Select
+                      value={draftFuncionario.funcaoPrincipal}
+                      onValueChange={(value) =>
+                        setDraftFuncionario((prev) => ({ ...prev, funcaoPrincipal: value }))
+                      }
+                      disabled={draftFuncionario.funcoes.length === 0}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a funcao principal" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {draftFuncionario.funcoes.map((funcaoNome) => (
+                          <SelectItem key={funcaoNome} value={funcaoNome}>
+                            {funcaoNome}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -696,87 +1180,72 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
               </div>
             )}
 
-            <div className="space-y-2 rounded-md border border-border/70 p-3">
-              <p className="text-sm font-semibold">Kits em uso</p>
+            {/* Kits em uso */}
+            <div className="space-y-2.5 rounded-2xl border border-border/65 bg-surface-1/85 p-4 sm:p-5">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <Package className="h-4 w-4 text-primary" />
+                Kits em uso
+                {resultado.itens_emprestados.length > 0 && (
+                  <span className="ml-auto text-xs font-normal text-muted-foreground">
+                    {resultado.itens_emprestados.length} ite{resultado.itens_emprestados.length === 1 ? "m" : "ns"}
+                  </span>
+                )}
+              </div>
               {resultado.itens_emprestados.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhum kit emprestado no momento.</p>
+                <p className="rounded-xl border border-dashed border-border/60 bg-background/55 py-3 text-center text-sm text-muted-foreground">
+                  Nenhum kit emprestado no momento.
+                </p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {resultado.itens_emprestados.map((item) => (
                     <button
                       key={item.codigo}
                       type="button"
-                      className="w-full rounded-md border border-border/60 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/40"
+                      className="group flex w-full items-center gap-3 rounded-xl border border-border/55 bg-background/70 px-3 py-2.5 text-left text-sm transition-all hover:border-primary/30 hover:bg-accent/40 hover:shadow-sm"
                       onClick={() => {
                         void openKit(item.codigo);
                       }}
                     >
-                      <div className="font-mono font-semibold text-primary">{item.codigo}</div>
-                      <div>{item.descricao}</div>
-                      <div className="text-xs text-muted-foreground">
-                        Emprestado em: {formatDateTime(item.data_emprestimo)}
+                      <div className="min-w-0 flex-1">
+                        <div className="font-mono font-semibold text-primary">{item.codigo}</div>
+                        <div className="truncate text-foreground">{item.descricao}</div>
+                        <div className="text-xs text-muted-foreground">Tamanho: {item.tamanho}</div>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <CalendarDays className="h-3 w-3" />
+                          {formatDateTime(item.data_emprestimo)}
+                        </div>
                       </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
                     </button>
                   ))}
                 </div>
               )}
             </div>
 
-            <div className="space-y-2 rounded-md border border-border/70 p-3">
-              <p className="text-sm font-semibold">Historico recente (saida x entrada)</p>
-              <HistoricoCiclosSection ciclos={ciclosRecentes} />
-              <div className="flex justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    void abrirHistoricoDetalhado();
-                  }}
-                >
-                  Ver historico completo
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              {canEditInModal() && !editMode && (
-                <Button variant="outline" onClick={() => void handleEnableEdit()}>
-                  Editar
-                </Button>
-              )}
-              {canEditInModal() && editMode && (
-                <>
-                  <Button variant="outline" onClick={() => setEditMode(false)} disabled={saving}>
-                    Cancelar
-                  </Button>
-                  <Button onClick={() => void handleSave()} disabled={saving}>
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                    Salvar
-                  </Button>
-                </>
-              )}
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void abrirHistoricoDetalhado();
+                }}
+              >
+                Ver historico completo
+              </Button>
             </div>
           </div>
         )}
       </Modal>
+
+      {/* Historico completo modal */}
       <Modal
         open={historicoModalOpen}
-        title="Historico completo (ciclos)"
+        title="Historico completo"
+        description="Todos os ciclos de saida e entrada"
+        icon={Clock}
         onClose={() => setHistoricoModalOpen(false)}
-      >
-        <div className="space-y-3">
-          {historicoLoading ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Carregando historico...
-            </div>
-          ) : historicoCiclos.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhum registro encontrado.</p>
-          ) : (
-            <HistoricoCiclosSection ciclos={historicoCiclos} />
-          )}
-
-          <div className="flex items-center justify-between border-t border-border/50 pt-3">
+        footer={
+          <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
               {historicoTotal === 0
                 ? "0 ciclos"
@@ -805,7 +1274,20 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
               </Button>
             </div>
           </div>
-        </div>
+        }
+      >
+        {historicoLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Carregando historico...
+          </div>
+        ) : historicoCiclos.length === 0 ? (
+          <p className="rounded-lg bg-muted/30 py-3 text-center text-sm text-muted-foreground">
+            Nenhum registro encontrado.
+          </p>
+        ) : (
+          <HistoricoCiclosSection ciclos={historicoCiclos} />
+        )}
       </Modal>
     </GlobalDetailContext.Provider>
   );
@@ -815,32 +1297,46 @@ function HistoricoCiclosSection({ ciclos }: { ciclos: HistoricoCiclo[] }) {
   return (
     <div className="space-y-2">
       {ciclos.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nenhum registro.</p>
+        <p className="rounded-lg bg-muted/30 py-3 text-center text-sm text-muted-foreground">
+          Nenhum registro.
+        </p>
       ) : (
         <div className="space-y-2">
           {ciclos.map((ciclo, index) => (
             <div
               key={`ciclo-${ciclo.item_codigo}-${ciclo.matricula}-${ciclo.saida_em ?? "sem-saida"}-${index}`}
-              className="rounded-md border border-border/60 px-3 py-2 text-sm"
+              className={cn(
+                "rounded-lg border-l-[3px] bg-surface-1 px-3 py-2.5 text-sm",
+                ciclo.em_aberto
+                  ? "border-l-warning"
+                  : "border-l-success",
+              )}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono font-semibold text-primary">{ciclo.item_codigo}</span>
-                  <span className="text-muted-foreground">{ciclo.nome_funcionario}</span>
+                  <span className="text-foreground">{ciclo.nome_funcionario}</span>
                   <span className="text-muted-foreground">({ciclo.matricula})</span>
                 </div>
-                <Badge variant={ciclo.em_aberto ? "destructive" : "secondary"}>
+                <StatusPill tone={ciclo.em_aberto ? "warning" : "success"}>
                   {ciclo.em_aberto ? "Em aberto" : "Concluido"}
-                </Badge>
+                </StatusPill>
               </div>
-              <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
-                <div>
-                  Saida: {formatDateTime(ciclo.saida_em)} | Operador: {ciclo.saida_operador ?? "-"}
+              <div className="mt-2 grid gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2">
+                <div className="flex items-center gap-1.5">
+                  <ArrowRightLeft className="h-3 w-3 text-primary/60" />
+                  Saida: {formatDateTime(ciclo.saida_em)}
+                  <span className="text-muted-foreground/70">({ciclo.saida_operador ?? "-"})</span>
                 </div>
-                <div>
-                  Entrada: {formatDateTime(ciclo.entrada_em)} | Operador: {ciclo.entrada_operador ?? "-"}
+                <div className="flex items-center gap-1.5">
+                  <ArrowRightLeft className="h-3 w-3 rotate-180 text-primary/60" />
+                  Entrada: {formatDateTime(ciclo.entrada_em)}
+                  <span className="text-muted-foreground/70">({ciclo.entrada_operador ?? "-"})</span>
                 </div>
-                <div>Tempo com kit: {formatDuracaoHoras(ciclo.duracao_horas)}</div>
+                <div className="flex items-center gap-1.5 sm:col-span-2">
+                  <Clock className="h-3 w-3 text-primary/60" />
+                  Tempo com kit: <span className="font-medium text-foreground">{formatDuracaoHoras(ciclo.duracao_horas)}</span>
+                </div>
               </div>
             </div>
           ))}

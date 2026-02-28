@@ -20,7 +20,7 @@ import type { CatalogoRow, FuncionarioRow } from "../types";
 
 const FUNCIONARIOS_POR_PAGINA = 8;
 
-interface SetorFuncionariosResponse {
+interface UnidadeFuncionariosResponse {
   pagina: number;
   limite: number;
   total: number;
@@ -38,7 +38,7 @@ const FILTRO_BAR_CLASS = "gap-1.5 md:flex-nowrap md:items-end";
 const SECTION_HEADER_CLASS = "gap-2 px-3 pb-2 pt-3 sm:px-4 sm:pb-2 sm:pt-4";
 const SECTION_CONTENT_CLASS = "space-y-2.5 px-3 pb-3 pt-0 sm:px-4 sm:pb-4";
 
-export function SetoresTab() {
+export function UnidadesTab() {
   const [rows, setRows] = useState<CatalogoRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<number | null>(null);
@@ -49,22 +49,22 @@ export function SetoresTab() {
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "inativo">("todos");
   const [nomeNovo, setNomeNovo] = useState("");
   const [edicao, setEdicao] = useState({ nome: "", status_ativo: true });
-  const [setorParaExcluir, setSetorParaExcluir] = useState<CatalogoRow | null>(null);
-  const [setorSelecionado, setSetorSelecionado] = useState<CatalogoRow | null>(null);
-  const [funcionariosSetor, setFuncionariosSetor] = useState<FuncionarioRow[]>([]);
-  const [totalFuncionariosSetor, setTotalFuncionariosSetor] = useState(0);
-  const [paginaFuncionariosSetor, setPaginaFuncionariosSetor] = useState(1);
-  const [loadingFuncionariosSetor, setLoadingFuncionariosSetor] = useState(false);
+  const [unidadeParaExcluir, setUnidadeParaExcluir] = useState<CatalogoRow | null>(null);
+  const [unidadeSelecionada, setUnidadeSelecionada] = useState<CatalogoRow | null>(null);
+  const [funcionariosUnidade, setFuncionariosUnidade] = useState<FuncionarioRow[]>([]);
+  const [totalFuncionariosUnidade, setTotalFuncionariosUnidade] = useState(0);
+  const [paginaFuncionariosUnidade, setPaginaFuncionariosUnidade] = useState(1);
+  const [loadingFuncionariosUnidade, setLoadingFuncionariosUnidade] = useState(false);
   const { success, error } = useToast();
   const { openFuncionario } = useGlobalDetail();
 
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.get<CatalogoRow[]>("/admin/setores?include_inactive=true");
+      const data = await api.get<CatalogoRow[]>("/admin/unidades?include_inactive=true");
       setRows(data);
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao carregar setores");
+      error(err instanceof Error ? err.message : "Erro ao carregar unidades");
     } finally {
       setLoading(false);
     }
@@ -89,69 +89,69 @@ export function SetoresTab() {
   );
   const inativosFiltrados = rowsFiltradas.length - ativosFiltrados;
 
-  const carregarFuncionariosSetor = useCallback(async () => {
-    if (!setorSelecionado) {
+  const carregarFuncionariosUnidade = useCallback(async () => {
+    if (!unidadeSelecionada) {
       return;
     }
 
-    setLoadingFuncionariosSetor(true);
+    setLoadingFuncionariosUnidade(true);
     try {
       const query = new URLSearchParams({
-        pagina: String(paginaFuncionariosSetor),
+        pagina: String(paginaFuncionariosUnidade),
         limite: String(FUNCIONARIOS_POR_PAGINA),
         include_inactive: "true",
       });
-      const data = await api.get<SetorFuncionariosResponse>(
-        `/admin/setores/${setorSelecionado.id}/funcionarios?${query.toString()}`,
+      const data = await api.get<UnidadeFuncionariosResponse>(
+        `/admin/unidades/${unidadeSelecionada.id}/funcionarios?${query.toString()}`,
       );
-      setFuncionariosSetor(data.rows);
-      setTotalFuncionariosSetor(data.total);
+      setFuncionariosUnidade(data.rows);
+      setTotalFuncionariosUnidade(data.total);
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao carregar funcionarios do setor");
+      error(err instanceof Error ? err.message : "Erro ao carregar funcionarios da unidade");
     } finally {
-      setLoadingFuncionariosSetor(false);
+      setLoadingFuncionariosUnidade(false);
     }
-  }, [error, paginaFuncionariosSetor, setorSelecionado]);
+  }, [error, paginaFuncionariosUnidade, unidadeSelecionada]);
 
   useEffect(() => {
-    if (!setorSelecionado) return;
-    void carregarFuncionariosSetor();
-  }, [setorSelecionado, paginaFuncionariosSetor, carregarFuncionariosSetor]);
+    if (!unidadeSelecionada) return;
+    void carregarFuncionariosUnidade();
+  }, [unidadeSelecionada, paginaFuncionariosUnidade, carregarFuncionariosUnidade]);
 
-  const totalPaginasFuncionariosSetor = Math.max(
+  const totalPaginasFuncionariosUnidade = Math.max(
     1,
-    Math.ceil(totalFuncionariosSetor / FUNCIONARIOS_POR_PAGINA),
+    Math.ceil(totalFuncionariosUnidade / FUNCIONARIOS_POR_PAGINA),
   );
-  const inicioFuncionariosSetor =
-    totalFuncionariosSetor === 0
+  const inicioFuncionariosUnidade =
+    totalFuncionariosUnidade === 0
       ? 0
-      : (paginaFuncionariosSetor - 1) * FUNCIONARIOS_POR_PAGINA + 1;
-  const fimFuncionariosSetor = Math.min(
-    paginaFuncionariosSetor * FUNCIONARIOS_POR_PAGINA,
-    totalFuncionariosSetor,
+      : (paginaFuncionariosUnidade - 1) * FUNCIONARIOS_POR_PAGINA + 1;
+  const fimFuncionariosUnidade = Math.min(
+    paginaFuncionariosUnidade * FUNCIONARIOS_POR_PAGINA,
+    totalFuncionariosUnidade,
   );
 
   useEffect(() => {
-    if (paginaFuncionariosSetor > totalPaginasFuncionariosSetor) {
-      setPaginaFuncionariosSetor(totalPaginasFuncionariosSetor);
+    if (paginaFuncionariosUnidade > totalPaginasFuncionariosUnidade) {
+      setPaginaFuncionariosUnidade(totalPaginasFuncionariosUnidade);
     }
-  }, [paginaFuncionariosSetor, totalPaginasFuncionariosSetor]);
+  }, [paginaFuncionariosUnidade, totalPaginasFuncionariosUnidade]);
 
-  function abrirFuncionariosSetor(row: CatalogoRow) {
-    setSetorSelecionado(row);
-    setPaginaFuncionariosSetor(1);
-    setFuncionariosSetor([]);
-    setTotalFuncionariosSetor(0);
-  }
-
-  function setoresLabel(row: FuncionarioRow) {
-    const setores = row.setores?.length ? row.setores : row.setor ? [row.setor] : [];
-    return setores.join(", ") || "-";
+  function abrirFuncionariosUnidade(row: CatalogoRow) {
+    setUnidadeSelecionada(row);
+    setPaginaFuncionariosUnidade(1);
+    setFuncionariosUnidade([]);
+    setTotalFuncionariosUnidade(0);
   }
 
   function unidadesLabel(row: FuncionarioRow) {
     const unidades = row.unidades?.length ? row.unidades : row.unidade ? [row.unidade] : [];
     return unidades.join(", ") || "-";
+  }
+
+  function setoresLabel(row: FuncionarioRow) {
+    const setores = row.setores?.length ? row.setores : row.setor ? [row.setor] : [];
+    return setores.join(", ") || "-";
   }
 
   function funcoesLabel(row: FuncionarioRow) {
@@ -161,19 +161,19 @@ export function SetoresTab() {
 
   async function criar() {
     if (!nomeNovo.trim()) {
-      error("Informe o nome do setor");
+      error("Informe o nome da unidade");
       return;
     }
 
     setCreating(true);
     try {
-      await api.post("/admin/setores", { nome: nomeNovo.trim() });
+      await api.post("/admin/unidades", { nome: nomeNovo.trim() });
       setNomeNovo("");
       setOpenCreateModal(false);
-      success("Setor criado com sucesso");
+      success("Unidade criada com sucesso");
       await carregar();
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao criar setor");
+      error(err instanceof Error ? err.message : "Erro ao criar unidade");
     } finally {
       setCreating(false);
     }
@@ -192,21 +192,21 @@ export function SetoresTab() {
   async function salvarEdicao() {
     if (!editandoId) return;
     if (!edicao.nome.trim()) {
-      error("Informe o nome do setor");
+      error("Informe o nome da unidade");
       return;
     }
 
     setSavingId(editandoId);
     try {
-      await api.put(`/admin/setores/${editandoId}`, {
+      await api.put(`/admin/unidades/${editandoId}`, {
         nome: edicao.nome.trim(),
         status_ativo: edicao.status_ativo,
       });
-      success("Setor atualizado");
+      success("Unidade atualizada");
       fecharEdicao();
       await carregar();
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao atualizar setor");
+      error(err instanceof Error ? err.message : "Erro ao atualizar unidade");
     } finally {
       setSavingId(null);
     }
@@ -214,18 +214,18 @@ export function SetoresTab() {
 
   async function apagar(row: CatalogoRow) {
     try {
-      await api.del(`/admin/setores/${row.id}`);
-      success("Setor apagado");
+      await api.del(`/admin/unidades/${row.id}`);
+      success("Unidade apagada");
       await carregar();
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao apagar setor");
+      error(err instanceof Error ? err.message : "Erro ao apagar unidade");
     }
   }
 
   return (
     <div className="space-y-3">
       <SectionCard
-        title={<span className="text-sm font-semibold">Setores</span>}
+        title={<span className="text-sm font-semibold">Unidades</span>}
         icon={Building2}
         description={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
@@ -242,7 +242,7 @@ export function SetoresTab() {
             <Input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar setor"
+              placeholder="Buscar unidade"
               className={`${FILTRO_INPUT_CLASS} w-full sm:w-56`}
             />
             <Select value={filtroStatus} onValueChange={(value) => setFiltroStatus(value as "todos" | "ativo" | "inativo")}>
@@ -259,8 +259,8 @@ export function SetoresTab() {
               size="icon"
               className="h-8 w-8 shrink-0 rounded-lg bg-gradient-to-r from-primary to-primary/85 text-primary-foreground"
               onClick={() => setOpenCreateModal(true)}
-              aria-label="Novo setor"
-              title="Novo setor"
+              aria-label="Nova unidade"
+              title="Nova unidade"
             >
               <Plus className="h-4 w-4" />
             </Button>
@@ -283,9 +283,9 @@ export function SetoresTab() {
             ]}
             rows={rowsFiltradas}
             getRowKey={(row) => row.id}
-            onRowClick={(row) => abrirFuncionariosSetor(row)}
+            onRowClick={(row) => abrirFuncionariosUnidade(row)}
             loading={loading}
-            emptyMessage="Nenhum setor encontrado."
+            emptyMessage="Nenhuma unidade encontrada."
             minWidthClassName="min-w-[700px]"
             containerClassName={TABELA_DENSE_CLASS}
             renderRow={(row) => (
@@ -308,7 +308,7 @@ export function SetoresTab() {
                       variant="ghost"
                       className="h-8 w-8 rounded-lg"
                       onClick={() => abrirEdicao(row)}
-                      aria-label={`Editar setor ${row.nome}`}
+                      aria-label={`Editar unidade ${row.nome}`}
                       title="Editar"
                     >
                       <Pencil className="h-4 w-4" />
@@ -317,8 +317,8 @@ export function SetoresTab() {
                       size="icon"
                       variant="ghost"
                       className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/12 hover:text-destructive"
-                      onClick={() => setSetorParaExcluir(row)}
-                      aria-label={`Apagar setor ${row.nome}`}
+                      onClick={() => setUnidadeParaExcluir(row)}
+                      aria-label={`Apagar unidade ${row.nome}`}
                       title="Apagar"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -341,7 +341,7 @@ export function SetoresTab() {
             ))
           ) : rowsFiltradas.length === 0 ? (
             <div className="rounded-xl border border-border/70 bg-surface-2/80 px-3 py-5">
-              <EmptyState compact title="Nenhum setor encontrado." />
+              <EmptyState compact title="Nenhuma unidade encontrada." />
             </div>
           ) : (
             rowsFiltradas.map((row) => (
@@ -353,7 +353,7 @@ export function SetoresTab() {
                   <button
                     type="button"
                     className="text-sm font-semibold text-primary underline-offset-2 hover:underline"
-                    onClick={() => abrirFuncionariosSetor(row)}
+                    onClick={() => abrirFuncionariosUnidade(row)}
                   >
                     {row.nome}
                   </button>
@@ -369,7 +369,7 @@ export function SetoresTab() {
                     size="sm"
                     variant="outline"
                     className="h-8 text-[11px]"
-                    onClick={() => abrirFuncionariosSetor(row)}
+                    onClick={() => abrirFuncionariosUnidade(row)}
                   >
                     Ver vinculados
                   </Button>
@@ -378,7 +378,7 @@ export function SetoresTab() {
                     variant="ghost"
                     className="h-8 w-8 rounded-lg"
                     onClick={() => abrirEdicao(row)}
-                    aria-label={`Editar setor ${row.nome}`}
+                    aria-label={`Editar unidade ${row.nome}`}
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
@@ -386,8 +386,8 @@ export function SetoresTab() {
                     size="icon"
                     variant="ghost"
                     className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/12 hover:text-destructive"
-                    onClick={() => setSetorParaExcluir(row)}
-                    aria-label={`Apagar setor ${row.nome}`}
+                    onClick={() => setUnidadeParaExcluir(row)}
+                    aria-label={`Apagar unidade ${row.nome}`}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -399,16 +399,16 @@ export function SetoresTab() {
       </SectionCard>
 
       <Modal
-        open={Boolean(setorSelecionado)}
-        onClose={() => setSetorSelecionado(null)}
-        title={setorSelecionado ? `Funcionarios vinculados - ${setorSelecionado.nome}` : "Funcionarios vinculados"}
-        description="Lista de funcionarios atualmente associados a este setor."
+        open={Boolean(unidadeSelecionada)}
+        onClose={() => setUnidadeSelecionada(null)}
+        title={unidadeSelecionada ? `Funcionarios vinculados - ${unidadeSelecionada.nome}` : "Funcionarios vinculados"}
+        description="Lista de funcionarios atualmente associados a esta unidade."
         maxWidthClassName="max-w-5xl"
       >
         <div className="space-y-2.5">
           <div className="text-[11px] text-muted-foreground">
-            {inicioFuncionariosSetor}-{fimFuncionariosSetor} de {totalFuncionariosSetor} | Pagina{" "}
-            {paginaFuncionariosSetor} de {totalPaginasFuncionariosSetor}
+            {inicioFuncionariosUnidade}-{fimFuncionariosUnidade} de {totalFuncionariosUnidade} | Pagina{" "}
+            {paginaFuncionariosUnidade} de {totalPaginasFuncionariosUnidade}
           </div>
 
           <div className="hidden md:block">
@@ -427,13 +427,13 @@ export function SetoresTab() {
                 { key: "funcao", title: "Funcoes", width: "18%", sortValue: (row) => funcoesLabel(row) },
                 { key: "status", title: "Status", align: "center", width: "20%", sortValue: (row) => row.statusAtivo },
               ]}
-              rows={funcionariosSetor}
+              rows={funcionariosUnidade}
               getRowKey={(row) => row.matricula}
               onRowClick={(row) => {
                 void openFuncionario(row.matricula);
               }}
-              loading={loadingFuncionariosSetor}
-              emptyMessage="Nenhum funcionario vinculado a este setor."
+              loading={loadingFuncionariosUnidade}
+              emptyMessage="Nenhum funcionario vinculado a esta unidade."
               minWidthClassName="min-w-[980px]"
               containerClassName={TABELA_DENSE_CLASS}
               renderRow={(row) => (
@@ -456,7 +456,7 @@ export function SetoresTab() {
           </div>
 
           <div className="space-y-2 md:hidden">
-            {loadingFuncionariosSetor ? (
+            {loadingFuncionariosUnidade ? (
               Array.from({ length: 2 }).map((_, index) => (
                 <div key={`func-setor-skeleton-${index}`} className="rounded-xl border border-border/70 bg-surface-2/80 p-3">
                   <div className="h-3 w-20 animate-pulse rounded bg-muted/70" />
@@ -464,12 +464,12 @@ export function SetoresTab() {
                   <div className="mt-1.5 h-2.5 w-3/4 animate-pulse rounded bg-muted/45" />
                 </div>
               ))
-            ) : funcionariosSetor.length === 0 ? (
+            ) : funcionariosUnidade.length === 0 ? (
               <div className="rounded-xl border border-border/70 bg-surface-2/80 px-3 py-5">
                 <EmptyState compact title="Nenhum funcionario vinculado." />
               </div>
             ) : (
-              funcionariosSetor.map((row) => (
+              funcionariosUnidade.map((row) => (
                 <article
                   key={row.matricula}
                   className="rounded-xl border border-border/70 bg-surface-2/85 p-3 shadow-[var(--shadow-soft)]"
@@ -514,8 +514,8 @@ export function SetoresTab() {
               variant="outline"
               size="sm"
               className="h-8 text-[11px]"
-              onClick={() => setPaginaFuncionariosSetor((prev) => Math.max(1, prev - 1))}
-              disabled={paginaFuncionariosSetor === 1 || loadingFuncionariosSetor}
+              onClick={() => setPaginaFuncionariosUnidade((prev) => Math.max(1, prev - 1))}
+              disabled={paginaFuncionariosUnidade === 1 || loadingFuncionariosUnidade}
             >
               Anterior
             </Button>
@@ -525,11 +525,11 @@ export function SetoresTab() {
               size="sm"
               className="h-8 text-[11px]"
               onClick={() =>
-                setPaginaFuncionariosSetor((prev) =>
-                  Math.min(totalPaginasFuncionariosSetor, prev + 1),
+                setPaginaFuncionariosUnidade((prev) =>
+                  Math.min(totalPaginasFuncionariosUnidade, prev + 1),
                 )
               }
-              disabled={paginaFuncionariosSetor >= totalPaginasFuncionariosSetor || loadingFuncionariosSetor}
+              disabled={paginaFuncionariosUnidade >= totalPaginasFuncionariosUnidade || loadingFuncionariosUnidade}
             >
               Proxima
             </Button>
@@ -540,17 +540,17 @@ export function SetoresTab() {
       <Modal
         open={openCreateModal}
         onClose={() => setOpenCreateModal(false)}
-        title="Novo Setor"
-        description="Crie um setor para classificar funcionarios e operacoes."
+        title="Nova Unidade"
+        description="Crie uma unidade para organizar setores e funcionarios."
         maxWidthClassName="max-w-xl"
       >
         <div className="space-y-3">
-          <FormField label="Nome do setor" htmlFor="novo-setor-nome">
+          <FormField label="Nome da unidade" htmlFor="nova-unidade-nome">
             <Input
-              id="novo-setor-nome"
+              id="nova-unidade-nome"
               value={nomeNovo}
               onChange={(e) => setNomeNovo(e.target.value)}
-              placeholder="Nome do setor"
+              placeholder="Nome da unidade"
               className="h-9 text-xs"
             />
           </FormField>
@@ -569,14 +569,14 @@ export function SetoresTab() {
       <Modal
         open={Boolean(editandoId)}
         onClose={fecharEdicao}
-        title="Editar Setor"
-        description="Atualize o nome e o status do setor."
+        title="Editar Unidade"
+        description="Atualize o nome e o status da unidade."
         maxWidthClassName="max-w-xl"
       >
         <div className="space-y-3">
-          <FormField label="Nome" htmlFor="edicao-setor-nome">
+          <FormField label="Nome" htmlFor="edicao-unidade-nome">
             <Input
-              id="edicao-setor-nome"
+              id="edicao-unidade-nome"
               value={edicao.nome}
               onChange={(e) => setEdicao((p) => ({ ...p, nome: e.target.value }))}
               className="h-9 text-xs"
@@ -602,19 +602,19 @@ export function SetoresTab() {
       </Modal>
 
       <ConfirmDialog
-        open={Boolean(setorParaExcluir)}
-        onClose={() => setSetorParaExcluir(null)}
-        title="Apagar setor"
+        open={Boolean(unidadeParaExcluir)}
+        onClose={() => setUnidadeParaExcluir(null)}
+        title="Apagar unidade"
         description={
-          setorParaExcluir
-            ? `Tem certeza que deseja apagar o setor ${setorParaExcluir.nome}?`
+          unidadeParaExcluir
+            ? `Tem certeza que deseja apagar a unidade ${unidadeParaExcluir.nome}?`
             : undefined
         }
         confirmLabel="Apagar"
         onConfirm={async () => {
-          if (!setorParaExcluir) return;
-          await apagar(setorParaExcluir);
-          setSetorParaExcluir(null);
+          if (!unidadeParaExcluir) return;
+          await apagar(unidadeParaExcluir);
+          setUnidadeParaExcluir(null);
         }}
       />
     </div>

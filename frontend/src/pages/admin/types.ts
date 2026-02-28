@@ -3,22 +3,31 @@ export type ItemStatus = "disponivel" | "emprestado" | "inativo";
 export interface FuncionarioRow {
   matricula: string;
   nome: string;
+  unidade: string;
+  unidades: string[];
   setor: string;
+  setores: string[];
   funcao: string;
+  funcoes: string[];
   statusAtivo: boolean;
 }
 
 export interface ItemRow {
   codigo: string;
   descricao: string;
+  tamanho: string;
   status: ItemStatus;
   statusAtivo: boolean;
 }
 
 export interface FuncionarioDraft {
   nome: string;
-  setor: string;
+  unidade?: string;
+  unidades: string[];
+  setor?: string;
+  setores: string[];
   funcao: string;
+  funcoes: string[];
   status_ativo: boolean;
 }
 
@@ -26,10 +35,12 @@ export interface CatalogoRow {
   id: number;
   nome: string;
   statusAtivo: boolean;
+  totalFuncionarios?: number;
 }
 
 export interface ItemDraft {
   descricao: string;
+  tamanho: string;
   status: ItemStatus;
   status_ativo: boolean;
 }
@@ -54,6 +65,7 @@ export interface CredencialDraft {
 }
 
 export interface DashboardFiltersResponse {
+  unidades: string[];
   setores: string[];
   funcionarios: Array<{ matricula: string; nome: string }>;
 }
@@ -74,6 +86,7 @@ export interface DashboardDataResponse {
       nome_funcionario: string;
       item_codigo: string;
       operador_nome: string;
+      unidade: string | null;
       setor: string | null;
     }>;
     devolucoes: Array<{
@@ -83,6 +96,7 @@ export interface DashboardDataResponse {
       nome_funcionario: string;
       item_codigo: string;
       operador_nome: string;
+      unidade: string | null;
       setor: string | null;
     }>;
   };

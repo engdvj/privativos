@@ -1,4 +1,4 @@
-# Controle de Privativos
+# Privativos
 
 Estrutura do repositorio:
 - `backend/`: API Fastify, Prisma, migracoes e seed

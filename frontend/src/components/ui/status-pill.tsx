@@ -7,7 +7,7 @@ type StatusTone = "success" | "danger" | "warning" | "info" | "neutral";
 const toneClassName: Record<StatusTone, string> = {
   success: "bg-success/14 text-success",
   danger: "bg-destructive/14 text-destructive",
-  warning: "bg-warning/16 text-warning-foreground",
+  warning: "bg-warning/16 text-warning-foreground dark:bg-warning/24 dark:text-warning",
   info: "bg-primary/14 text-primary",
   neutral: "bg-muted text-muted-foreground",
 };

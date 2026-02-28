@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/use-toast";
-import { LogIn } from "lucide-react";
+import { LockKeyhole, LogIn, Search, UserRound } from "lucide-react";
 
 interface LoginResponse {
   token: string;
@@ -71,54 +71,99 @@ export function LoginPage() {
     }
   }
 
-  return (
-    <div className="relative min-h-dvh overflow-hidden bg-[linear-gradient(160deg,#e2ecff_0%,#f7fbff_28%,#ffe8d6_58%,#d9f2ff_100%)] animate-in fade-in-0">
-      <main className="relative flex min-h-dvh items-center justify-center px-4 py-10 sm:px-6">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute inset-0 bg-[radial-gradient(900px_460px_at_8%_0%,rgba(14,116,255,0.34),transparent_58%),radial-gradient(780px_460px_at_90%_100%,rgba(249,115,22,0.3),transparent_54%),radial-gradient(600px_320px_at_50%_80%,rgba(16,185,129,0.25),transparent_62%)] animate-fade-up" />
-          <div className="absolute top-5 left-6 h-40 w-40 rounded-full bg-blue-500/25 blur-[90px] animate-fade-up" />
-          <div className="absolute right-8 top-20 h-36 w-36 rounded-full bg-emerald-400/20 blur-[90px] animate-fade-up" />
-          <div className="absolute bottom-8 left-[12%] h-48 w-48 rounded-full bg-orange-400/20 blur-[110px] animate-fade-up" />
-        </div>
+  function abrirTelaAcompanhamento() {
+    const opened = window.open(
+      "/monitor-operacao",
+      "monitor-operacao",
+      "width=1080,height=760,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes",
+    );
 
-        <Card className="relative w-full max-w-md border-border/70 bg-surface-2/90 shadow-[var(--shadow-pop)] backdrop-blur-xl animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2">
-          <CardHeader className="pb-3 text-center">
-            <div className="mb-2 flex justify-center animate-in fade-in-0">
-              <img src="/privativos.png" alt="Controle de Privativos" className="h-16 w-16 rounded-2xl shadow-sm object-cover" />
+    if (!opened) {
+      error("Nao foi possivel abrir a janela de acompanhamento");
+      return;
+    }
+
+    opened.focus();
+  }
+
+  return (
+    <div className="relative min-h-dvh overflow-hidden bg-background animate-in fade-in-0">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute inset-0 bg-gradient-to-br from-background via-accent/25 to-secondary/55 dark:from-background dark:via-primary/8 dark:to-accent/18" />
+        <div className="absolute -left-16 top-[-8.5rem] h-[26rem] w-[26rem] rounded-full bg-primary/28 blur-[120px] animate-drift-slower" />
+        <div className="absolute right-[-9rem] bottom-[-10rem] h-[30rem] w-[30rem] rounded-full bg-secondary/75 blur-[132px] animate-drift-slow dark:bg-accent/30" />
+        <div className="absolute left-[44%] top-[8%] h-44 w-44 rounded-full bg-success/20 blur-[88px] animate-drift-slow" />
+      </div>
+
+      <main className="relative mx-auto flex min-h-dvh w-full max-w-6xl items-center justify-center px-4 py-10 sm:px-6">
+        <Card className="relative w-full max-w-md border-border/80 bg-card/95 shadow-[0_30px_60px_-34px_hsl(200_76%_20%_/_0.65)] backdrop-blur-xl animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2">
+          <CardHeader className="space-y-3 pb-4 text-center">
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[1.6rem] border border-primary/28 bg-gradient-to-br from-primary/18 via-background to-accent/52 p-3 shadow-[0_16px_40px_-24px_hsl(198_68%_26%_/_0.56)]">
+              <img src="/logo-privativos.png" alt="Privativos" className="h-full w-full rounded-2xl object-cover shadow-[0_4px_18px_-10px_hsl(198_70%_12%_/_0.7)]" />
             </div>
-            <CardTitle className="text-2xl">Entrar no sistema</CardTitle>
-            <CardDescription>Informe suas credenciais para continuar.</CardDescription>
+            <div className="space-y-1">
+              <CardTitle className="text-3xl font-black tracking-tight">Privativos</CardTitle>
+              <CardDescription className="mx-auto max-w-sm text-[13px] leading-relaxed">Entre com suas credenciais para continuar.</CardDescription>
+            </div>
           </CardHeader>
 
-          <CardContent className="pt-0">
+          <CardContent className="space-y-4 pt-0">
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="usuario">Usuario</Label>
-                <Input
-                  id="usuario"
-                  type="text"
-                  placeholder="Digite seu usuario"
-                  value={usuario}
-                  onChange={(e) => setUsuario(e.target.value)}
-                  autoComplete="username"
-                />
+              <div className="space-y-2 animate-in fade-in-0 slide-in-from-bottom-2" style={{ animationDelay: "80ms" }}>
+                <Label htmlFor="usuario" className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Usuario
+                </Label>
+                <div className="relative">
+                  <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="usuario"
+                    type="text"
+                    placeholder="Digite seu usuario"
+                    value={usuario}
+                    onChange={(e) => setUsuario(e.target.value)}
+                    autoComplete="username"
+                    className="h-11 rounded-xl border-border/80 bg-background/85 pl-10 text-foreground placeholder:text-muted-foreground/80 focus-visible:border-primary/55 focus-visible:ring-primary/35"
+                  />
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="senha">Senha</Label>
-                <Input
-                  id="senha"
-                  type="password"
-                  placeholder="Digite sua senha"
-                  value={senha}
-                  onChange={(e) => setSenha(e.target.value)}
-                  autoComplete="current-password"
-                />
+              <div className="space-y-2 animate-in fade-in-0 slide-in-from-bottom-2" style={{ animationDelay: "120ms" }}>
+                <Label htmlFor="senha" className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Senha
+                </Label>
+                <div className="relative">
+                  <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="senha"
+                    type="password"
+                    placeholder="Digite sua senha"
+                    value={senha}
+                    onChange={(e) => setSenha(e.target.value)}
+                    autoComplete="current-password"
+                    className="h-11 rounded-xl border-border/80 bg-background/85 pl-10 text-foreground placeholder:text-muted-foreground/80 focus-visible:border-primary/55 focus-visible:ring-primary/35"
+                  />
+                </div>
               </div>
 
-              <Button type="submit" className="mt-1 w-full" loading={loading}>
+              <Button
+                type="submit"
+                className="mt-1 h-11 w-full bg-gradient-to-r from-primary to-primary/85 text-primary-foreground shadow-[0_16px_34px_-18px_hsl(198_78%_22%_/_0.9)] hover:from-primary/95 hover:to-primary animate-in fade-in-0 slide-in-from-bottom-2"
+                loading={loading}
+                style={{ animationDelay: "160ms" }}
+              >
                 <LogIn className="h-4 w-4" />
                 {loading ? "Entrando..." : "Entrar"}
+              </Button>
+
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-9 w-full text-xs font-medium text-muted-foreground hover:text-foreground animate-in fade-in-0 slide-in-from-bottom-2"
+                style={{ animationDelay: "200ms" }}
+                onClick={abrirTelaAcompanhamento}
+              >
+                <Search className="h-3.5 w-3.5" />
+                Abrir janela de acompanhamento
               </Button>
             </form>
           </CardContent>

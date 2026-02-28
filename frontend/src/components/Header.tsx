@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { Loader2, LogOut, Moon, Sun, Settings } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Loader2, LogOut, Moon, Search, Settings, Sun, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useGlobalDetail } from "@/components/global-detail/GlobalDetailProvider";
 import {
   DropdownMenu,
@@ -25,8 +25,10 @@ interface BuscaSugestao {
 export function Header() {
   const navigate = useNavigate();
   const [nome, setNome] = useState(() => api.getNome() ?? "");
-  const { openFuncionario, openKit } = useGlobalDetail();
+  const perfilAtual = api.getPerfil();
+  const { openByQuery, openFuncionario, openKit } = useGlobalDetail();
   const [busca, setBusca] = useState("");
+  const [buscaAberta, setBuscaAberta] = useState(false);
   const [loadingBusca, setLoadingBusca] = useState(false);
   const [sugestoes, setSugestoes] = useState<BuscaSugestao[]>([]);
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
@@ -35,7 +37,8 @@ export function Header() {
     return localStorage.getItem("theme") === "dark";
   });
   const [modalPerfilAberto, setModalPerfilAberto] = useState(false);
-  const containerBuscaMobileRef = useRef<HTMLDivElement | null>(null);
+  const containerBuscaRef = useRef<HTMLDivElement | null>(null);
+  const inputBuscaRef = useRef<HTMLInputElement | null>(null);
   const requestIdRef = useRef(0);
 
   async function handleLogout() {
@@ -51,9 +54,10 @@ export function Header() {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
-      const clicouNoMobile = containerBuscaMobileRef.current?.contains(target);
-      if (!clicouNoMobile) {
+      const clicouNoContainer = containerBuscaRef.current?.contains(target);
+      if (!clicouNoContainer) {
         setMostrarSugestoes(false);
+        setBuscaAberta(false);
       }
     };
 
@@ -67,13 +71,40 @@ export function Header() {
 
     // Salva no backend (async, sem bloquear UI)
     api.atualizarTema(tema as "light" | "dark").catch(() => {
-      // Ignora erro silenciosamente para não atrapalhar UX
+      // Ignora erro silenciosamente para nao atrapalhar UX
     });
   }, [darkMode]);
 
   useEffect(() => {
+    if (!buscaAberta) {
+      setMostrarSugestoes(false);
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      inputBuscaRef.current?.focus();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [buscaAberta]);
+
+  useEffect(() => {
+    if (!buscaAberta) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMostrarSugestoes(false);
+        setBuscaAberta(false);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [buscaAberta]);
+
+  useEffect(() => {
     const query = busca.trim();
-    if (query.length < 2) {
+    if (!buscaAberta || query.length < 2) {
       setSugestoes([]);
       setMostrarSugestoes(false);
       setLoadingBusca(false);
@@ -99,10 +130,10 @@ export function Header() {
           setLoadingBusca(false);
         }
       }
-    }, 250);
+    }, 220);
 
     return () => clearTimeout(timeoutId);
-  }, [busca]);
+  }, [busca, buscaAberta]);
 
   async function handleSelecionarSugestao(sugestao: BuscaSugestao) {
     setLoadingBusca(true);
@@ -114,9 +145,42 @@ export function Header() {
       }
       setBusca(sugestao.chave);
       setMostrarSugestoes(false);
+      setBuscaAberta(false);
     } finally {
       setLoadingBusca(false);
     }
+  }
+
+  async function handleSubmitBusca(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    const query = busca.trim();
+    if (!query) return;
+
+    setLoadingBusca(true);
+    try {
+      await openByQuery(query);
+      setMostrarSugestoes(false);
+      setBuscaAberta(false);
+    } finally {
+      setLoadingBusca(false);
+    }
+  }
+
+  function handleToggleBusca() {
+    setBuscaAberta((prev) => {
+      const next = !prev;
+      if (!next) {
+        setMostrarSugestoes(false);
+      }
+      return next;
+    });
+  }
+
+  function handleLimparBusca() {
+    setBusca("");
+    setSugestoes([]);
+    setMostrarSugestoes(false);
+    inputBuscaRef.current?.focus();
   }
 
   function toggleTheme() {
@@ -135,26 +199,36 @@ export function Header() {
     setNome(novoNome);
   }
 
+  function handleNavegarInicio() {
+    if (perfilAtual === "setor") {
+      navigate("/setor");
+      return;
+    }
+    navigate("/admin");
+  }
+
   const circleIconButtonClass =
-    "rounded-full bg-white/12 text-white ring-1 ring-white/22 transition-all duration-200 hover:-translate-y-0.5 hover:bg-white/24 hover:text-white";
+    "h-9 w-9 rounded-xl border border-white/22 bg-white/12 text-white transition-all duration-200 hover:-translate-y-0.5 hover:border-white/35 hover:bg-white/22 hover:text-white dark:border-border/80 dark:bg-background/62 dark:text-foreground dark:hover:border-border dark:hover:bg-accent/40";
 
   function renderSugestoesDropdown() {
     if (!mostrarSugestoes || sugestoes.length === 0) return null;
 
     return (
-      <div className="absolute inset-x-0 top-[calc(100%+8px)] z-50 rounded-xl border border-border/60 bg-popover shadow-lg backdrop-blur animate-in fade-in-0 zoom-in-95 slide-in-from-top-2">
-        <div className="max-h-72 overflow-auto p-1.5">
-          {sugestoes.map((sugestao) => (
+      <div className="absolute inset-x-0 bottom-[calc(100%+7px)] z-[72] rounded-xl border border-border/75 bg-popover/98 shadow-[var(--shadow-soft)] backdrop-blur-xl animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 dark:border-border/90">
+        <div className="max-h-64 overflow-auto p-1">
+          {sugestoes.map((sugestao, index) => (
             <button
               key={`${sugestao.tipo}-${sugestao.chave}`}
               type="button"
-              className="w-full rounded-lg px-3 py-2 text-left transition-all duration-150 hover:bg-accent/55 hover:translate-x-0.5"
+              className="w-full rounded-lg px-2.5 py-1.5 text-left transition-all duration-150 hover:bg-accent/50 hover:translate-x-0.5 animate-in fade-in-0 slide-in-from-bottom-2"
+              style={{ animationDelay: `${index * 24}ms` }}
+              onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
                 void handleSelecionarSugestao(sugestao);
               }}
             >
-              <div className="text-sm font-medium text-foreground">{sugestao.titulo}</div>
-              <div className="text-xs text-muted-foreground">{sugestao.subtitulo}</div>
+              <div className="text-[13px] font-semibold text-foreground">{sugestao.titulo}</div>
+              <div className="text-[11px] text-muted-foreground">{sugestao.subtitulo}</div>
             </button>
           ))}
         </div>
@@ -163,26 +237,45 @@ export function Header() {
   }
 
   return (
-    <header className="border-b border-border/35 bg-gradient-to-r from-[#0d3b66] via-[#0b7285] to-[#1f6feb] px-4 py-3 text-white shadow-md animate-in fade-in-0 slide-in-from-top-2 sm:px-6">
-      <div className="mx-auto flex w-full items-center gap-3 md:grid md:grid-cols-[1fr_minmax(0,64rem)_1fr]">
-        <div className="order-2 flex shrink-0 items-center justify-end gap-2 md:col-start-3 md:justify-self-end">
-          <DropdownMenu modal={false}>
+    <>
+      <header className="border-b border-border/60 bg-gradient-to-r from-primary/95 via-primary/82 to-primary/75 px-4 py-2.5 text-primary-foreground shadow-[0_10px_28px_-22px_hsl(198_72%_16%_/_0.9)] backdrop-blur-xl animate-in fade-in-0 slide-in-from-top-2 dark:from-background dark:via-background dark:to-muted/45 dark:text-foreground sm:px-6">
+        <div className="mx-auto flex w-full items-center justify-between gap-2.5">
+          <button
+            type="button"
+            onClick={handleNavegarInicio}
+            aria-label="Ir para a tela inicial do Privativos"
+            className="group inline-flex items-center rounded-md px-1 py-0.5 text-left transition-all duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 dark:focus-visible:ring-ring/70"
+          >
+            <span className="font-display text-lg font-extrabold tracking-tight text-white dark:text-foreground sm:text-xl">
+              Privativos
+            </span>
+          </button>
+
+          <div className="flex items-center gap-2">
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
                   className={circleIconButtonClass}
-                  aria-label="Menu do usuário"
+                  aria-label="Menu do usuario"
                   title={nome}
                 >
                   <span className="text-xs font-medium">{getIniciais(nome)}</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{nome}</p>
-                    <p className="text-xs leading-none text-muted-foreground">Conta do usuário</p>
+              <DropdownMenuContent align="end" className="w-64 rounded-2xl border-border/80 bg-popover/98 p-1.5 dark:border-border/90">
+                <DropdownMenuLabel className="p-0 font-normal">
+                  <div className="rounded-xl border border-border/65 bg-background/65 p-3 dark:border-border/85 dark:bg-background/58">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary/25 bg-primary/12 text-[11px] font-semibold text-primary">
+                        {getIniciais(nome)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold leading-none text-foreground">{nome}</p>
+                        <p className="mt-1 text-[11px] leading-none text-muted-foreground">Conta do usuario</p>
+                      </div>
+                    </div>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -190,44 +283,104 @@ export function Header() {
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Editar perfil</span>
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={toggleTheme}>
+                  {darkMode ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
+                  <span>{darkMode ? "Modo claro" : "Modo escuro"}</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="text-destructive focus:bg-destructive/12 focus:text-destructive dark:focus:bg-destructive/20"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Sair</span>
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleTheme}
-              className={circleIconButtonClass}
-              aria-label={darkMode ? "Ativar modo claro" : "Ativar modo escuro"}
-              title={darkMode ? "Modo claro" : "Modo escuro"}
-            >
-              {darkMode ? <Sun className="h-4 w-4 animate-in fade-in-0 zoom-in-95" /> : <Moon className="h-4 w-4 animate-in fade-in-0 zoom-in-95" />}
-            </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleLogout}
-            className={circleIconButtonClass}
-            aria-label="Sair"
-            title="Sair"
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
+          </div>
         </div>
+      </header>
 
-        <div ref={containerBuscaMobileRef} className="order-1 relative min-w-0 flex-1 md:col-start-2 md:w-full">
-          <Input
-            value={busca}
-            onChange={(event) => setBusca(event.target.value)}
-            onFocus={() => {
-              if (sugestoes.length > 0) setMostrarSugestoes(true);
-            }}
-            placeholder="Busca global: kit, usuario ou matricula"
-            className="h-9 border-white/30 bg-white/14 pr-10 text-white placeholder:text-white/75"
-          />
-          {loadingBusca ? (
-            <Loader2 className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 animate-spin text-white/80" />
-          ) : null}
-          {renderSugestoesDropdown()}
+      <div ref={containerBuscaRef} className="pointer-events-none fixed bottom-[3.95rem] right-3.5 z-[70] sm:bottom-[4.2rem] sm:right-5">
+        <div className="pointer-events-auto flex items-center gap-2">
+          {buscaAberta && (
+            <div className="w-[min(92vw,19rem)] origin-bottom-right animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2">
+              <form
+                onSubmit={(event) => {
+                  void handleSubmitBusca(event);
+                }}
+                className="relative"
+              >
+                {renderSugestoesDropdown()}
+
+                <div className="rounded-xl border border-border/80 bg-card/94 p-1.5 shadow-[var(--shadow-soft)] backdrop-blur-xl dark:border-border/90 dark:bg-popover/94">
+                  <div className="flex h-8 items-center gap-1.5 rounded-lg border border-border/80 bg-background/86 px-2 dark:border-border/90 dark:bg-background/72">
+                    <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <input
+                      ref={inputBuscaRef}
+                      value={busca}
+                      onChange={(event) => setBusca(event.target.value)}
+                      onFocus={() => {
+                        if (sugestoes.length > 0) setMostrarSugestoes(true);
+                      }}
+                      placeholder="Buscar kit, usuario ou matricula"
+                      className="h-full min-w-0 flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/80 outline-none"
+                      aria-label="Busca global"
+                    />
+
+                    {busca.trim().length > 0 && !loadingBusca && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleLimparBusca}
+                        aria-label="Limpar busca"
+                        title="Limpar busca"
+                        className="h-5 w-5 shrink-0 rounded-md text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    )}
+
+                    {loadingBusca ? (
+                      <Loader2 className="h-3 w-3 shrink-0 animate-spin text-primary" />
+                    ) : (
+                      <Button
+                        type="submit"
+                        size="icon"
+                        className="h-5 w-5 shrink-0 rounded-md"
+                        disabled={!busca.trim()}
+                        aria-label="Executar busca global"
+                        title="Buscar"
+                      >
+                        <Search className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </form>
+            </div>
+          )}
+
+          <div className="relative">
+            <Button
+              type="button"
+              size="icon"
+              onClick={handleToggleBusca}
+              aria-label={buscaAberta ? "Fechar busca global" : "Abrir busca global"}
+              aria-expanded={buscaAberta}
+              title={buscaAberta ? "Fechar busca global" : "Abrir busca global"}
+              className={cn(
+                "relative h-10 w-10 rounded-xl border border-border/75 bg-card/95 text-primary shadow-[var(--shadow-soft)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-accent/35 hover:text-primary dark:border-border/90 dark:bg-popover/90",
+                buscaAberta ? "scale-95" : "scale-100",
+              )}
+            >
+              {!buscaAberta && (
+                <span className="pointer-events-none absolute -inset-0.5 rounded-xl border border-primary/25 animate-pulse-slow dark:border-primary/35" />
+              )}
+              {buscaAberta ? <X className="h-3.5 w-3.5" /> : <Search className="h-3.5 w-3.5" />}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -236,6 +389,6 @@ export function Header() {
         onClose={() => setModalPerfilAberto(false)}
         onPerfilAtualizado={handlePerfilAtualizado}
       />
-    </header>
+    </>
   );
 }

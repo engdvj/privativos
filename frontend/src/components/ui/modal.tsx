@@ -1,4 +1,5 @@
-import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { type ComponentType, type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -9,6 +10,8 @@ interface ModalProps {
   children: ReactNode;
   description?: string;
   maxWidthClassName?: string;
+  icon?: ComponentType<{ className?: string }>;
+  footer?: ReactNode;
 }
 
 const FOCUSABLE_SELECTOR = [
@@ -20,7 +23,7 @@ const FOCUSABLE_SELECTOR = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 
-const EXIT_ANIMATION_MS = 180;
+const EXIT_ANIMATION_MS = 210;
 
 export function Modal({
   open,
@@ -29,6 +32,8 @@ export function Modal({
   children,
   description,
   maxWidthClassName = "max-w-3xl",
+  icon: Icon,
+  footer,
 }: ModalProps) {
   const titleId = useId();
   const descriptionId = useId();
@@ -158,7 +163,7 @@ export function Modal({
 
   if (!mounted) return null;
 
-  return (
+  return createPortal(
     <div
       className={cn(
         "fixed inset-0 z-50 grid place-items-center p-4 sm:p-6",
@@ -168,8 +173,8 @@ export function Modal({
       <button
         type="button"
         className={cn(
-          "absolute inset-0 bg-slate-950/45 backdrop-blur-[3px]",
-          visible ? "animate-in fade-in-0" : "animate-out fade-out-0",
+          "absolute inset-0 bg-slate-950/46 backdrop-blur-[2px] transition-opacity duration-200 ease-out dark:bg-black/60",
+          visible ? "opacity-100" : "opacity-0",
         )}
         aria-label="Fechar modal"
         onClick={onClose}
@@ -183,28 +188,34 @@ export function Modal({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          "relative w-full rounded-2xl border border-border/70 bg-card p-5 shadow-lg backdrop-blur sm:p-6",
-          visible
-            ? "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2"
-            : "animate-out fade-out-0 zoom-out-95",
+          "relative flex w-full flex-col overflow-hidden rounded-[1.1rem] border border-border/75 bg-popover/98 text-popover-foreground shadow-[0_28px_58px_-30px_hsl(210_45%_18%_/_0.82)] transition-[opacity,transform] duration-200 ease-out will-change-[opacity,transform] sm:max-h-[84vh] dark:border-border/85 dark:bg-popover/94",
+          visible ? "translate-y-0 scale-100 opacity-100" : "translate-y-2 scale-[0.985] opacity-0",
           maxWidthClassName,
         )}
       >
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <h2 id={titleId} className="text-lg font-semibold text-foreground">
-              {title}
-            </h2>
-            {description ? (
-              <p id={descriptionId} className="mt-1 text-sm text-muted-foreground">
-                {description}
-              </p>
+        {/* Header */}
+        <div className="relative flex items-start justify-between gap-3 border-b border-border/60 bg-gradient-to-r from-primary/8 via-transparent to-accent/16 px-4 py-3 sm:px-5 dark:from-primary/12 dark:to-accent/12">
+          <div className="flex items-center gap-3">
+            {Icon ? (
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/12">
+                <Icon className="h-4 w-4 text-primary" />
+              </div>
             ) : null}
+            <div>
+              <h2 id={titleId} className="font-display text-base font-bold text-foreground sm:text-lg">
+                {title}
+              </h2>
+              {description ? (
+                <p id={descriptionId} className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
+                  {description}
+                </p>
+              ) : null}
+            </div>
           </div>
 
           <button
             type="button"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent/65 hover:text-foreground"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/65 bg-background/65 text-muted-foreground transition-all duration-200 hover:border-destructive/35 hover:bg-destructive/10 hover:text-destructive dark:border-border/85 dark:bg-background/55"
             onClick={onClose}
             aria-label="Fechar"
           >
@@ -212,8 +223,19 @@ export function Modal({
           </button>
         </div>
 
-        {children}
+        {/* Body */}
+        <div className="relative flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5">
+          {children}
+        </div>
+
+        {/* Footer */}
+        {footer ? (
+          <div className="border-t border-border/60 bg-muted/22 px-4 py-2.5 sm:px-5 dark:bg-background/32">
+            {footer}
+          </div>
+        ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

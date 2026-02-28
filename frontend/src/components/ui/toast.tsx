@@ -7,9 +7,11 @@ interface ToastItem {
   id: number;
   message: string;
   variant: ToastVariant;
+  isClosing: boolean;
 }
 
 const TOAST_TTL_MS = 3400;
+const TOAST_EXIT_MS = 180;
 
 const variantClassName: Record<ToastVariant, string> = {
   success: "border-success/30 bg-success/14 text-foreground",
@@ -31,16 +33,29 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
 
-  const showToast = useCallback(
-    (message: string, variant: ToastVariant = "info") => {
-      const id = nextId.current++;
-      setToasts((current) => [...current, { id, message, variant }]);
+  const startToastClose = useCallback(
+    (id: number) => {
+      setToasts((current) =>
+        current.map((toast) => (toast.id === id ? { ...toast, isClosing: true } : toast)),
+      );
 
       window.setTimeout(() => {
         removeToast(id);
-      }, TOAST_TTL_MS);
+      }, TOAST_EXIT_MS);
     },
     [removeToast],
+  );
+
+  const showToast = useCallback(
+    (message: string, variant: ToastVariant = "info") => {
+      const id = nextId.current++;
+      setToasts((current) => [...current, { id, message, variant, isClosing: false }]);
+
+      window.setTimeout(() => {
+        startToastClose(id);
+      }, TOAST_TTL_MS);
+    },
+    [startToastClose],
   );
 
   const value = useMemo(
@@ -68,7 +83,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div
               key={toast.id}
               className={cn(
-                "animate-fade-up pointer-events-auto flex items-start gap-2 rounded-xl border px-3.5 py-3 text-sm shadow-lg backdrop-blur",
+                "pointer-events-auto flex items-start gap-2 rounded-xl border px-3.5 py-3 text-sm shadow-lg backdrop-blur",
+                toast.isClosing
+                  ? "animate-out fade-out-0 slide-out-to-right-2"
+                  : "animate-in fade-in-0 slide-in-from-right-2",
                 variantClassName[toast.variant],
               )}
               role="status"
