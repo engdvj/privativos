@@ -27,6 +27,7 @@ const TABELA_DENSE_CLASS = `${TABELA_CONTAINER_CLASS} [--table-inline-gap:0.95re
 const FILTRO_BAR_CLASS = "gap-1.5 md:flex-nowrap md:items-end";
 const SECTION_HEADER_CLASS = "gap-2 px-3 pb-2 pt-3 sm:px-4 sm:pb-2 sm:pt-4";
 const SECTION_CONTENT_CLASS = "space-y-2.5 px-3 pb-3 pt-0 sm:px-4 sm:pb-4";
+const FUNCOES_POR_PAGINA = 10;
 
 export function FuncoesTab() {
   const [rows, setRows] = useState<CatalogoRow[]>([]);
@@ -37,6 +38,7 @@ export function FuncoesTab() {
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "inativo">("todos");
+  const [paginaFuncoes, setPaginaFuncoes] = useState(1);
   const [nomeNovo, setNomeNovo] = useState("");
   const [edicao, setEdicao] = useState({ nome: "", status_ativo: true });
   const [funcaoParaExcluir, setFuncaoParaExcluir] = useState<CatalogoRow | null>(null);
@@ -72,6 +74,23 @@ export function FuncoesTab() {
     [rowsFiltradas],
   );
   const inativosFiltrados = rowsFiltradas.length - ativosFiltrados;
+  const totalPaginasFuncoes = Math.max(1, Math.ceil(rowsFiltradas.length / FUNCOES_POR_PAGINA));
+  const rowsPaginadas = useMemo(() => {
+    const inicio = (paginaFuncoes - 1) * FUNCOES_POR_PAGINA;
+    return rowsFiltradas.slice(inicio, inicio + FUNCOES_POR_PAGINA);
+  }, [rowsFiltradas, paginaFuncoes]);
+  const inicioPaginaFuncoes = rowsFiltradas.length === 0 ? 0 : (paginaFuncoes - 1) * FUNCOES_POR_PAGINA + 1;
+  const fimPaginaFuncoes = Math.min(paginaFuncoes * FUNCOES_POR_PAGINA, rowsFiltradas.length);
+
+  useEffect(() => {
+    setPaginaFuncoes(1);
+  }, [busca, filtroStatus]);
+
+  useEffect(() => {
+    if (paginaFuncoes > totalPaginasFuncoes) {
+      setPaginaFuncoes(totalPaginasFuncoes);
+    }
+  }, [paginaFuncoes, totalPaginasFuncoes]);
 
   async function criar() {
     if (!nomeNovo.trim()) {
@@ -171,7 +190,7 @@ export function FuncoesTab() {
             </Select>
             <Button
               size="icon"
-              className="h-8 w-8 shrink-0 rounded-lg bg-gradient-to-r from-primary to-primary/85 text-primary-foreground"
+              className="h-8 w-8 shrink-0 rounded-lg border-0 bg-primary text-primary-foreground shadow-[var(--shadow-soft)] transition-all duration-200 hover:bg-sky-500 hover:animate-pulse"
               onClick={() => setOpenCreateModal(true)}
               aria-label="Nova funcao"
               title="Nova funcao"
@@ -188,7 +207,7 @@ export function FuncoesTab() {
               { key: "status", title: "Status", align: "center", width: "20%", sortValue: (row) => row.statusAtivo },
               { key: "acoes", title: "Acoes", align: "center", width: "20%" },
             ]}
-            rows={rowsFiltradas}
+            rows={rowsPaginadas}
             getRowKey={(row) => row.id}
             onRowClick={(row) => abrirEdicao(row)}
             loading={loading}
@@ -248,7 +267,7 @@ export function FuncoesTab() {
               <EmptyState compact title="Nenhuma funcao encontrada." />
             </div>
           ) : (
-            rowsFiltradas.map((row) => (
+            rowsPaginadas.map((row) => (
               <article
                 key={row.id}
                 className="rounded-xl border border-border/70 bg-surface-2/85 p-3 shadow-[var(--shadow-soft)]"
@@ -288,6 +307,34 @@ export function FuncoesTab() {
               </article>
             ))
           )}
+        </div>
+
+        <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[10px] text-muted-foreground">
+            {inicioPaginaFuncoes}-{fimPaginaFuncoes} de {rowsFiltradas.length} | Pagina {paginaFuncoes} de {totalPaginasFuncoes}
+          </p>
+          <div className="flex min-w-[220px] justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
+              onClick={() => setPaginaFuncoes((paginaAtual) => Math.max(1, paginaAtual - 1))}
+              disabled={paginaFuncoes === 1}
+            >
+              Anterior
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
+              onClick={() => setPaginaFuncoes((paginaAtual) => Math.min(totalPaginasFuncoes, paginaAtual + 1))}
+              disabled={paginaFuncoes === totalPaginasFuncoes}
+            >
+              Proxima
+            </Button>
+          </div>
         </div>
       </SectionCard>
 

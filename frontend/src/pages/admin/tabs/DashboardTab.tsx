@@ -27,7 +27,6 @@ import {
 import type { CatalogoRow, DashboardDataResponse, DashboardFiltersResponse } from "../types";
 
 const ITENS_POR_PAGINA = 5;
-const LIMITE_LISTA_DISTRIBUICAO_POPOVER = 4;
 
 const FILTROS_INICIAIS = {
   data_inicio: "",
@@ -102,6 +101,36 @@ const COLUNAS_EVENTOS: DataTableColumn<EventoDashboardRow>[] = [
 
 type KpiChave = "emprestimos" | "devolucoes" | "disponiveis" | "emprestados";
 
+const KPI_META: Record<
+  KpiChave,
+  {
+    label: string;
+    descricao: string;
+    tone: "info" | "success" | "neutral";
+  }
+> = {
+  emprestimos: {
+    label: "Emprestimos",
+    descricao: "Mostrando somente eventos de solicitacao.",
+    tone: "info",
+  },
+  devolucoes: {
+    label: "Devolucoes",
+    descricao: "Mostrando somente eventos de devolucao.",
+    tone: "success",
+  },
+  disponiveis: {
+    label: "Itens disponiveis",
+    descricao: "Mostrando os itens atualmente disponiveis.",
+    tone: "neutral",
+  },
+  emprestados: {
+    label: "Itens emprestados",
+    descricao: "Mostrando os itens atualmente emprestados.",
+    tone: "neutral",
+  },
+};
+
 type ItemDashboardResumo = {
   codigo: string;
   descricao: string | null;
@@ -125,92 +154,71 @@ type FuncionarioDashboardResumo = {
   statusAtivo: boolean;
 };
 
-type ResumoDistribuicao = {
-  label: string;
-  valor: number;
-  percentual: number;
+type ItemTabelaRow = ItemDashboardResumo & {
+  solicitanteNome: string | null;
+  unidadeLabel: string | null;
+  setorLabel: string | null;
+  origemAtual: OrigemMovimentacao | null;
 };
 
-type IndicadorRapido = {
-  rotulo: string;
-  valor: string;
-  apoio?: string;
-};
-
-type ResumoKpi = {
-  titulo: string;
-  subtitulo: string;
-  indicadores: IndicadorRapido[];
-};
-
-function normalizarLabel(valor: string | null | undefined, fallback = "Nao informado") {
-  const limpo = (valor ?? "").trim();
-  return limpo || fallback;
-}
-
-function setorPrincipal(setorLabel: string | null) {
-  if (!setorLabel) return "Nao informado";
-  const [primeiro] = setorLabel.split(",");
-  return normalizarLabel(primeiro);
-}
-
-function montarDistribuicao(
-  valores: Array<string | null | undefined>,
+const COLUNAS_ITENS: DataTableColumn<ItemTabelaRow>[] = [
   {
-    limite = 4,
-    incluirOutros = true,
-    fallback = "Nao informado",
-  }: {
-    limite?: number;
-    incluirOutros?: boolean;
-    fallback?: string;
-  } = {},
-) {
-  if (valores.length === 0) {
-    return [] satisfies ResumoDistribuicao[];
-  }
-
-  const contagem = new Map<string, number>();
-  for (const valor of valores) {
-    const label = normalizarLabel(valor, fallback);
-    contagem.set(label, (contagem.get(label) ?? 0) + 1);
-  }
-
-  const ordenados = [...contagem.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  const top = ordenados.slice(0, limite);
-
-  if (incluirOutros && ordenados.length > limite) {
-    const totalTop = top.reduce((acc, [, valor]) => acc + valor, 0);
-    const outros = valores.length - totalTop;
-    if (outros > 0) {
-      top.push(["Outros", outros]);
-    }
-  }
-
-  const total = valores.length;
-  return top.map(([label, valor]) => ({
-    label,
-    valor,
-    percentual: total === 0 ? 0 : Math.round((valor / total) * 100),
-  }));
-}
-
-function pluralizar(valor: number, singular: string, plural: string) {
-  return valor === 1 ? singular : plural;
-}
-
-function calcularDiasDesde(dataIso: string | null) {
-  if (!dataIso) return null;
-  const data = new Date(dataIso);
-  if (Number.isNaN(data.getTime())) return null;
-  const diffMs = Date.now() - data.getTime();
-  return diffMs < 0 ? 0 : Math.floor(diffMs / (1000 * 60 * 60 * 24));
-}
-
-function obterTop(distribuicao: ResumoDistribuicao[], fallback: string) {
-  const top = distribuicao[0];
-  return top ? `${top.label} (${top.valor})` : fallback;
-}
+    key: "codigo",
+    title: "Item",
+    align: "center",
+    className: "font-mono tabular-nums",
+    sortValue: (row) => row.codigo,
+  },
+  {
+    key: "tipo",
+    title: "Tipo",
+    align: "center",
+    sortValue: (row) => row.tipo,
+  },
+  {
+    key: "tamanho",
+    title: "Tam",
+    align: "center",
+    sortValue: (row) => row.tamanho,
+  },
+  {
+    key: "status",
+    title: "Status",
+    align: "center",
+    sortValue: (row) => row.status,
+  },
+  {
+    key: "origem",
+    title: "Origem",
+    align: "center",
+    sortValue: (row) => row.origemAtual ?? "",
+  },
+  {
+    key: "matricula",
+    title: "Matricula",
+    align: "center",
+    className: "font-mono tabular-nums",
+    sortValue: (row) => row.solicitanteMatricula ?? "",
+  },
+  {
+    key: "solicitante",
+    title: "Solicitante",
+    align: "center",
+    sortValue: (row) => row.solicitanteNome ?? "",
+  },
+  {
+    key: "unidade",
+    title: "Unidade",
+    align: "center",
+    sortValue: (row) => row.unidadeLabel ?? "",
+  },
+  {
+    key: "setor",
+    title: "Setor",
+    align: "center",
+    sortValue: (row) => row.setorLabel ?? "",
+  },
+];
 
 function formatarDataFiltro(valor: string) {
   if (!valor) return "--";
@@ -264,6 +272,13 @@ function eventoTipoTone(tipo: EventoTipo): "info" | "success" {
   return tipo === "solicitacao" ? "info" : "success";
 }
 
+function ordenarEventos(a: EventoDashboardRow, b: EventoDashboardRow) {
+  return (
+    new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime() ||
+    a.evento_chave.localeCompare(b.evento_chave)
+  );
+}
+
 function filtroOrigemLabel(origem: string) {
   if (origem === "setor") return "Setor";
   if (origem === "colaborador") return "Colaborador";
@@ -278,6 +293,48 @@ function normalizarBuscaTexto(valor: string) {
     .replace(/[^\w\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function buscarFuncionarioExato(
+  termo: string,
+  funcionarios: DashboardFiltersResponse["funcionarios"],
+) {
+  const termoNormalizado = normalizarBuscaTexto(termo);
+  if (!termoNormalizado) {
+    return null;
+  }
+
+  const matchMatricula = funcionarios.find(
+    (funcionario) => normalizarBuscaTexto(funcionario.matricula) === termoNormalizado,
+  );
+  if (matchMatricula) {
+    return matchMatricula;
+  }
+
+  const matchesNome = funcionarios.filter(
+    (funcionario) => normalizarBuscaTexto(funcionario.nome) === termoNormalizado,
+  );
+  if (matchesNome.length === 1) {
+    return matchesNome[0];
+  }
+
+  return null;
+}
+
+function listaUnicaRotulos(valores: Array<string | null | undefined>) {
+  const vistos = new Set<string>();
+  const resultado: string[] = [];
+
+  for (const valor of valores) {
+    const normalizado = (valor ?? "").trim();
+    if (!normalizado || vistos.has(normalizado)) {
+      continue;
+    }
+    vistos.add(normalizado);
+    resultado.push(normalizado);
+  }
+
+  return resultado;
 }
 
 export function DashboardTab() {
@@ -338,6 +395,10 @@ export function DashboardTab() {
 
     return mapa;
   }, [funcionariosResumo]);
+  const funcionarioByMatricula = useMemo(
+    () => new Map(funcionariosResumo.map((funcionario) => [funcionario.matricula, funcionario] as const)),
+    [funcionariosResumo],
+  );
 
   const carregarOpcoes = useCallback(async () => {
     try {
@@ -624,12 +685,53 @@ export function DashboardTab() {
       evento_chave: `devolucao-${row.id}`,
     }));
 
-    return [...eventosSolicitacao, ...eventosDevolucao].sort(
-      (a, b) =>
-        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime() ||
-        a.evento_chave.localeCompare(b.evento_chave),
-    );
-  }, [devolucoesFiltradas, solicitacoesFiltradas]);
+    const eventosOrdenados = [...eventosSolicitacao, ...eventosDevolucao].sort(ordenarEventos);
+
+    const matriculaFiltro = filtros.matricula.trim();
+    if (matriculaFiltro) {
+      return eventosOrdenados.filter((evento) => evento.matricula === matriculaFiltro);
+    }
+
+    return eventosOrdenados;
+  }, [devolucoesFiltradas, filtros.matricula, solicitacoesFiltradas]);
+  const filtrosDashboardAtivos = useMemo(
+    () =>
+      Boolean(
+        filtros.data_inicio ||
+        filtros.data_fim ||
+        filtros.unidade ||
+        filtros.setor ||
+        filtros.origem ||
+        filtros.matricula,
+      ),
+    [
+      filtros.data_inicio,
+      filtros.data_fim,
+      filtros.matricula,
+      filtros.origem,
+      filtros.setor,
+      filtros.unidade,
+    ],
+  );
+  const codigosItensNoRecorte = useMemo(
+    () => new Set(eventosFiltrados.map((evento) => evento.item_codigo)),
+    [eventosFiltrados],
+  );
+  const itensAtivosNoRecorte = useMemo(
+    () =>
+      itensResumo
+        .filter((item) => item.statusAtivo)
+        .filter((item) => !filtrosDashboardAtivos || codigosItensNoRecorte.has(item.codigo)),
+    [codigosItensNoRecorte, filtrosDashboardAtivos, itensResumo],
+  );
+  const itensDisponiveisNoRecorte = useMemo(
+    () => itensAtivosNoRecorte.filter((item) => item.status === "disponivel"),
+    [itensAtivosNoRecorte],
+  );
+  const itensEmprestadosNoRecorte = useMemo(
+    () => itensAtivosNoRecorte.filter((item) => item.status === "emprestado"),
+    [itensAtivosNoRecorte],
+  );
   const eventosTabelaFiltrados = useMemo(() => {
     if (!kpiSelecionado) {
       return eventosFiltrados;
@@ -643,17 +745,8 @@ export function DashboardTab() {
       return eventosFiltrados.filter((evento) => evento.evento_tipo === "devolucao");
     }
 
-    const statusAtualPorCodigo = new Map(itensResumo.map((item) => [item.codigo, item.status] as const));
-    if (kpiSelecionado === "disponiveis") {
-      return eventosFiltrados.filter((evento) => statusAtualPorCodigo.get(evento.item_codigo) === "disponivel");
-    }
-
-    if (kpiSelecionado === "emprestados") {
-      return eventosFiltrados.filter((evento) => statusAtualPorCodigo.get(evento.item_codigo) === "emprestado");
-    }
-
     return eventosFiltrados;
-  }, [eventosFiltrados, itensResumo, kpiSelecionado]);
+  }, [eventosFiltrados, kpiSelecionado]);
   const resumoMovimentacoesPorOrigem = useMemo(() => {
     const solicitacoesSetor = solicitacoesFiltradas.filter((row) => row.origem === "setor").length;
     const devolucoesSetor = devolucoesFiltradas.filter((row) => row.origem === "setor").length;
@@ -664,6 +757,55 @@ export function DashboardTab() {
       devolucoesColaborador: devolucoesFiltradas.length - devolucoesSetor,
     };
   }, [devolucoesFiltradas, solicitacoesFiltradas]);
+
+  const exibindoTabelaItens = kpiSelecionado === "disponiveis" || kpiSelecionado === "emprestados";
+  const itensTabelaFiltrados = useMemo(() => {
+    if (!exibindoTabelaItens) {
+      return [] satisfies ItemTabelaRow[];
+    }
+
+    return itensAtivosNoRecorte
+      .filter((item) => {
+        if (kpiSelecionado === "disponiveis") {
+          return item.status === "disponivel";
+        }
+        if (kpiSelecionado === "emprestados") {
+          return item.status === "emprestado";
+        }
+        return false;
+      })
+      .map((item) => {
+        const funcionario = item.solicitanteMatricula
+          ? funcionarioByMatricula.get(item.solicitanteMatricula) ?? null
+          : null;
+        const setoresFuncionario = funcionario
+          ? listaUnicaRotulos([...(funcionario.setores ?? []), funcionario.setor])
+          : [];
+        const unidadesFuncionario = funcionario
+          ? listaUnicaRotulos([...(funcionario.unidades ?? []), funcionario.unidade])
+          : [];
+        const unidadeSetor = item.setorSolicitante
+          ? listaUnicaRotulos(setorByNome.get(item.setorSolicitante)?.unidades ?? [])
+          : [];
+        const solicitanteNome = item.setorSolicitante ? `Setor ${item.setorSolicitante}` : funcionario?.nome ?? null;
+        const origemAtual =
+          item.status === "emprestado"
+            ? (item.setorSolicitante ? "setor" : "colaborador")
+            : null;
+
+        return {
+          ...item,
+          solicitanteNome,
+          unidadeLabel:
+            item.setorSolicitante
+              ? (unidadeSetor.join(", ") || null)
+              : (unidadesFuncionario.join(", ") || null),
+          setorLabel: item.setorSolicitante ?? (setoresFuncionario.join(", ") || null),
+          origemAtual,
+        } satisfies ItemTabelaRow;
+      })
+      .sort((a, b) => a.codigo.localeCompare(b.codigo, "pt-BR", { numeric: true, sensitivity: "base" }));
+  }, [exibindoTabelaItens, funcionarioByMatricula, itensAtivosNoRecorte, kpiSelecionado, setorByNome]);
 
   useEffect(() => {
     setPaginaEventos(1);
@@ -676,12 +818,32 @@ export function DashboardTab() {
     return eventosTabelaFiltrados.slice(inicio, inicio + ITENS_POR_PAGINA);
   }, [eventosTabelaFiltrados, paginaEventos]);
 
-  useEffect(() => {
-    if (paginaEventos > totalPaginasEventos) setPaginaEventos(totalPaginasEventos);
-  }, [paginaEventos, totalPaginasEventos]);
+  const totalPaginasItens = Math.max(1, Math.ceil(itensTabelaFiltrados.length / ITENS_POR_PAGINA));
+  const itensPaginados = useMemo(() => {
+    const inicio = (paginaEventos - 1) * ITENS_POR_PAGINA;
+    return itensTabelaFiltrados.slice(inicio, inicio + ITENS_POR_PAGINA);
+  }, [itensTabelaFiltrados, paginaEventos]);
+  const totalPaginasTabela = exibindoTabelaItens ? totalPaginasItens : totalPaginasEventos;
+  const totalRegistrosTabela = exibindoTabelaItens
+    ? itensTabelaFiltrados.length
+    : eventosTabelaFiltrados.length;
 
-  const inicioEventos = eventosTabelaFiltrados.length === 0 ? 0 : (paginaEventos - 1) * ITENS_POR_PAGINA + 1;
-  const fimEventos = Math.min(paginaEventos * ITENS_POR_PAGINA, eventosTabelaFiltrados.length);
+  useEffect(() => {
+    if (paginaEventos > totalPaginasTabela) setPaginaEventos(totalPaginasTabela);
+  }, [paginaEventos, totalPaginasTabela]);
+
+  const inicioEventos = totalRegistrosTabela === 0 ? 0 : (paginaEventos - 1) * ITENS_POR_PAGINA + 1;
+  const fimEventos = Math.min(paginaEventos * ITENS_POR_PAGINA, totalRegistrosTabela);
+  const filtroKpiAtivo = kpiSelecionado ? KPI_META[kpiSelecionado] : null;
+  const emptyMessageEventos = useMemo(() => {
+    if (kpiSelecionado === "disponiveis") {
+      return "Sem itens disponiveis no momento.";
+    }
+    if (kpiSelecionado === "emprestados") {
+      return "Sem itens emprestados no momento.";
+    }
+    return "Sem eventos para os filtros atuais.";
+  }, [kpiSelecionado]);
 
   const periodoAtivo = filtros.data_inicio || filtros.data_fim
     ? `${formatarDataFiltro(filtros.data_inicio)} - ${formatarDataFiltro(filtros.data_fim)}`
@@ -735,10 +897,6 @@ export function DashboardTab() {
     () => new Map(itensResumo.map((item) => [item.codigo, item])),
     [itensResumo],
   );
-  const funcionarioByMatricula = useMemo(
-    () => new Map(funcionariosResumo.map((funcionario) => [funcionario.matricula, funcionario])),
-    [funcionariosResumo],
-  );
   const itemSolicitacaoSelecionada = useMemo(
     () => (solicitacaoSelecionada ? itemByCodigo.get(solicitacaoSelecionada.item_codigo) ?? null : null),
     [solicitacaoSelecionada, itemByCodigo],
@@ -748,285 +906,20 @@ export function DashboardTab() {
     [devolucaoSelecionada, itemByCodigo],
   );
 
-  const itensAtivos = useMemo(() => itensResumo.filter((item) => item.statusAtivo), [itensResumo]);
-  const itensDisponiveisAtivos = useMemo(
-    () => itensAtivos.filter((item) => item.status === "disponivel"),
-    [itensAtivos],
-  );
-  const itensEmprestadosAtivos = useMemo(
-    () => itensAtivos.filter((item) => item.status === "emprestado"),
-    [itensAtivos],
-  );
   const resumoEmprestadosPorOrigem = useMemo(() => {
-    const setor = itensEmprestadosAtivos.filter((item) => Boolean(item.setorSolicitante)).length;
+    const setor = itensEmprestadosNoRecorte.filter((item) => Boolean(item.setorSolicitante)).length;
     return {
       setor,
-      colaborador: itensEmprestadosAtivos.length - setor,
+      colaborador: itensEmprestadosNoRecorte.length - setor,
     };
-  }, [itensEmprestadosAtivos]);
-  const emprestimosPorSetorTodos = useMemo(
-    () =>
-      montarDistribuicao(
-        solicitacoesFiltradas.map((row) => setorPrincipal(row.setor)),
-        { limite: Math.max(1, solicitacoesFiltradas.length), incluirOutros: false },
-      ),
-    [solicitacoesFiltradas],
-  );
-
-  const emprestimosPorTamanhoTodos = useMemo(
-    () =>
-      montarDistribuicao(
-        solicitacoesFiltradas.map((row) => itemByCodigo.get(row.item_codigo)?.tamanho ?? "Sem tamanho"),
-        {
-          limite: Math.max(1, solicitacoesFiltradas.length),
-          incluirOutros: false,
-          fallback: "Sem tamanho",
-        },
-      ),
-    [itemByCodigo, solicitacoesFiltradas],
-  );
-
-  const devolucoesPorSetorTodos = useMemo(
-    () =>
-      montarDistribuicao(
-        devolucoesFiltradas.map((row) => setorPrincipal(row.setor)),
-        { limite: Math.max(1, devolucoesFiltradas.length), incluirOutros: false },
-      ),
-    [devolucoesFiltradas],
-  );
-
-  const devolucoesPorTamanhoTodos = useMemo(
-    () =>
-      montarDistribuicao(
-        devolucoesFiltradas.map((row) => itemByCodigo.get(row.item_codigo)?.tamanho ?? "Sem tamanho"),
-        {
-          limite: Math.max(1, devolucoesFiltradas.length),
-          incluirOutros: false,
-          fallback: "Sem tamanho",
-        },
-      ),
-    [devolucoesFiltradas, itemByCodigo],
-  );
-
-  const disponiveisPorTamanhoTodos = useMemo(
-    () =>
-      montarDistribuicao(
-        itensDisponiveisAtivos.map((item) => item.tamanho),
-        {
-          limite: Math.max(1, itensDisponiveisAtivos.length),
-          incluirOutros: false,
-          fallback: "Sem tamanho",
-        },
-      ),
-    [itensDisponiveisAtivos],
-  );
-
-  const emprestadosPorTamanhoTodos = useMemo(
-    () =>
-      montarDistribuicao(
-        itensEmprestadosAtivos.map((item) => item.tamanho),
-        {
-          limite: Math.max(1, itensEmprestadosAtivos.length),
-          incluirOutros: false,
-          fallback: "Sem tamanho",
-        },
-      ),
-    [itensEmprestadosAtivos],
-  );
-
-  const detalhesKpi = useMemo<Record<KpiChave, ResumoKpi>>(() => {
-    const emprestimosPorSetor = emprestimosPorSetorTodos.slice(0, 3);
-    const emprestimosPorTamanho = emprestimosPorTamanhoTodos.slice(0, 3);
-    const emprestimosPorItem = montarDistribuicao(
-      solicitacoesFiltradas.map((row) => row.item_codigo),
-      { limite: 3, incluirOutros: false, fallback: "Sem item" },
-    );
-
-    const devolucoesPorSetor = devolucoesPorSetorTodos.slice(0, 3);
-    const devolucoesPorTamanho = devolucoesPorTamanhoTodos.slice(0, 3);
-
-    const disponiveisPorTamanho = montarDistribuicao(
-      itensDisponiveisAtivos.map((item) => item.tamanho),
-      { limite: 3, fallback: "Sem tamanho" },
-    );
-    const panoramaEstoque = montarDistribuicao(
-      itensAtivos.map((item) => {
-        if (item.status === "disponivel") return "Disponiveis";
-        if (item.status === "emprestado") return "Emprestados";
-        return "Inativos";
-      }),
-      { limite: 3, incluirOutros: false },
-    );
-
-    const emprestadosPorTamanho = montarDistribuicao(
-      itensEmprestadosAtivos.map((item) => item.tamanho),
-      { limite: 3, fallback: "Sem tamanho" },
-    );
-    const emprestadosPorSetor = montarDistribuicao(
-      itensEmprestadosAtivos.map((item) => {
-        if (item.setorSolicitante) {
-          return item.setorSolicitante;
-        }
-        const matricula = item.solicitanteMatricula ?? "";
-        return funcionarioByMatricula.get(matricula)?.setor ?? "Nao informado";
-      }),
-      { limite: 3 },
-    );
-
-    const ultimaSolicitacao = solicitacoesFiltradas[0]
-      ? formatarTimestamp(solicitacoesFiltradas[0].timestamp).completo
-      : "--";
-    const ultimaDevolucao = devolucoesFiltradas[0]
-      ? formatarTimestamp(devolucoesFiltradas[0].timestamp).completo
-      : "--";
-
-    const saldoPeriodo = solicitacoesFiltradas.length - devolucoesFiltradas.length;
-    const taxaRetorno = solicitacoesFiltradas.length
-      ? Math.round((devolucoesFiltradas.length / solicitacoesFiltradas.length) * 100)
-      : 0;
-    const tamanhosComDisponiveis = new Set(
-      itensDisponiveisAtivos.map((item) => normalizarLabel(item.tamanho, "Sem tamanho")),
-    ).size;
-    const taxaDisponiveis = itensAtivos.length
-      ? Math.round((itensDisponiveisAtivos.length / itensAtivos.length) * 100)
-      : 0;
-
-    const itemEmprestadoMaisAntigo = itensEmprestadosAtivos.reduce<{ codigo: string; dias: number } | null>(
-      (acc, item) => {
-        const dias = calcularDiasDesde(item.dataEmprestimo);
-        if (dias === null) {
-          return acc;
-        }
-        if (!acc || dias > acc.dias) {
-          return { codigo: item.codigo, dias };
-        }
-        return acc;
-      },
-      null,
-    );
-
-    return {
-      emprestimos: {
-        titulo: "Emprestimos",
-        subtitulo: "Indicadores rapidos do periodo filtrado.",
-        indicadores: [
-          {
-            rotulo: "Setor em destaque",
-            valor: obterTop(emprestimosPorSetor, "Sem dados"),
-          },
-          {
-            rotulo: "Tamanho mais pedido",
-            valor: obterTop(emprestimosPorTamanho, "Sem dados"),
-          },
-          {
-            rotulo: "Item mais solicitado",
-            valor: obterTop(emprestimosPorItem, "Sem dados"),
-          },
-          {
-            rotulo: "Ultimo registro",
-            valor: ultimaSolicitacao,
-          },
-        ],
-      },
-      devolucoes: {
-        titulo: "Devolucoes",
-        subtitulo: "Indicadores de retorno no recorte atual.",
-        indicadores: [
-          {
-            rotulo: "Setor com mais retornos",
-            valor: obterTop(devolucoesPorSetor, "Sem dados"),
-          },
-          {
-            rotulo: "Tamanho mais devolvido",
-            valor: obterTop(devolucoesPorTamanho, "Sem dados"),
-          },
-          {
-            rotulo: "Taxa de retorno",
-            valor: `${taxaRetorno}%`,
-            apoio: `${devolucoesFiltradas.length} de ${solicitacoesFiltradas.length} devolvidos`,
-          },
-          {
-            rotulo: "Saldo do periodo",
-            valor:
-              saldoPeriodo === 0
-                ? "Equilibrado"
-                : saldoPeriodo > 0
-                  ? `+${saldoPeriodo} em uso`
-                  : `${saldoPeriodo} em uso`,
-            apoio: `Ultimo retorno: ${ultimaDevolucao}`,
-          },
-        ],
-      },
-      disponiveis: {
-        titulo: "Itens disponiveis",
-        subtitulo: "Capacidade de atendimento imediata.",
-        indicadores: [
-          {
-            rotulo: "Tamanho com maior estoque",
-            valor: obterTop(disponiveisPorTamanho, "Sem dados"),
-          },
-          {
-            rotulo: "Cobertura de tamanhos",
-            valor: `${tamanhosComDisponiveis} ${pluralizar(tamanhosComDisponiveis, "tamanho", "tamanhos")}`,
-          },
-          {
-            rotulo: "Disponiveis no estoque ativo",
-            valor: `${taxaDisponiveis}%`,
-            apoio: `${itensDisponiveisAtivos.length} de ${itensAtivos.length}`,
-          },
-          {
-            rotulo: "Panorama atual",
-            valor:
-              panoramaEstoque.length > 0
-                ? panoramaEstoque.map((item) => `${item.label}: ${item.valor}`).join(" | ")
-                : "Sem dados",
-          },
-        ],
-      },
-      emprestados: {
-        titulo: "Itens emprestados",
-        subtitulo: "Uso ativo por equipe e tamanho.",
-        indicadores: [
-          {
-            rotulo: "Setor com mais itens em uso",
-            valor: obterTop(emprestadosPorSetor, "Sem dados"),
-          },
-          {
-            rotulo: "Tamanho mais em uso",
-            valor: obterTop(emprestadosPorTamanho, "Sem dados"),
-          },
-          {
-            rotulo: "Emprestimo mais antigo",
-            valor: itemEmprestadoMaisAntigo
-              ? `${itemEmprestadoMaisAntigo.codigo} (${itemEmprestadoMaisAntigo.dias}d)`
-              : "Sem data registrada",
-          },
-          {
-            rotulo: "Total em uso agora",
-            valor: `${itensEmprestadosAtivos.length} ${pluralizar(itensEmprestadosAtivos.length, "item", "itens")}`,
-          },
-        ],
-      },
-    };
-  }, [
-    devolucoesFiltradas,
-    devolucoesPorSetorTodos,
-    devolucoesPorTamanhoTodos,
-    emprestimosPorSetorTodos,
-    emprestimosPorTamanhoTodos,
-    funcionarioByMatricula,
-    itensAtivos,
-    itensDisponiveisAtivos,
-    itensEmprestadosAtivos,
-    solicitacoesFiltradas,
-  ]);
+  }, [itensEmprestadosNoRecorte]);
 
   const cardsKpi = data
     ? ([
         {
           chave: "emprestimos",
           label: "Emprestimos",
-          valor: data.kpis.total_emprestimos,
+          valor: solicitacoesFiltradas.length,
           helper: `Colaborador: ${resumoMovimentacoesPorOrigem.solicitacoesColaborador} | Setor: ${resumoMovimentacoesPorOrigem.solicitacoesSetor}`,
           icon: Package,
           gradientClass: "from-primary/18 via-primary/8 to-transparent",
@@ -1035,7 +928,7 @@ export function DashboardTab() {
         {
           chave: "devolucoes",
           label: "Devolucoes",
-          valor: data.kpis.total_devolucoes,
+          valor: devolucoesFiltradas.length,
           helper: `Colaborador: ${resumoMovimentacoesPorOrigem.devolucoesColaborador} | Setor: ${resumoMovimentacoesPorOrigem.devolucoesSetor}`,
           icon: Undo2,
           gradientClass:
@@ -1045,8 +938,10 @@ export function DashboardTab() {
         {
           chave: "disponiveis",
           label: "Itens disponiveis",
-          valor: data.kpis.itens_disponiveis,
-          helper: "Prontos para novo emprestimo.",
+          valor: itensDisponiveisNoRecorte.length,
+          helper: filtrosDashboardAtivos
+            ? "Prontos para novo emprestimo dentro do recorte."
+            : "Prontos para novo emprestimo.",
           icon: Boxes,
           gradientClass:
             "from-[hsl(197_92%_56%_/_0.2)] via-[hsl(197_92%_56%_/_0.08)] to-transparent",
@@ -1055,7 +950,7 @@ export function DashboardTab() {
         {
           chave: "emprestados",
           label: "Itens emprestados",
-          valor: data.kpis.itens_emprestados,
+          valor: itensEmprestadosNoRecorte.length,
           helper: `Colaborador: ${resumoEmprestadosPorOrigem.colaborador} | Setor: ${resumoEmprestadosPorOrigem.setor}`,
           icon: BarChart3,
           gradientClass:
@@ -1073,22 +968,8 @@ export function DashboardTab() {
       }>)
     : [];
 
-  const detalheSelecionado = kpiSelecionado ? detalhesKpi[kpiSelecionado] : null;
-  const emprestimosSetoresCompactos = emprestimosPorSetorTodos.slice(0, LIMITE_LISTA_DISTRIBUICAO_POPOVER);
-  const emprestimosTamanhosCompactos = emprestimosPorTamanhoTodos.slice(0, LIMITE_LISTA_DISTRIBUICAO_POPOVER);
-  const podeExpandirEmprestimos =
-    emprestimosPorSetorTodos.length > LIMITE_LISTA_DISTRIBUICAO_POPOVER ||
-    emprestimosPorTamanhoTodos.length > LIMITE_LISTA_DISTRIBUICAO_POPOVER;
-  const devolucoesSetoresCompactos = devolucoesPorSetorTodos.slice(0, LIMITE_LISTA_DISTRIBUICAO_POPOVER);
-  const devolucoesTamanhosCompactos = devolucoesPorTamanhoTodos.slice(0, LIMITE_LISTA_DISTRIBUICAO_POPOVER);
-  const podeExpandirDevolucoes =
-    devolucoesPorSetorTodos.length > LIMITE_LISTA_DISTRIBUICAO_POPOVER ||
-    devolucoesPorTamanhoTodos.length > LIMITE_LISTA_DISTRIBUICAO_POPOVER;
-  const disponiveisTamanhosCompactos = disponiveisPorTamanhoTodos.slice(0, LIMITE_LISTA_DISTRIBUICAO_POPOVER);
-  const emprestadosTamanhosCompactos = emprestadosPorTamanhoTodos.slice(0, LIMITE_LISTA_DISTRIBUICAO_POPOVER);
-
   useEffect(() => {
-    if (!detalheSelecionado) {
+    if (!kpiSelecionado) {
       return;
     }
 
@@ -1100,15 +981,6 @@ export function DashboardTab() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [detalheSelecionado]);
-
-  useEffect(() => {
-    if (kpiSelecionado !== "emprestimos") {
-      setOpenEmprestimosModal(false);
-    }
-    if (kpiSelecionado !== "devolucoes") {
-      setOpenDevolucoesModal(false);
-    }
   }, [kpiSelecionado]);
 
   function abrirResumoSolicitacao(row: MovimentacaoRow) {
@@ -1325,9 +1197,20 @@ export function DashboardTab() {
                         setMostrarSugestoesFuncionario(false);
                         return;
                       }
-                      if (event.key === "Enter" && sugestoesFuncionario.length > 0) {
+                      if (event.key !== "Enter") {
+                        return;
+                      }
+
+                      if (sugestoesFuncionario.length > 0) {
                         event.preventDefault();
                         selecionarFuncionario(sugestoesFuncionario[0]);
+                        return;
+                      }
+
+                      const funcionarioExato = buscarFuncionarioExato(buscaFuncionario, opcoes.funcionarios);
+                      if (funcionarioExato) {
+                        event.preventDefault();
+                        selecionarFuncionario(funcionarioExato);
                       }
                     }}
                   />
@@ -1378,6 +1261,11 @@ export function DashboardTab() {
                   </div>
                 )}
               </div>
+              {!filtroSomenteSetor && buscaFuncionario.trim().length >= 2 && !filtros.matricula ? (
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  Selecione um funcionario da lista para aplicar o filtro no dashboard.
+                </p>
+              ) : null}
             </div>
           </div>
         </CardContent>
@@ -1389,285 +1277,65 @@ export function DashboardTab() {
             {cardsKpi.map((card, index) => {
               const Icon = card.icon;
               const selecionado = kpiSelecionado === card.chave;
-              const resumoCard = detalhesKpi[card.chave];
               return (
-                <div key={card.chave} className="relative">
+                <Card
+                  key={card.chave}
+                  className={cn(
+                    "group relative overflow-hidden border-border/70 bg-card/92 shadow-[var(--shadow-soft)] transition-all duration-200 animate-in fade-in-0 slide-in-from-bottom-2 dark:border-border/85 dark:bg-card/88",
+                    selecionado
+                      ? "-translate-y-0.5 border-primary/80 bg-gradient-to-br from-primary/[0.14] via-primary/[0.06] to-card ring-2 ring-primary/50 shadow-[0_0_0_1px_hsl(var(--primary)/0.4),0_20px_32px_-24px_hsl(var(--primary)/0.95)] dark:border-primary/80"
+                      : "hover:-translate-y-1 hover:border-primary/45",
+                  )}
+                  style={{ animationDelay: `${index * 30}ms` }}
+                >
                   {selecionado ? (
-                    <div className="pointer-events-none absolute left-1/2 top-0 z-[70] w-52 -translate-x-1/2 -translate-y-[calc(100%+0.35rem)]">
-                      <Card className="pointer-events-auto border-border/70 bg-card/96 shadow-[0_14px_28px_-20px_hsl(var(--primary)/0.58)] dark:border-border/85 dark:bg-card/95">
-                        <CardContent className="space-y-1.5 p-2">
-                          <p className="truncate text-[10px] font-semibold text-foreground">{resumoCard.titulo}</p>
-                          {card.chave === "emprestimos" ? (
-                            <div className="space-y-1.5">
-                              <div>
-                                <p className="text-[8px] uppercase tracking-[0.06em] text-muted-foreground">Setores</p>
-                                <div className="mt-0.5 flex flex-wrap gap-1">
-                                  {emprestimosSetoresCompactos.length > 0 ? (
-                                    emprestimosSetoresCompactos.map((item) => (
-                                      <span
-                                        key={`setor-pop-${item.label}`}
-                                        className="max-w-full truncate rounded-md bg-background/70 px-1.5 py-0.5 text-[9px] text-foreground dark:bg-background/55"
-                                      >
-                                        {item.label} ({item.valor})
-                                      </span>
-                                    ))
-                                  ) : (
-                                    <span className="text-[9px] text-muted-foreground">Sem registros</span>
-                                  )}
-                                </div>
-                              </div>
-                              <div>
-                                <p className="text-[8px] uppercase tracking-[0.06em] text-muted-foreground">Tamanhos</p>
-                                <div className="mt-0.5 flex flex-wrap gap-1">
-                                  {emprestimosTamanhosCompactos.length > 0 ? (
-                                    emprestimosTamanhosCompactos.map((item) => (
-                                      <span
-                                        key={`tam-pop-${item.label}`}
-                                        className="max-w-full truncate rounded-md bg-background/70 px-1.5 py-0.5 text-[9px] text-foreground dark:bg-background/55"
-                                      >
-                                        {item.label} ({item.valor})
-                                      </span>
-                                    ))
-                                  ) : (
-                                    <span className="text-[9px] text-muted-foreground">Sem registros</span>
-                                  )}
-                                </div>
-                              </div>
-                              {podeExpandirEmprestimos ? (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-6 w-full text-[9px]"
-                                  onClick={() => setOpenEmprestimosModal(true)}
-                                >
-                                  Ver lista completa
-                                </Button>
-                              ) : null}
-                            </div>
-                          ) : card.chave === "devolucoes" ? (
-                            <div className="space-y-1.5">
-                              <div>
-                                <p className="text-[8px] uppercase tracking-[0.06em] text-muted-foreground">Setores</p>
-                                <div className="mt-0.5 flex flex-wrap gap-1">
-                                  {devolucoesSetoresCompactos.length > 0 ? (
-                                    devolucoesSetoresCompactos.map((item) => (
-                                      <span
-                                        key={`setor-dev-pop-${item.label}`}
-                                        className="max-w-full truncate rounded-md bg-background/70 px-1.5 py-0.5 text-[9px] text-foreground dark:bg-background/55"
-                                      >
-                                        {item.label} ({item.valor})
-                                      </span>
-                                    ))
-                                  ) : (
-                                    <span className="text-[9px] text-muted-foreground">Sem registros</span>
-                                  )}
-                                </div>
-                              </div>
-                              <div>
-                                <p className="text-[8px] uppercase tracking-[0.06em] text-muted-foreground">Tamanhos</p>
-                                <div className="mt-0.5 flex flex-wrap gap-1">
-                                  {devolucoesTamanhosCompactos.length > 0 ? (
-                                    devolucoesTamanhosCompactos.map((item) => (
-                                      <span
-                                        key={`tam-dev-pop-${item.label}`}
-                                        className="max-w-full truncate rounded-md bg-background/70 px-1.5 py-0.5 text-[9px] text-foreground dark:bg-background/55"
-                                      >
-                                        {item.label} ({item.valor})
-                                      </span>
-                                    ))
-                                  ) : (
-                                    <span className="text-[9px] text-muted-foreground">Sem registros</span>
-                                  )}
-                                </div>
-                              </div>
-                              {podeExpandirDevolucoes ? (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-6 w-full text-[9px]"
-                                  onClick={() => setOpenDevolucoesModal(true)}
-                                >
-                                  Ver lista completa
-                                </Button>
-                              ) : null}
-                            </div>
-                          ) : card.chave === "disponiveis" || card.chave === "emprestados" ? (
-                            <div>
-                              <p className="text-[8px] uppercase tracking-[0.06em] text-muted-foreground">Tamanhos</p>
-                              <div className="mt-0.5 flex flex-wrap gap-1">
-                                {(card.chave === "disponiveis" ? disponiveisTamanhosCompactos : emprestadosTamanhosCompactos).length > 0 ? (
-                                  (card.chave === "disponiveis" ? disponiveisTamanhosCompactos : emprestadosTamanhosCompactos).map((item) => (
-                                    <span
-                                      key={`${card.chave}-tam-pop-${item.label}`}
-                                      className="max-w-full truncate rounded-md bg-background/70 px-1.5 py-0.5 text-[9px] text-foreground dark:bg-background/55"
-                                    >
-                                      {item.label} ({item.valor})
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="text-[9px] text-muted-foreground">Sem registros</span>
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            resumoCard.indicadores.slice(0, 2).map((indicador) => (
-                              <div key={`${resumoCard.titulo}-${indicador.rotulo}`} className="rounded-md bg-background/70 px-1.5 py-1 dark:bg-background/55">
-                                <p className="truncate text-[8px] uppercase tracking-[0.06em] text-muted-foreground">{indicador.rotulo}</p>
-                                <p className="truncate text-[10px] font-semibold text-foreground">{indicador.valor}</p>
-                              </div>
-                            ))
-                          )}
-                        </CardContent>
-                      </Card>
-                      <div className="mx-auto mt-1 h-2 w-2 rotate-45 border-b border-r border-border/70 bg-card/96 dark:border-border/85 dark:bg-card/95" />
-                    </div>
+                    <span className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 bg-primary/90" />
                   ) : null}
-
-                  <Card
-                    className={cn(
-                      "group relative overflow-hidden border-border/70 bg-card/92 shadow-[var(--shadow-soft)] animate-in fade-in-0 slide-in-from-bottom-2 dark:border-border/85 dark:bg-card/88",
-                      selecionado
-                        ? "border-primary/55 shadow-[0_0_0_1px_hsl(var(--primary)/0.25),var(--shadow-soft)] dark:border-primary/60"
-                        : "hover:-translate-y-0.5 hover:border-primary/35",
-                    )}
-                    style={{ animationDelay: `${index * 30}ms` }}
+                  <div className={cn("pointer-events-none absolute inset-0 bg-gradient-to-br", card.gradientClass)} />
+                  <button
+                    type="button"
+                    className="relative w-full cursor-pointer rounded-[inherit] text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    onClick={() =>
+                      setKpiSelecionado((anterior) => (anterior === card.chave ? null : card.chave))
+                    }
+                    aria-pressed={selecionado}
+                    aria-label={`Filtrar eventos por ${card.label}`}
                   >
-                    <div className={cn("pointer-events-none absolute inset-0 bg-gradient-to-br", card.gradientClass)} />
-                    <button
-                      type="button"
-                      className="relative w-full cursor-pointer rounded-[inherit] text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                      onClick={() =>
-                        setKpiSelecionado((anterior) => (anterior === card.chave ? null : card.chave))
-                      }
-                      aria-pressed={selecionado}
-                      aria-label={`Abrir resumo de ${card.label}`}
-                    >
-                      <CardContent className="relative p-2.5">
-                        <div className="flex items-start justify-between gap-1.5">
-                          <div>
+                    <CardContent className="relative p-2.5">
+                      <div className="flex items-start justify-between gap-1.5">
+                        <div>
+                          <div className="flex items-center gap-1.5">
                             <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                               {card.label}
                             </p>
-                            <p className="mt-1 text-xl font-bold leading-none text-foreground">{card.valor}</p>
+                            {selecionado ? (
+                              <StatusPill tone="info" className="h-4 px-1.5 text-[9px]">
+                                Filtro ativo
+                              </StatusPill>
+                            ) : null}
                           </div>
-                          <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-border/50 bg-background/75 dark:border-border/80 dark:bg-background/60">
-                            <Icon className={cn("h-3.5 w-3.5", card.iconClass)} />
-                          </div>
+                          <p className="mt-1 text-xl font-bold leading-none text-foreground">{card.valor}</p>
                         </div>
-                        <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground">{card.helper}</p>
-                      </CardContent>
-                    </button>
-                  </Card>
-                </div>
+                        <div className={cn(
+                          "flex h-7 w-7 items-center justify-center rounded-lg border border-border/50 bg-background/75 dark:border-border/80 dark:bg-background/60",
+                          selecionado && "border-primary/50 bg-primary/[0.12] dark:border-primary/45 dark:bg-primary/[0.18]",
+                        )}>
+                          <Icon className={cn("h-3.5 w-3.5", card.iconClass)} />
+                        </div>
+                      </div>
+                      <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground">{card.helper}</p>
+                      <p className={cn(
+                        "mt-1 text-[9px] font-medium",
+                        selecionado ? "text-primary" : "text-muted-foreground/75",
+                      )}>
+                        {selecionado ? "Clique para remover o filtro" : "Clique para filtrar a tabela"}
+                      </p>
+                    </CardContent>
+                  </button>
+                </Card>
               );
             })}
           </div>
-
-          <Modal
-            open={openEmprestimosModal}
-            onClose={() => setOpenEmprestimosModal(false)}
-            title="Emprestimos por setor e tamanho"
-            description="Distribuicao completa das solicitacoes no recorte atual."
-            maxWidthClassName="max-w-2xl"
-          >
-            <div className="grid gap-2.5 sm:grid-cols-2">
-              <div className="rounded-xl border border-border/70 bg-background/72 p-2.5 dark:border-border/85 dark:bg-background/55">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Setores ({emprestimosPorSetorTodos.length})
-                </p>
-                <div className="mt-1.5 max-h-64 space-y-1 overflow-y-auto pr-1">
-                  {emprestimosPorSetorTodos.length > 0 ? (
-                    emprestimosPorSetorTodos.map((item) => (
-                      <div
-                        key={`modal-setor-${item.label}`}
-                        className="flex items-center justify-between gap-2 rounded-md border border-border/65 bg-card/76 px-2 py-1 text-[11px] dark:border-border/80 dark:bg-card/65"
-                      >
-                        <span className="truncate text-foreground">{item.label}</span>
-                        <span className="shrink-0 tabular-nums text-muted-foreground">{item.valor}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-[11px] text-muted-foreground">Sem setores neste periodo.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-border/70 bg-background/72 p-2.5 dark:border-border/85 dark:bg-background/55">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Tamanhos ({emprestimosPorTamanhoTodos.length})
-                </p>
-                <div className="mt-1.5 max-h-64 space-y-1 overflow-y-auto pr-1">
-                  {emprestimosPorTamanhoTodos.length > 0 ? (
-                    emprestimosPorTamanhoTodos.map((item) => (
-                      <div
-                        key={`modal-tamanho-${item.label}`}
-                        className="flex items-center justify-between gap-2 rounded-md border border-border/65 bg-card/76 px-2 py-1 text-[11px] dark:border-border/80 dark:bg-card/65"
-                      >
-                        <span className="truncate text-foreground">{item.label}</span>
-                        <span className="shrink-0 tabular-nums text-muted-foreground">{item.valor}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-[11px] text-muted-foreground">Sem tamanhos neste periodo.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </Modal>
-
-          <Modal
-            open={openDevolucoesModal}
-            onClose={() => setOpenDevolucoesModal(false)}
-            title="Devolucoes por setor e tamanho"
-            description="Distribuicao completa das devolucoes no recorte atual."
-            maxWidthClassName="max-w-2xl"
-          >
-            <div className="grid gap-2.5 sm:grid-cols-2">
-              <div className="rounded-xl border border-border/70 bg-background/72 p-2.5 dark:border-border/85 dark:bg-background/55">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Setores ({devolucoesPorSetorTodos.length})
-                </p>
-                <div className="mt-1.5 max-h-64 space-y-1 overflow-y-auto pr-1">
-                  {devolucoesPorSetorTodos.length > 0 ? (
-                    devolucoesPorSetorTodos.map((item) => (
-                      <div
-                        key={`modal-dev-setor-${item.label}`}
-                        className="flex items-center justify-between gap-2 rounded-md border border-border/65 bg-card/76 px-2 py-1 text-[11px] dark:border-border/80 dark:bg-card/65"
-                      >
-                        <span className="truncate text-foreground">{item.label}</span>
-                        <span className="shrink-0 tabular-nums text-muted-foreground">{item.valor}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-[11px] text-muted-foreground">Sem setores neste periodo.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-border/70 bg-background/72 p-2.5 dark:border-border/85 dark:bg-background/55">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Tamanhos ({devolucoesPorTamanhoTodos.length})
-                </p>
-                <div className="mt-1.5 max-h-64 space-y-1 overflow-y-auto pr-1">
-                  {devolucoesPorTamanhoTodos.length > 0 ? (
-                    devolucoesPorTamanhoTodos.map((item) => (
-                      <div
-                        key={`modal-dev-tamanho-${item.label}`}
-                        className="flex items-center justify-between gap-2 rounded-md border border-border/65 bg-card/76 px-2 py-1 text-[11px] dark:border-border/80 dark:bg-card/65"
-                      >
-                        <span className="truncate text-foreground">{item.label}</span>
-                        <span className="shrink-0 tabular-nums text-muted-foreground">{item.valor}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-[11px] text-muted-foreground">Sem tamanhos neste periodo.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </Modal>
 
           <Modal
             open={openResumoSolicitacaoModal}
@@ -1850,78 +1518,178 @@ export function DashboardTab() {
           </Modal>
 
           <SectionCard
-            title={<span className="text-sm font-semibold">Eventos</span>}
-            icon={BarChart3}
-            actions={<StatusPill tone="info" className="text-[10px]">{eventosFiltrados.length} registros</StatusPill>}
+            title={<span className="text-sm font-semibold">{exibindoTabelaItens ? "Itens" : "Eventos"}</span>}
+            icon={exibindoTabelaItens ? Boxes : BarChart3}
+            actions={(
+              <div className="flex items-center gap-1.5">
+                {filtroKpiAtivo ? (
+                  <StatusPill tone={filtroKpiAtivo.tone} className="text-[10px]">
+                    Filtro: {filtroKpiAtivo.label}
+                  </StatusPill>
+                ) : null}
+                <StatusPill tone="info" className="text-[10px]">{totalRegistrosTabela} registros</StatusPill>
+              </div>
+            )}
             className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)] dark:border-border/85 dark:bg-card/90"
             headerClassName="pb-1.5"
             contentClassName="pt-0"
           >
+            {filtroKpiAtivo ? (
+              <div className="mb-1.5 flex items-center justify-between gap-2 rounded-lg border border-border/70 bg-background/70 px-2 py-1 dark:border-border/85 dark:bg-background/55">
+                <p className="text-[10px] text-muted-foreground">{filtroKpiAtivo.descricao}</p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[10px]"
+                  onClick={() => setKpiSelecionado(null)}
+                >
+                  Limpar filtro
+                </Button>
+              </div>
+            ) : null}
             <div className="min-h-[198px]">
-              <DataTable
-                columns={COLUNAS_EVENTOS}
-                rows={eventosPaginados}
-                getRowKey={(row) => row.evento_chave}
-                onRowClick={abrirResumoEvento}
-                loading={loading}
-                emptyMessage="Sem eventos para os filtros atuais."
-                minWidthClassName="min-w-0"
-                containerClassName="overflow-x-hidden border-border/65 bg-background/70 dark:border-border/85 dark:bg-background/55"
-                emptyCellClassName="py-3"
-                renderRow={(row) => {
-                  const dataHora = formatarTimestamp(row.timestamp);
-                  const solicitante = row.origem === "setor"
-                    ? (row.setor_solicitante ?? row.nome_funcionario)
-                    : row.nome_funcionario;
-                  return (
-                    <>
-                      <td className="max-w-0" title={dataHora.completo}>
-                        <div className="flex flex-col items-center gap-0.5">
-                          <span className="text-xs leading-tight">{dataHora.data}</span>
-                          <span className="text-[10px] leading-tight text-muted-foreground">{dataHora.hora}</span>
-                        </div>
-                      </td>
-                      <td className="max-w-0">
-                        <StatusPill tone={eventoTipoTone(row.evento_tipo)} className="text-[10px]">
-                          {eventoTipoLabel(row.evento_tipo)}
-                        </StatusPill>
-                      </td>
-                      <td className="max-w-0">
-                        <StatusPill tone={origemMovimentacaoTone(row.origem)} className="text-[10px]">
-                          {origemMovimentacaoLabel(row.origem)}
-                        </StatusPill>
-                      </td>
-                      <td className="max-w-0 truncate" title={row.origem === "colaborador" ? row.matricula : "--"}>
-                        {row.origem === "colaborador" ? (
+              {exibindoTabelaItens ? (
+                <DataTable
+                  columns={COLUNAS_ITENS}
+                  rows={itensPaginados}
+                  getRowKey={(row) => row.codigo}
+                  onRowClick={(row) => {
+                    void openKit(row.codigo);
+                  }}
+                  loading={loading}
+                  emptyMessage={emptyMessageEventos}
+                  minWidthClassName="min-w-0"
+                  containerClassName="overflow-x-hidden border-border/65 bg-background/70 dark:border-border/85 dark:bg-background/55"
+                  emptyCellClassName="py-3"
+                  renderRow={(row) => {
+                    const descricao = descricaoItemResumo(row.descricao);
+                    return (
+                      <>
+                        <td className="max-w-0 truncate font-mono" title={descricao ? `${row.codigo} | ${descricao}` : row.codigo}>
                           <button
                             type="button"
                             data-row-ignore-click="true"
                             className="font-mono text-primary underline-offset-2 hover:underline"
                             onClick={() => {
-                              void openFuncionario(row.matricula);
+                              void openKit(row.codigo);
                             }}
                           >
-                            {row.matricula}
+                            {row.codigo}
                           </button>
-                        ) : (
-                          <span className="text-muted-foreground">--</span>
-                        )}
-                      </td>
-                      <td className="max-w-0 truncate" title={solicitante}>{solicitante}</td>
-                      <td className="max-w-0 truncate" title={row.unidade ?? "-"}>{row.unidade ?? "-"}</td>
-                      <td className="max-w-0 truncate" title={row.setor_solicitante ?? row.setor ?? "-"}>
-                        {row.setor_solicitante ?? row.setor ?? "-"}
-                      </td>
-                      <td className="max-w-0 truncate font-mono" title={row.item_codigo}>{row.item_codigo}</td>
-                    </>
-                  );
-                }}
-              />
+                        </td>
+                        <td className="max-w-0 truncate" title={row.tipo}>{row.tipo}</td>
+                        <td className="max-w-0 truncate" title={row.tamanho}>{row.tamanho}</td>
+                        <td className="max-w-0">
+                          <StatusPill tone={statusItemTone(row.status)} className="text-[10px]">
+                            {statusItemLabel(row.status)}
+                          </StatusPill>
+                        </td>
+                        <td className="max-w-0">
+                          {row.origemAtual ? (
+                            <StatusPill tone={origemMovimentacaoTone(row.origemAtual)} className="text-[10px]">
+                              {origemMovimentacaoLabel(row.origemAtual)}
+                            </StatusPill>
+                          ) : (
+                            <span className="text-muted-foreground">--</span>
+                          )}
+                        </td>
+                        <td
+                          className="max-w-0 truncate"
+                          title={row.solicitanteMatricula ?? "--"}
+                        >
+                          {row.solicitanteMatricula ? (
+                            <button
+                              type="button"
+                              data-row-ignore-click="true"
+                              className="font-mono text-primary underline-offset-2 hover:underline"
+                              onClick={() => {
+                                const matricula = row.solicitanteMatricula;
+                                if (!matricula) {
+                                  return;
+                                }
+                                void openFuncionario(matricula);
+                              }}
+                            >
+                              {row.solicitanteMatricula}
+                            </button>
+                          ) : (
+                            <span className="text-muted-foreground">--</span>
+                          )}
+                        </td>
+                        <td className="max-w-0 truncate" title={row.solicitanteNome ?? "-"}>{row.solicitanteNome ?? "-"}</td>
+                        <td className="max-w-0 truncate" title={row.unidadeLabel ?? "-"}>{row.unidadeLabel ?? "-"}</td>
+                        <td className="max-w-0 truncate" title={row.setorLabel ?? "-"}>{row.setorLabel ?? "-"}</td>
+                      </>
+                    );
+                  }}
+                />
+              ) : (
+                <DataTable
+                  columns={COLUNAS_EVENTOS}
+                  rows={eventosPaginados}
+                  getRowKey={(row) => row.evento_chave}
+                  onRowClick={abrirResumoEvento}
+                  loading={loading}
+                  emptyMessage={emptyMessageEventos}
+                  minWidthClassName="min-w-0"
+                  containerClassName="overflow-x-hidden border-border/65 bg-background/70 dark:border-border/85 dark:bg-background/55"
+                  emptyCellClassName="py-3"
+                  renderRow={(row) => {
+                    const dataHora = formatarTimestamp(row.timestamp);
+                    const solicitante = row.origem === "setor"
+                      ? (row.setor_solicitante ?? row.nome_funcionario)
+                      : row.nome_funcionario;
+                    return (
+                      <>
+                        <td className="max-w-0" title={dataHora.completo}>
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className="text-xs leading-tight">{dataHora.data}</span>
+                            <span className="text-[10px] leading-tight text-muted-foreground">{dataHora.hora}</span>
+                          </div>
+                        </td>
+                        <td className="max-w-0">
+                          <StatusPill tone={eventoTipoTone(row.evento_tipo)} className="text-[10px]">
+                            {eventoTipoLabel(row.evento_tipo)}
+                          </StatusPill>
+                        </td>
+                        <td className="max-w-0">
+                          <StatusPill tone={origemMovimentacaoTone(row.origem)} className="text-[10px]">
+                            {origemMovimentacaoLabel(row.origem)}
+                          </StatusPill>
+                        </td>
+                        <td className="max-w-0 truncate" title={row.origem === "colaborador" ? row.matricula : "--"}>
+                          {row.origem === "colaborador" ? (
+                            <button
+                              type="button"
+                              data-row-ignore-click="true"
+                              className="font-mono text-primary underline-offset-2 hover:underline"
+                              onClick={() => {
+                                void openFuncionario(row.matricula);
+                              }}
+                            >
+                              {row.matricula}
+                            </button>
+                          ) : (
+                            <span className="text-muted-foreground">--</span>
+                          )}
+                        </td>
+                        <td className="max-w-0 truncate" title={solicitante}>{solicitante}</td>
+                        <td className="max-w-0 truncate" title={row.unidade ?? "-"}>{row.unidade ?? "-"}</td>
+                        <td className="max-w-0 truncate" title={row.setor_solicitante ?? row.setor ?? "-"}>
+                          {row.setor_solicitante ?? row.setor ?? "-"}
+                        </td>
+                        <td className="max-w-0 truncate font-mono" title={row.item_codigo}>{row.item_codigo}</td>
+                      </>
+                    );
+                  }}
+                />
+              )}
             </div>
 
             <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[10px] text-muted-foreground">
-                {inicioEventos}-{fimEventos} de {eventosFiltrados.length} | Pagina {paginaEventos} de {totalPaginasEventos}
+                {inicioEventos}-{fimEventos} de {totalRegistrosTabela} | Pagina {paginaEventos} de {totalPaginasTabela}
               </p>
               <div className="flex min-w-[220px] justify-end gap-2">
                 <Button
@@ -1939,8 +1707,8 @@ export function DashboardTab() {
                   variant="outline"
                   size="sm"
                   className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
-                  onClick={() => setPaginaEventos((paginaAtual) => Math.min(totalPaginasEventos, paginaAtual + 1))}
-                  disabled={paginaEventos === totalPaginasEventos}
+                  onClick={() => setPaginaEventos((paginaAtual) => Math.min(totalPaginasTabela, paginaAtual + 1))}
+                  disabled={paginaEventos === totalPaginasTabela}
                 >
                   Proxima
                 </Button>

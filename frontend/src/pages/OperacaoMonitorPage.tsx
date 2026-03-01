@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
-  CircleDashed,
   Clock3,
   Package,
-  RefreshCw,
   Undo2,
   XCircle,
 } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { Card, CardContent } from "@/components/ui/card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { cn } from "@/lib/utils";
 import {
@@ -18,22 +15,6 @@ import {
   readLastOperacaoMonitorEvent,
   subscribeOperacaoMonitor,
 } from "@/lib/operacao-monitor";
-
-function formatTimestamp(timestamp: string) {
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return "--";
-  return date.toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-function tipoLabel(tipo: "emprestimo" | "devolucao") {
-  return tipo === "emprestimo" ? "Emprestimo" : "Devolucao";
-}
 
 function WaitingState({ mensagem }: { mensagem: string }) {
   return (
@@ -50,118 +31,109 @@ function WaitingState({ mensagem }: { mensagem: string }) {
 }
 
 function ResumoState({ data }: { data: MonitorResumoData }) {
+  const isEmprestimo = data.tipo === "emprestimo";
   const Icon = data.tipo === "emprestimo" ? Package : Undo2;
+  const selecoesResumo =
+    data.selecoes && data.selecoes.length > 0
+      ? data.selecoes
+      : data.tipo_item
+        ? [{ tipo: data.tipo_item, tamanho: data.tamanho ?? "-", quantidade: data.quantidade || 1 }]
+        : [];
 
   return (
-    <div className="space-y-4 animate-in fade-in-0 slide-in-from-bottom-2">
-      <div className="text-center">
-        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl border border-primary/25 bg-primary/12">
+    <div className="mx-auto w-full max-w-xl space-y-4 animate-in fade-in-0 slide-in-from-bottom-2">
+      <div className="space-y-2 text-center">
+        <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-primary/25 bg-primary/10">
           <Icon className="h-5 w-5 text-primary" />
         </div>
-        <h3 className="mt-2 text-lg font-bold text-foreground">Resumo para confirmacao</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <h3 className="text-lg font-semibold text-foreground">
+          {isEmprestimo ? "Confirmar Solicitacao" : "Confirmar Devolucao"}
+        </h3>
+        <p className="text-sm text-muted-foreground">
           Revise os dados antes da confirmacao na tela principal.
         </p>
       </div>
 
-      <div className="rounded-xl border border-border/70 bg-surface-1/92 p-3">
-        <dl className="space-y-2">
-          <div className="flex items-center justify-between">
-            <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Operacao
-            </dt>
-            <dd>
-              <StatusPill tone="info">{tipoLabel(data.tipo)}</StatusPill>
-            </dd>
+      <div className="space-y-4">
+        <section className="overflow-hidden rounded-xl border border-border/70 bg-surface-2/60">
+          <div className="border-b border-border px-4 py-2.5">
+            <h4 className="text-sm font-semibold text-foreground">Dados do usuario</h4>
           </div>
-          <Separator />
-          <div className="flex items-center justify-between gap-3">
-            <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Funcionario
-            </dt>
-            <dd className="truncate text-sm font-semibold text-foreground">{data.funcionarioNome}</dd>
+          <div className="divide-y divide-border">
+            <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+              <span className="text-sm text-muted-foreground">Funcionario</span>
+              <span className="truncate text-sm font-semibold text-foreground">{data.funcionarioNome}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+              <span className="text-sm text-muted-foreground">Matricula</span>
+              <span className="font-mono text-sm font-semibold text-foreground">{data.matricula}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+              <span className="text-sm text-muted-foreground">Unidade</span>
+              <span className="truncate text-sm font-semibold text-foreground">{data.funcionarioUnidade || "-"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+              <span className="text-sm text-muted-foreground">Setor</span>
+              <span className="truncate text-sm font-semibold text-foreground">{data.funcionarioSetor || "-"}</span>
+            </div>
           </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Matricula
-            </dt>
-            <dd className="font-mono text-sm font-semibold text-foreground">{data.matricula}</dd>
+        </section>
+
+        <section className="rounded-xl border border-border/70 bg-surface-2/60 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-foreground">
+              {isEmprestimo ? "Pedido" : "Itens para devolucao"}
+            </h4>
+            <StatusPill tone="info">
+              {data.quantidade} {data.quantidade === 1 ? "item" : "itens"}
+            </StatusPill>
           </div>
-          <Separator />
-          <div className="flex items-center justify-between gap-3">
-            <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Unidade
-            </dt>
-            <dd className="truncate text-sm font-semibold text-foreground">{data.funcionarioUnidade || "-"}</dd>
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between gap-3">
-            <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Setor
-            </dt>
-            <dd className="truncate text-sm font-semibold text-foreground">{data.funcionarioSetor}</dd>
-          </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              Quantidade
-            </dt>
-            <dd>
-              <StatusPill tone="warning">{data.quantidade}</StatusPill>
-            </dd>
-          </div>
-          {data.tipo === "emprestimo" && data.selecoes && data.selecoes.length > 0 ? (
-            <>
-              <Separator />
-              <div className="space-y-1">
-                <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Pedido
-                </dt>
-                <dd className="space-y-1">
-                  {data.selecoes.map((row) => (
-                    <div
-                      key={`${row.tipo}-${row.tamanho}`}
-                      className="flex items-center justify-between rounded-lg border border-border/60 bg-background/80 px-2 py-1.5"
-                    >
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <StatusPill tone="neutral">{row.tipo}</StatusPill>
-                        <StatusPill tone="neutral">{row.tamanho}</StatusPill>
-                      </div>
-                      <StatusPill tone="info">{row.quantidade}</StatusPill>
+
+          {isEmprestimo ? (
+            selecoesResumo.length > 0 ? (
+              <div className="max-h-40 divide-y divide-border overflow-y-auto rounded-xl border border-border/70 bg-background">
+                {selecoesResumo.map((row) => (
+                  <div
+                    key={`${row.tipo}-${row.tamanho}`}
+                    className="flex items-center justify-between gap-3 px-3 py-2.5"
+                  >
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <StatusPill tone="neutral">{row.tipo}</StatusPill>
+                      <StatusPill tone="neutral">{row.tamanho}</StatusPill>
                     </div>
-                  ))}
-                </dd>
+                    <StatusPill tone="info" className="tabular-nums">
+                      {row.quantidade}
+                    </StatusPill>
+                  </div>
+                ))}
               </div>
-            </>
-          ) : null}
-          {data.tipo === "emprestimo" && !data.selecoes?.length && data.tipo_item ? (
-            <>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Tipo
-                </dt>
-                <dd>
-                  <StatusPill tone="neutral">{data.tipo_item}</StatusPill>
-                </dd>
+            ) : (
+              <div className="rounded-xl border border-border/70 bg-background p-3 text-center">
+                <p className="text-sm text-muted-foreground">Nenhum item no pedido.</p>
               </div>
-            </>
-          ) : null}
-          {data.tipo === "emprestimo" && !data.selecoes?.length && data.tamanho ? (
-            <>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Tamanho
-                </dt>
-                <dd>
-                  <StatusPill tone="neutral">{data.tamanho}</StatusPill>
-                </dd>
-              </div>
-            </>
-          ) : null}
-        </dl>
+            )
+          ) : data.itens.length > 0 ? (
+            <div className="max-h-40 divide-y divide-border overflow-y-auto rounded-xl border border-border/70 bg-background">
+              {data.itens.map((item) => (
+                <div key={item.codigo} className="space-y-1.5 px-3 py-2.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <StatusPill tone="info" className="font-mono">{item.codigo}</StatusPill>
+                    {item.tipo ? <StatusPill tone="neutral">{item.tipo}</StatusPill> : null}
+                    {item.tamanho ? <StatusPill tone="neutral">{item.tamanho}</StatusPill> : null}
+                    <StatusPill tone="info">1</StatusPill>
+                  </div>
+                  {item.descricao ? (
+                    <p className="truncate text-sm text-muted-foreground">{item.descricao}</p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border/70 bg-background p-3 text-center">
+              <p className="text-sm text-muted-foreground">Nenhum item no pedido.</p>
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
@@ -172,101 +144,42 @@ function ResultadoState({
 }: {
   event: Extract<OperacaoMonitorEvent, { kind: "resultado" }>;
 }) {
+  const isEmprestimo = event.data.tipo === "emprestimo";
+
   return (
-    <div className="mx-auto w-full max-w-lg space-y-4 text-center animate-in fade-in-0 zoom-in-95">
+    <div className="mx-auto w-full max-w-xl space-y-4 text-center animate-in fade-in-0 zoom-in-95">
       <div className="flex justify-center">
         <div
           className={cn(
-            "flex h-14 w-14 items-center justify-center rounded-2xl border shadow-[0_16px_30px_-22px_hsl(210_42%_18%_/_0.65)]",
+            "flex h-12 w-12 items-center justify-center rounded-2xl border",
             event.data.sucesso
-              ? "border-success/30 bg-success/12"
-              : "border-destructive/30 bg-destructive/12",
+              ? "border-success/30 bg-success/10"
+              : "border-border/70 bg-muted/45",
           )}
         >
           {event.data.sucesso ? (
-            <CheckCircle2 className="h-7 w-7 text-success" />
+            <CheckCircle2 className="h-6 w-6 text-success" />
           ) : (
-            <XCircle className="h-7 w-7 text-destructive" />
+            <XCircle className="h-6 w-6 text-muted-foreground" />
           )}
         </div>
       </div>
 
       <div>
-        <h3 className="text-2xl font-bold text-foreground">
-          {event.data.sucesso ? "Operacao concluida" : "Falha na operacao"}
+        <h3 className="text-xl font-semibold text-foreground">
+          {event.data.sucesso
+            ? isEmprestimo
+              ? "Solicitacao realizada"
+              : "Devolucao realizada"
+            : "Operacao cancelada"}
         </h3>
-        <p className="mt-1 text-sm text-muted-foreground">{event.data.mensagem}</p>
-      </div>
-
-      <div className="flex flex-wrap justify-center gap-1.5">
-        <StatusPill tone={event.data.sucesso ? "success" : "danger"}>
-          {tipoLabel(event.data.tipo)}
-        </StatusPill>
-        <StatusPill tone="info">{event.data.itens.length} item(ns)</StatusPill>
-      </div>
-
-      <div className="rounded-xl border border-border/70 bg-surface-1/92 p-3">
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          {event.data.tipo === "emprestimo" ? "Itens emprestados" : "Itens devolvidos"}
+        <p className="mt-1 text-sm text-muted-foreground">
+          {event.data.sucesso
+            ? isEmprestimo
+              ? "A solicitacao foi confirmada com sucesso."
+              : "A devolucao foi confirmada com sucesso."
+            : "A operacao foi cancelada e nenhuma alteracao foi realizada."}
         </p>
-        <div className="flex flex-wrap justify-center gap-1.5">
-          {event.data.itens.map((item) => (
-            <StatusPill key={item} tone="neutral" className="font-mono text-[10px]">
-              {item}
-            </StatusPill>
-          ))}
-          {event.data.itens.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Nenhum item retornado.</p>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatusTrilha({ event }: { event: OperacaoMonitorEvent }) {
-  const active = event.kind;
-
-  return (
-    <div className="mx-auto grid w-full max-w-3xl gap-2 rounded-2xl border border-border/70 bg-gradient-to-r from-surface-2/95 via-background/92 to-surface-2/95 p-1.5 shadow-sm sm:grid-cols-3">
-      <div
-        className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-xl border px-2 py-2.5 text-xs font-semibold transition-all",
-          active === "waiting"
-            ? "border-primary/30 bg-primary/12 text-primary"
-            : "border-transparent text-muted-foreground",
-        )}
-      >
-        <CircleDashed className="h-4 w-4" />
-        Em espera
-      </div>
-      <div
-        className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-xl border px-2 py-2.5 text-xs font-semibold transition-all",
-          active === "resumo"
-            ? "border-primary/30 bg-primary/10 text-primary"
-            : "border-transparent text-muted-foreground",
-        )}
-      >
-        <Clock3 className="h-4 w-4" />
-        Resumo
-      </div>
-      <div
-        className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-xl border px-2 py-2.5 text-xs font-semibold transition-all",
-          active === "resultado"
-            ? event.kind === "resultado" && event.data.sucesso
-              ? "border-success/35 bg-success/12 text-success"
-              : "border-destructive/35 bg-destructive/12 text-destructive"
-            : "border-transparent text-muted-foreground",
-        )}
-      >
-        {event.kind === "resultado" && !event.data.sucesso ? (
-          <XCircle className="h-4 w-4" />
-        ) : (
-          <CheckCircle2 className="h-4 w-4" />
-        )}
-        Resultado
       </div>
     </div>
   );
@@ -319,58 +232,65 @@ export function OperacaoMonitorPage() {
     return { tone: "info" as const, label: "Tela de espera" };
   }, [event]);
 
+  const isResultado = event.kind === "resultado";
+
   return (
     <div className="relative min-h-dvh overflow-hidden bg-background animate-in fade-in-0">
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-background via-accent/22 to-secondary/50 dark:from-background dark:via-primary/8 dark:to-accent/18" />
+        <div className="absolute inset-0 bg-gradient-to-br from-background via-accent/20 to-secondary/42 dark:from-background dark:via-primary/8 dark:to-accent/18" />
         <div className="absolute -left-20 top-[-10rem] h-[30rem] w-[30rem] rounded-full bg-primary/24 blur-[128px] animate-drift-slower" />
-        <div className="absolute right-[-11rem] bottom-[-11rem] h-[33rem] w-[33rem] rounded-full bg-secondary/72 blur-[136px] animate-drift-slow dark:bg-accent/26" />
-        <div className="absolute left-[48%] top-[9%] h-44 w-44 rounded-full bg-primary/18 blur-[90px] animate-drift-slow" />
+        <div className="absolute right-[-11rem] bottom-[-11rem] h-[33rem] w-[33rem] rounded-full bg-secondary/68 blur-[136px] animate-drift-slow dark:bg-accent/26" />
       </div>
 
-      <main className="relative mx-auto flex w-full max-w-6xl flex-1 items-center justify-center px-4 py-8 sm:px-6 sm:py-10">
-        <Card className="w-full border-border/80 bg-card/95 shadow-[0_30px_60px_-34px_hsl(200_76%_20%_/_0.65)] backdrop-blur-xl animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2">
-          <CardHeader className="gap-2 border-b border-border/65 bg-gradient-to-r from-primary/8 via-transparent to-accent/14 px-4 pb-4 pt-4 sm:px-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex min-w-0 items-start gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/28 bg-gradient-to-br from-primary/18 via-background to-accent/45 p-2.5 shadow-[0_10px_26px_-18px_hsl(198_68%_24%_/_0.68)]">
-                  <img src="/logo-privativos.png" alt="Privativos" className="h-full w-full rounded-lg object-cover" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
-                    Privativos
-                  </p>
-                  <CardTitle className="text-lg font-bold sm:text-2xl">Acompanhamento da operacao</CardTitle>
-                  <CardDescription className="mt-0.5 text-xs sm:text-sm">
-                    Monitoramento em tempo real da triagem operacional.
-                  </CardDescription>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-1.5">
-                <StatusPill tone={status.tone} className="text-[10px]">{status.label}</StatusPill>
-                <StatusPill tone="neutral" className="text-[10px]">Atualizado em: {formatTimestamp(event.timestamp)}</StatusPill>
-              </div>
-            </div>
-          </CardHeader>
-
-          <CardContent className="space-y-5 px-4 pb-4 pt-5 sm:px-5 sm:pb-5">
-            <StatusTrilha event={event} />
-
-            <Card className="border-border/70 bg-background/65 shadow-[var(--shadow-soft)]">
-              <CardContent className="px-3 pb-4 pt-4 sm:px-4 sm:pb-5">
-                {event.kind === "waiting" ? <WaitingState mensagem={event.mensagem} /> : null}
-                {event.kind === "resumo" ? <ResumoState data={event.data} /> : null}
-                {event.kind === "resultado" ? <ResultadoState event={event} /> : null}
+      <main
+        className={cn(
+          "relative mx-auto flex min-h-dvh w-full max-w-[1320px] justify-center px-6",
+          isResultado ? "items-center py-6" : "items-start py-10 sm:py-12",
+        )}
+      >
+        {isResultado ? (
+          <div className="w-full max-w-5xl">
+            <Card className="border-border/70 bg-card/95 shadow-sm animate-in fade-in-0 slide-in-from-bottom-2">
+              <CardContent className="p-6">
+                <ResultadoState event={event} />
               </CardContent>
             </Card>
+          </div>
+        ) : (
+          <div className="w-full">
+            <section className="grid grid-cols-12 gap-6">
+              <div className="col-span-12 flex flex-wrap items-start justify-between gap-6">
+                <div className="space-y-2">
+                  <h1 className="text-3xl font-bold text-foreground">Acompanhamento da operacao</h1>
+                  <p className="text-sm text-muted-foreground">
+                    Monitoramento em tempo real da triagem operacional.
+                  </p>
+                </div>
+                <StatusPill tone={status.tone}>{status.label}</StatusPill>
+              </div>
+            </section>
 
-            <div className="flex items-center justify-end gap-2 text-[11px] text-muted-foreground">
-              <RefreshCw className="h-3.5 w-3.5" />
-              Sincronizacao automatica ativa
-            </div>
-          </CardContent>
-        </Card>
+            <section className="mt-6 grid grid-cols-12 gap-6">
+              <div className="col-span-12 flex justify-center">
+                <Card className="w-full max-w-5xl border-border/70 bg-card/95 shadow-sm animate-in fade-in-0 slide-in-from-bottom-2">
+                  <CardContent className="space-y-6 p-6">
+                    <div className="space-y-2">
+                      <h2 className="text-lg font-semibold text-foreground">Painel em tempo real</h2>
+                      <p className="text-sm text-muted-foreground">
+                        O painel reflete automaticamente os eventos da tela de operacoes.
+                      </p>
+                    </div>
+
+                    <div className="mx-auto w-full max-w-xl rounded-xl border border-border/70 bg-background/65 p-4">
+                      {event.kind === "waiting" ? <WaitingState mensagem={event.mensagem} /> : null}
+                      {event.kind === "resumo" ? <ResumoState data={event.data} /> : null}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </section>
+          </div>
+        )}
       </main>
     </div>
   );

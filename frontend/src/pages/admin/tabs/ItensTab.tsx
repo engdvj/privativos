@@ -21,6 +21,10 @@ const NOVO_TAMANHO_OPTION = "__novo_tamanho__";
 const NOVO_TIPO_OPTION = "__novo_tipo__";
 const TAMANHOS_PADRAO = ["UNICO", "PP", "P", "M", "G", "GG", "XG"];
 const TIPOS_PADRAO = ["Kit roupa", "Lencol", "Sem tipo"];
+const CODIGO_BASE_PADRAO = "KIT-";
+const CASAS_CODIGO_PADRAO = 3;
+const MAX_ITENS_LOTE = 200;
+const ITENS_POR_PAGINA = 10;
 const FILTRO_INPUT_CLASS =
   "h-8 rounded-xl border-border/80 bg-background/85 text-xs dark:border-border/90 dark:bg-background/70";
 const FILTRO_SELECT_CLASS =
@@ -69,6 +73,66 @@ function montarOpcoesTipo(tiposExistentes: string[]) {
   return [...TIPOS_PADRAO, ...extras];
 }
 
+type ModoCriacaoItem = "unitario" | "lote";
+
+type SugestaoCodigo = {
+  base: string;
+  proximoNumero: number;
+  casasNumero: number;
+};
+
+function gerarCodigoSequencial(base: string, numero: number, casasNumero: number) {
+  return `${base}${String(numero).padStart(casasNumero, "0")}`;
+}
+
+function sugerirSequenciaCodigo(rows: ItemRow[]): SugestaoCodigo {
+  let maiorNumero = -1;
+  let melhorBase = CODIGO_BASE_PADRAO;
+  let melhorCasas = CASAS_CODIGO_PADRAO;
+
+  for (const row of rows) {
+    const codigo = row.codigo.trim();
+    const match = codigo.match(/^(.*?)(\d+)$/);
+    if (!match) {
+      continue;
+    }
+
+    const numero = Number.parseInt(match[2], 10);
+    if (!Number.isFinite(numero) || numero < maiorNumero) {
+      continue;
+    }
+
+    maiorNumero = numero;
+    melhorBase = match[1] || CODIGO_BASE_PADRAO;
+    melhorCasas = Math.max(1, match[2].length);
+  }
+
+  return {
+    base: melhorBase,
+    proximoNumero: maiorNumero >= 0 ? maiorNumero + 1 : 1,
+    casasNumero: melhorCasas,
+  };
+}
+
+function gerarCodigosLote(params: {
+  base: string;
+  numeroInicial: number;
+  quantidade: number;
+  casasNumero: number;
+}) {
+  return Array.from({ length: params.quantidade }, (_, index) =>
+    gerarCodigoSequencial(params.base, params.numeroInicial + index, params.casasNumero),
+  );
+}
+
+function resumirCodigos(codigos: string[], limite = 6) {
+  if (codigos.length <= limite) {
+    return codigos.join(", ");
+  }
+  const primeiros = codigos.slice(0, limite).join(", ");
+  return `${primeiros} ... (+${codigos.length - limite})`;
+}
+
 export function ItensTab() {
   const [rows, setRows] = useState<ItemRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -77,7 +141,9 @@ export function ItensTab() {
   const [busca, setBusca] = useState("");
   const [filtroStatusItem, setFiltroStatusItem] = useState<"todos" | ItemStatus>("todos");
   const [filtroTipo, setFiltroTipo] = useState("todos");
+  const [filtroTamanho, setFiltroTamanho] = useState("todos");
   const [filtroAtivo, setFiltroAtivo] = useState<"todos" | "ativo" | "inativo">("todos");
+  const [paginaItens, setPaginaItens] = useState(1);
   const [itemParaExcluir, setItemParaExcluir] = useState<ItemRow | null>(null);
   const { success, error } = useToast();
   const { openKit } = useGlobalDetail();
@@ -91,6 +157,13 @@ export function ItensTab() {
   const [novoTipo, setNovoTipo] = useState("");
   const [tamanhoSelecionado, setTamanhoSelecionado] = useState("UNICO");
   const [novoTamanho, setNovoTamanho] = useState("");
+  const [modoCriacao, setModoCriacao] = useState<ModoCriacaoItem>("unitario");
+  const [lote, setLote] = useState({
+    codigoBase: CODIGO_BASE_PADRAO,
+    numeroInicial: "1",
+    quantidade: "1",
+    casasNumero: String(CASAS_CODIGO_PADRAO),
+  });
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -123,9 +196,38 @@ export function ItensTab() {
   const opcoesTamanho = useMemo(() => montarOpcoesTamanho(rows.map((row) => row.tamanho)), [rows]);
   const opcoesTipo = useMemo(() => montarOpcoesTipo(rows.map((row) => row.tipo)), [rows]);
 
-  function abrirModalCriacao() {
+  const codigosLotePreview = useMemo(() => {
+    if (modoCriacao !== "lote") {
+      return [];
+    }
+
+    const base = lote.codigoBase.trim();
+    const numeroInicial = Number.parseInt(lote.numeroInicial, 10);
+    const quantidade = Number.parseInt(lote.quantidade, 10);
+    const casasNumero = Number.parseInt(lote.casasNumero, 10);
+
+    if (!base || !Number.isInteger(numeroInicial) || !Number.isInteger(quantidade) || !Number.isInteger(casasNumero)) {
+      return [];
+    }
+
+    if (numeroInicial < 0 || quantidade <= 0 || casasNumero <= 0) {
+      return [];
+    }
+
+    const previewQuantidade = Math.min(quantidade, 20);
+    return gerarCodigosLote({
+      base,
+      numeroInicial,
+      quantidade: previewQuantidade,
+      casasNumero,
+    });
+  }, [modoCriacao, lote]);
+
+  function resetarFormularioCriacao() {
+    const sugestao = sugerirSequenciaCodigo(rows);
+
     setNovo({
-      codigo: "",
+      codigo: gerarCodigoSequencial(sugestao.base, sugestao.proximoNumero, sugestao.casasNumero),
       descricao: "",
       status: "disponivel",
     });
@@ -133,6 +235,17 @@ export function ItensTab() {
     setNovoTipo("");
     setTamanhoSelecionado("UNICO");
     setNovoTamanho("");
+    setModoCriacao("unitario");
+    setLote({
+      codigoBase: sugestao.base,
+      numeroInicial: String(sugestao.proximoNumero),
+      quantidade: "1",
+      casasNumero: String(sugestao.casasNumero),
+    });
+  }
+
+  function abrirModalCriacao() {
+    resetarFormularioCriacao();
     setOpenCreateModal(true);
   }
 
@@ -144,30 +257,105 @@ export function ItensTab() {
       ? normalizarTamanho(novoTamanho)
       : normalizarTamanho(tamanhoSelecionado);
 
-    if (!novo.codigo.trim() || !tipoFinal || !tamanhoFinal) {
+    if (!tipoFinal || !tamanhoFinal) {
+      error("Preencha tipo e tamanho para criar item");
+      return;
+    }
+
+    const descricaoFinal = novo.descricao.trim() || null;
+
+    if (modoCriacao === "unitario" && !novo.codigo.trim()) {
       error("Preencha codigo, tipo e tamanho para criar item");
       return;
     }
 
+    const isLote = modoCriacao === "lote";
+    const baseLote = lote.codigoBase.trim();
+    const numeroInicialLote = Number.parseInt(lote.numeroInicial, 10);
+    const quantidadeLote = Number.parseInt(lote.quantidade, 10);
+    const casasNumeroLote = Number.parseInt(lote.casasNumero, 10);
+
+    if (isLote) {
+      if (!baseLote || !Number.isInteger(numeroInicialLote) || !Number.isInteger(quantidadeLote) || !Number.isInteger(casasNumeroLote)) {
+        error("Preencha codigo base, numero inicial, quantidade e casas do codigo");
+        return;
+      }
+
+      if (numeroInicialLote < 0 || quantidadeLote <= 0 || casasNumeroLote <= 0) {
+        error("Numero inicial deve ser maior ou igual a zero; quantidade e casas do codigo devem ser maiores que zero");
+        return;
+      }
+
+      if (quantidadeLote > MAX_ITENS_LOTE) {
+        error(`Quantidade maxima por lote: ${MAX_ITENS_LOTE} itens`);
+        return;
+      }
+    }
+
     setCreating(true);
     try {
-      await api.post("/admin/itens", {
-        codigo: novo.codigo.trim(),
-        descricao: novo.descricao.trim() || null,
-        tipo: tipoFinal,
-        tamanho: tamanhoFinal,
-        status: novo.status,
-      });
-      setNovo({ codigo: "", descricao: "", status: "disponivel" });
-      setTipoSelecionado(TIPOS_PADRAO[0]);
-      setNovoTipo("");
-      setTamanhoSelecionado("UNICO");
-      setNovoTamanho("");
+      if (!isLote) {
+        await api.post("/admin/itens", {
+          codigo: novo.codigo.trim(),
+          descricao: descricaoFinal,
+          tipo: tipoFinal,
+          tamanho: tamanhoFinal,
+          status: novo.status,
+        });
+        success("Item criado com sucesso");
+      } else {
+        const codigos = gerarCodigosLote({
+          base: baseLote,
+          numeroInicial: numeroInicialLote,
+          quantidade: quantidadeLote,
+          casasNumero: casasNumeroLote,
+        });
+
+        const codigosNormalizados = codigos.map((codigo) => codigo.toLowerCase());
+        const codigosDuplicadosNoLote = codigos.filter(
+          (_codigo, index) => codigosNormalizados.indexOf(codigosNormalizados[index]) !== index,
+        );
+        if (codigosDuplicadosNoLote.length > 0) {
+          error(`Lote invalido: codigos duplicados (${resumirCodigos([...new Set(codigosDuplicadosNoLote)])})`);
+          return;
+        }
+
+        const codigosExistentes = new Set(rows.map((row) => row.codigo.toLowerCase()));
+        const codigosConflitantes = codigos.filter((codigo) => codigosExistentes.has(codigo.toLowerCase()));
+        if (codigosConflitantes.length > 0) {
+          error(`Ja existem codigos cadastrados neste lote: ${resumirCodigos(codigosConflitantes)}`);
+          return;
+        }
+
+        const codigosCriados: string[] = [];
+        for (const codigo of codigos) {
+          try {
+            await api.post("/admin/itens", {
+              codigo,
+              descricao: descricaoFinal,
+              tipo: tipoFinal,
+              tamanho: tamanhoFinal,
+              status: novo.status,
+            });
+            codigosCriados.push(codigo);
+          } catch (err) {
+            const mensagemBase = err instanceof Error ? err.message : "Erro ao criar item";
+            const sufixo = codigosCriados.length > 0
+              ? ` (${codigosCriados.length} itens criados antes da falha)`
+              : "";
+            throw new Error(`${mensagemBase}${sufixo}`);
+          }
+        }
+
+        success(`${codigosCriados.length} itens criados com sucesso`);
+      }
+
+      resetarFormularioCriacao();
       setOpenCreateModal(false);
-      success("Item criado com sucesso");
       await carregar();
     } catch (err) {
       error(err instanceof Error ? err.message : "Erro ao criar item");
+      await carregar();
     } finally {
       setCreating(false);
     }
@@ -191,10 +379,30 @@ export function ItensTab() {
         !termo || [row.codigo, row.tipo, descricao, row.tamanho, row.status, row.statusAtivo ? "ativo" : "inativo"].join(" ").toLowerCase().includes(termo);
       const matchStatus = filtroStatusItem === "todos" || row.status === filtroStatusItem;
       const matchTipo = filtroTipo === "todos" || row.tipo === filtroTipo;
+      const matchTamanho = filtroTamanho === "todos" || row.tamanho === filtroTamanho;
       const matchAtivo = filtroAtivo === "todos" || (filtroAtivo === "ativo" ? row.statusAtivo : !row.statusAtivo);
-      return matchTexto && matchStatus && matchTipo && matchAtivo;
+      return matchTexto && matchStatus && matchTipo && matchTamanho && matchAtivo;
     });
-  }, [rows, busca, filtroStatusItem, filtroTipo, filtroAtivo]);
+  }, [rows, busca, filtroStatusItem, filtroTipo, filtroTamanho, filtroAtivo]);
+
+  useEffect(() => {
+    setPaginaItens(1);
+  }, [busca, filtroStatusItem, filtroTipo, filtroTamanho, filtroAtivo]);
+
+  const totalPaginasItens = Math.max(1, Math.ceil(rowsFiltradas.length / ITENS_POR_PAGINA));
+  const rowsPaginadas = useMemo(() => {
+    const inicio = (paginaItens - 1) * ITENS_POR_PAGINA;
+    return rowsFiltradas.slice(inicio, inicio + ITENS_POR_PAGINA);
+  }, [rowsFiltradas, paginaItens]);
+
+  useEffect(() => {
+    if (paginaItens > totalPaginasItens) {
+      setPaginaItens(totalPaginasItens);
+    }
+  }, [paginaItens, totalPaginasItens]);
+
+  const inicioPaginaItens = rowsFiltradas.length === 0 ? 0 : (paginaItens - 1) * ITENS_POR_PAGINA + 1;
+  const fimPaginaItens = Math.min(paginaItens * ITENS_POR_PAGINA, rowsFiltradas.length);
 
   const resumoStatus = useMemo(() => {
     return rowsFiltradas.reduce(
@@ -256,6 +464,19 @@ export function ItensTab() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={filtroTamanho} onValueChange={setFiltroTamanho}>
+              <SelectTrigger className={`${FILTRO_SELECT_CLASS} w-full sm:w-36`}>
+                <SelectValue placeholder="Tamanho" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos tamanhos</SelectItem>
+                {opcoesTamanho.map((tamanho) => (
+                  <SelectItem key={tamanho} value={tamanho}>
+                    {tamanho}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={filtroAtivo} onValueChange={(value) => setFiltroAtivo(value as "todos" | "ativo" | "inativo")}>
               <SelectTrigger className={`${FILTRO_SELECT_CLASS} w-full sm:w-36`}>
                 <SelectValue placeholder="Ativo" />
@@ -268,7 +489,7 @@ export function ItensTab() {
             </Select>
             <Button
               size="icon"
-              className="h-8 w-8 shrink-0 rounded-lg bg-gradient-to-r from-primary to-primary/85 text-primary-foreground"
+              className="h-8 w-8 shrink-0 rounded-lg border-0 bg-primary text-primary-foreground shadow-[var(--shadow-soft)] transition-all duration-200 hover:bg-sky-500 hover:animate-pulse"
               onClick={abrirModalCriacao}
               aria-label="Novo item"
               title="Novo item"
@@ -295,7 +516,7 @@ export function ItensTab() {
               { key: "ativo", title: "Ativo", align: "center", width: "10%", sortValue: (row) => row.statusAtivo },
               { key: "acoes", title: "Acoes", align: "center", width: "10%" },
             ]}
-            rows={rowsFiltradas}
+            rows={rowsPaginadas}
             getRowKey={(row) => row.codigo}
             onRowClick={(row) => {
               void openKit(row.codigo);
@@ -371,7 +592,7 @@ export function ItensTab() {
               <EmptyState compact title="Nenhum item encontrado." />
             </div>
           ) : (
-            rowsFiltradas.map((row) => (
+            rowsPaginadas.map((row) => (
               <article
                 key={row.codigo}
                 className="rounded-xl border border-border/70 bg-surface-2/85 p-3 shadow-[var(--shadow-soft)]"
@@ -422,26 +643,132 @@ export function ItensTab() {
             ))
           )}
         </div>
+
+        <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[10px] text-muted-foreground">
+            {inicioPaginaItens}-{fimPaginaItens} de {rowsFiltradas.length} | Pagina {paginaItens} de {totalPaginasItens}
+          </p>
+          <div className="flex min-w-[220px] justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
+              onClick={() => setPaginaItens((paginaAtual) => Math.max(1, paginaAtual - 1))}
+              disabled={paginaItens === 1}
+            >
+              Anterior
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
+              onClick={() => setPaginaItens((paginaAtual) => Math.min(totalPaginasItens, paginaAtual + 1))}
+              disabled={paginaItens === totalPaginasItens}
+            >
+              Proxima
+            </Button>
+          </div>
+        </div>
       </SectionCard>
 
       <Modal
         open={openCreateModal}
         onClose={() => setOpenCreateModal(false)}
-        title="Novo Item"
-        description="Cadastre codigo, tipo, descricao opcional, tamanho e status inicial."
+        title={modoCriacao === "lote" ? "Novo Lote de Itens" : "Novo Item"}
+        description={
+          modoCriacao === "lote"
+            ? "Use um codigo base e uma quantidade para gerar codigos em sequencia."
+            : "Cadastre codigo, tipo, descricao opcional, tamanho e status inicial."
+        }
         maxWidthClassName="max-w-3xl"
       >
         <div className="space-y-3">
-          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-5">
-            <FormField label="Codigo" htmlFor="novo-item-codigo">
-              <Input
-                id="novo-item-codigo"
-                value={novo.codigo}
-                onChange={(e) => setNovo((p) => ({ ...p, codigo: e.target.value }))}
-                placeholder="Codigo"
-                className="h-9 text-xs"
-              />
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+            <FormField label="Modo de criacao" htmlFor="novo-item-modo">
+              <Select value={modoCriacao} onValueChange={(value) => setModoCriacao(value as ModoCriacaoItem)}>
+                <SelectTrigger id="novo-item-modo" className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unitario">Unitario</SelectItem>
+                  <SelectItem value="lote">Lote</SelectItem>
+                </SelectContent>
+              </Select>
             </FormField>
+
+            {modoCriacao === "unitario" ? (
+              <FormField label="Codigo" htmlFor="novo-item-codigo">
+                <Input
+                  id="novo-item-codigo"
+                  value={novo.codigo}
+                  onChange={(e) => setNovo((p) => ({ ...p, codigo: e.target.value }))}
+                  placeholder="Codigo"
+                  className="h-9 text-xs"
+                />
+              </FormField>
+            ) : (
+              <>
+                <FormField label="Codigo base" htmlFor="novo-item-lote-base">
+                  <Input
+                    id="novo-item-lote-base"
+                    value={lote.codigoBase}
+                    onChange={(e) => setLote((prev) => ({ ...prev, codigoBase: e.target.value }))}
+                    placeholder="Ex.: KIT-"
+                    className="h-9 text-xs"
+                  />
+                </FormField>
+                <FormField label="Numero inicial" htmlFor="novo-item-lote-inicial">
+                  <Input
+                    id="novo-item-lote-inicial"
+                    type="number"
+                    min={0}
+                    value={lote.numeroInicial}
+                    onChange={(e) => setLote((prev) => ({ ...prev, numeroInicial: e.target.value }))}
+                    className="h-9 text-xs"
+                  />
+                </FormField>
+                <FormField label="Quantidade" htmlFor="novo-item-lote-quantidade">
+                  <Input
+                    id="novo-item-lote-quantidade"
+                    type="number"
+                    min={1}
+                    max={MAX_ITENS_LOTE}
+                    value={lote.quantidade}
+                    onChange={(e) => setLote((prev) => ({ ...prev, quantidade: e.target.value }))}
+                    className="h-9 text-xs"
+                  />
+                </FormField>
+                <FormField label="Casas do codigo" htmlFor="novo-item-lote-casas">
+                  <Input
+                    id="novo-item-lote-casas"
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={lote.casasNumero}
+                    onChange={(e) => setLote((prev) => ({ ...prev, casasNumero: e.target.value }))}
+                    className="h-9 text-xs"
+                  />
+                </FormField>
+              </>
+            )}
+          </div>
+
+          {modoCriacao === "lote" && (
+            <div className="rounded-xl border border-border/70 bg-surface-2/60 px-3 py-2.5 text-xs text-muted-foreground">
+              {codigosLotePreview.length > 0 ? (
+                <p>
+                  Previa de codigos: <span className="font-mono text-foreground">{resumirCodigos(codigosLotePreview)}</span>
+                  {Number.parseInt(lote.quantidade, 10) > codigosLotePreview.length ? " ..." : ""}
+                </p>
+              ) : (
+                <p>Preencha o padrao do lote para gerar a previa de codigos.</p>
+              )}
+            </div>
+          )}
+
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
             <FormField label="Tipo" htmlFor="novo-item-tipo-select">
               <Select value={tipoSelecionado} onValueChange={setTipoSelecionado}>
                 <SelectTrigger id="novo-item-tipo-select" className="h-9 text-xs">
@@ -497,7 +824,7 @@ export function ItensTab() {
               </Select>
             </FormField>
             {tipoSelecionado === NOVO_TIPO_OPTION && (
-              <FormField label="Novo tipo" htmlFor="novo-item-tipo-custom" className="sm:col-span-2">
+              <FormField label="Novo tipo" htmlFor="novo-item-tipo-custom" className="sm:col-span-2 xl:col-span-2">
                 <Input
                   id="novo-item-tipo-custom"
                   value={novoTipo}
@@ -509,7 +836,7 @@ export function ItensTab() {
               </FormField>
             )}
             {tamanhoSelecionado === NOVO_TAMANHO_OPTION && (
-              <FormField label="Novo tamanho" htmlFor="novo-item-tamanho-custom" className="sm:col-span-2">
+              <FormField label="Novo tamanho" htmlFor="novo-item-tamanho-custom" className="sm:col-span-2 xl:col-span-2">
                 <Input
                   id="novo-item-tamanho-custom"
                   value={novoTamanho}
@@ -527,7 +854,7 @@ export function ItensTab() {
             </Button>
             <Button className="h-9 text-xs" onClick={criar} loading={creating}>
               <Plus className="h-4 w-4" />
-              Criar
+              {modoCriacao === "lote" ? "Criar lote" : "Criar"}
             </Button>
           </div>
         </div>

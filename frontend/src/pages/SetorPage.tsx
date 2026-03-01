@@ -5,14 +5,13 @@ import { Footer } from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { StatusPill } from "@/components/ui/status-pill";
-import { QuantitySelector } from "@/components/ui/quantity-selector";
 import { cn } from "@/lib/utils";
 import { publishOperacaoMonitor, type MonitorTipoOperacao } from "@/lib/operacao-monitor";
 import {
@@ -30,6 +29,8 @@ import {
   ChevronRight,
   Building2,
   UserRound,
+  Minus,
+  Plus,
 } from "lucide-react";
 
 interface FuncionarioInfo {
@@ -168,10 +169,6 @@ function chaveSelecao(tipo: string, tamanho: string) {
   return `${tipo}::${tamanho}`;
 }
 
-function isPendenciaDisponivelOpcao(row: PendenciaSetor | PendenciaDisponivelOpcao): row is PendenciaDisponivelOpcao {
-  return typeof (row as PendenciaDisponivelOpcao).quantidade_disponivel === "number";
-}
-
 function enviarMonitorResultado(params: {
   tipo: MonitorTipoOperacao;
   sucesso: boolean;
@@ -276,7 +273,7 @@ async function resolverMatriculaPorTermo(termoEntrada: string): Promise<string> 
       return sugestaoExata.matricula;
     }
 
-    throw createBuscaError("error", "Encontramos mais de um funcionario. Selecione uma sugestao.");
+    throw createBuscaError("idle", "Encontramos mais de um funcionario. Selecione uma sugestao.");
   }
 
   throw createBuscaError("notFound", "Nenhum funcionario ou kit encontrado.");
@@ -322,6 +319,27 @@ function useBuscaSugestoes(termo: string, enabled: boolean) {
   return { sugestoes, sugestoesLoading: loading };
 }
 
+function useDelicateTransition(trigger: string, duration = 320) {
+  const [ativo, setAtivo] = useState(false);
+
+  useEffect(() => {
+    setAtivo(false);
+    const frame = window.requestAnimationFrame(() => {
+      setAtivo(true);
+    });
+    const timeout = window.setTimeout(() => {
+      setAtivo(false);
+    }, duration);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timeout);
+    };
+  }, [trigger, duration]);
+
+  return ativo;
+}
+
 function SearchSection({
   id,
   matricula,
@@ -351,30 +369,28 @@ function SearchSection({
   const errorId = `${id}-error`;
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor={id} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           Identificacao
         </Label>
-        <p id={hintId} className="text-[11px] text-muted-foreground">
-          Matricula, nome ou codigo do kit
-        </p>
+
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
-        <div className="relative space-y-1">
+      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+        <div className="relative z-30 space-y-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               id={id}
               value={matricula}
-              placeholder="Ex.: 92148594, nome do colaborador ou codigo do kit"
+              placeholder="Matricula, nome ou codigo do kit"
               autoComplete="off"
               aria-invalid={Boolean(matriculaError)}
               aria-describedby={matriculaError ? errorId : hintId}
               onChange={(e) => onMatriculaChange(e.target.value)}
               className={cn(
-                "h-10 rounded-xl border-border/80 bg-background/85 pl-9 text-sm",
+                "h-11 rounded-xl border-border/80 bg-background pl-9 text-sm",
                 matriculaError && "border-destructive/60",
               )}
             />
@@ -387,15 +403,15 @@ function SearchSection({
           ) : null}
 
           {showSugestoes && (sugestoesLoading || sugestoes.length > 0) ? (
-            <div className="absolute inset-x-0 top-[calc(100%+4px)] z-20 rounded-lg border border-border/70 bg-popover/97 p-1 shadow-[var(--shadow-soft)] backdrop-blur-xl">
+            <div className="absolute inset-x-0 top-[calc(100%+8px)] z-50 max-h-64 overflow-y-auto rounded-xl border border-border/70 bg-popover p-2 shadow-[var(--shadow-soft)]">
               {sugestoesLoading ? (
-                <p className="px-2 py-1.5 text-xs text-muted-foreground">Buscando sugestoes...</p>
+                <p className="px-2 py-2 text-xs text-muted-foreground">Buscando sugestoes...</p>
               ) : (
                 sugestoes.map((sugestao) => (
                   <button
                     key={`${sugestao.tipo}-${sugestao.chave}`}
                     type="button"
-                    className="w-full rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
+                    className="w-full rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => onSelecionarSugestao(sugestao)}
                   >
@@ -413,7 +429,7 @@ function SearchSection({
           disabled={loading || !canClear}
           variant="outline"
           size="icon"
-          className="h-10 w-10 rounded-xl"
+          className="h-11 w-11 rounded-xl"
           aria-label="Limpar busca"
           title="Limpar busca"
         >
@@ -426,8 +442,8 @@ function SearchSection({
 
 function BuscaSkeleton() {
   return (
-    <div className="space-y-2.5">
-      <div className="h-14 rounded-xl border border-border/60 bg-surface-2/75 animate-pulse-slow" />
+    <div className="space-y-4">
+      <div className="h-12 rounded-xl border border-border/60 bg-surface-2/75 animate-pulse-slow" />
       <div className="h-24 rounded-xl border border-border/60 bg-surface-2/65 animate-pulse-slow" />
     </div>
   );
@@ -486,22 +502,77 @@ function BuscaEstadoCard({
   );
 }
 
-function FuncionarioCard({ funcionario }: { funcionario: FuncionarioInfo }) {
+function OperacaoStepper({
+  value,
+  onChange,
+  min = 1,
+  max = 99,
+  disabled = false,
+  label,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  disabled?: boolean;
+  label?: string;
+}) {
+  const canDecrement = value > min;
+  const canIncrement = value < max;
+
   return (
-    <div className="rounded-xl border border-border/70 bg-surface-1/90 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">{funcionario.nome}</p>
-          <p className="truncate text-xs text-muted-foreground">{funcionario.unidade}</p>
-          <p className="truncate text-xs text-muted-foreground">{funcionario.setor}</p>
+    <div className="space-y-2">
+      {label ? <Label className="text-xs text-muted-foreground">{label}</Label> : null}
+      <div className="flex h-11 items-center rounded-xl border border-border/70 bg-background px-1">
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          onClick={() => {
+            if (canDecrement && !disabled) onChange(value - 1);
+          }}
+          disabled={disabled || !canDecrement}
+          className="h-9 w-9 rounded-lg"
+          aria-label="Diminuir quantidade"
+        >
+          <Minus className="h-4 w-4" />
+        </Button>
+
+        <div className="flex flex-1 justify-center px-2">
+          <input
+            type="number"
+            min={min}
+            max={max}
+            value={value}
+            disabled={disabled}
+            onChange={(event) => {
+              const parsed = Number.parseInt(event.target.value, 10);
+              if (Number.isNaN(parsed)) return;
+              onChange(Math.min(max, Math.max(min, parsed)));
+            }}
+            className="h-9 w-full bg-transparent text-center text-sm font-semibold tabular-nums text-foreground focus-visible:outline-none disabled:opacity-60 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            aria-label="Quantidade"
+          />
         </div>
-        <StatusPill tone="info" className="text-[10px]">
-          Em uso: {funcionario.kits_em_uso}/{funcionario.max_kits}
-        </StatusPill>
+
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          onClick={() => {
+            if (canIncrement && !disabled) onChange(value + 1);
+          }}
+          disabled={disabled || !canIncrement}
+          className="h-9 w-9 rounded-lg"
+          aria-label="Aumentar quantidade"
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
       </div>
     </div>
   );
 }
+
 function ResumoEtapa({
   tipo,
   funcionario,
@@ -529,120 +600,122 @@ function ResumoEtapa({
 }) {
   const isEmprestimo = tipo === "emprestimo";
   const Icon = isEmprestimo ? Package : Undo2;
+  const totalSelecionado = isEmprestimo
+    ? quantidade ?? selecoes?.reduce((acc, item) => acc + item.quantidade, 0) ?? 0
+    : itens?.length ?? 0;
+  const selecoesFallback = tipoItem
+    ? [
+        {
+          tipo: tipoItem,
+          tamanho: tamanho ?? "-",
+          quantidade: quantidade ?? 1,
+        },
+      ]
+    : [];
+  const selecoesResumo = selecoes && selecoes.length > 0 ? selecoes : selecoesFallback;
 
   return (
-    <Card className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)]">
-      <CardContent className="px-4 pb-4 pt-5 sm:px-5">
-        <div className="mx-auto max-w-md space-y-4">
-          <div className="space-y-1 text-center">
-            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-primary/25 bg-primary/12">
+    <Card className="border-border/70 bg-card/95 shadow-sm animate-in fade-in-0 slide-in-from-bottom-2">
+      <CardContent className="p-4 sm:p-6">
+        <div className="mx-auto max-w-xl space-y-4">
+          <div className="space-y-2 text-center">
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-primary/25 bg-primary/10">
               <Icon className="h-5 w-5 text-primary" />
             </div>
-            <h3 className="text-base font-bold text-foreground">
+            <h3 className="text-lg font-semibold text-foreground">
               {isEmprestimo ? "Confirmar Solicitacao" : "Confirmar Devolucao"}
             </h3>
-            <p className="text-xs text-muted-foreground">Revise as informacoes antes de confirmar.</p>
+            <p className="text-sm text-muted-foreground">Revise as informacoes antes de confirmar.</p>
           </div>
 
-          <div className="space-y-2 rounded-xl border border-border/70 bg-surface-2/70 p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Funcionario</span>
-              <span className="text-sm font-semibold text-foreground">{funcionario.nome}</span>
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Matricula</span>
-              <span className="font-mono text-sm font-semibold text-foreground">{matricula}</span>
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Unidade</span>
-              <span className="text-sm font-semibold text-foreground">{funcionario.unidade}</span>
-            </div>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Setor</span>
-              <span className="text-sm font-semibold text-foreground">{funcionario.setor}</span>
-            </div>
+          <div className="space-y-4">
+            <section className="space-y-4">
+              <div className="overflow-hidden rounded-xl border border-border/70 bg-surface-2/60">
+                <div className="border-b border-border px-4 py-2.5">
+                  <h4 className="text-sm font-semibold text-foreground">Dados do usuario</h4>
+                </div>
+                <div className="divide-y divide-border">
+                  <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+                    <span className="text-sm text-muted-foreground">Funcionario</span>
+                    <span className="text-sm font-semibold text-foreground">{funcionario.nome}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+                    <span className="text-sm text-muted-foreground">Matricula</span>
+                    <span className="font-mono text-sm font-semibold text-foreground">{matricula}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+                    <span className="text-sm text-muted-foreground">Unidade</span>
+                    <span className="text-sm font-semibold text-foreground">{funcionario.unidade}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+                    <span className="text-sm text-muted-foreground">Setor</span>
+                    <span className="text-sm font-semibold text-foreground">{funcionario.setor}</span>
+                  </div>
+                </div>
+              </div>
+            </section>
 
-            {isEmprestimo && quantidade != null && (
-              <>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Quantidade</span>
+            <section className="space-y-4">
+              <div className="rounded-xl border border-border/70 bg-surface-2/60 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-foreground">
+                    {isEmprestimo ? "Pedido" : "Itens para devolucao"}
+                  </h4>
                   <StatusPill tone="info">
-                    {quantidade} {quantidade === 1 ? "kit" : "kits"}
+                    {totalSelecionado} {totalSelecionado === 1 ? "item" : "itens"}
                   </StatusPill>
                 </div>
-                {selecoes && selecoes.length > 0 ? (
-                  <>
-                    <Separator />
-                    <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">Pedido ({selecoes.length} selecao(oes))</p>
-                      <div className="max-h-40 space-y-1 overflow-y-auto">
-                        {selecoes.map((selecao) => (
-                          <div
-                            key={chaveSelecao(selecao.tipo, selecao.tamanho)}
-                            className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-background/75 p-2"
-                          >
-                            <div className="flex flex-wrap items-center gap-2">
-                              <StatusPill tone="neutral">{selecao.tipo}</StatusPill>
-                              <StatusPill tone="neutral">{selecao.tamanho}</StatusPill>
-                            </div>
-                            <StatusPill tone="info" className="tabular-nums">
-                              {selecao.quantidade}
-                            </StatusPill>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                ) : tipoItem ? (
-                  <>
-                    <Separator />
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Tipo</span>
-                      <StatusPill tone="neutral">{tipoItem}</StatusPill>
-                    </div>
-                  </>
-                ) : null}
-                {!selecoes?.length && tamanho && (
-                  <>
-                    <Separator />
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Tamanho</span>
-                      <StatusPill tone="neutral">{tamanho}</StatusPill>
-                    </div>
-                  </>
-                )}
-              </>
-            )}
 
-            {!isEmprestimo && itens && itens.length > 0 && (
-              <>
-                <Separator />
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">Itens a devolver ({itens.length})</p>
-                  <div className="max-h-40 space-y-1 overflow-y-auto">
+                {isEmprestimo ? (
+                  selecoesResumo.length > 0 ? (
+                    <div className="max-h-40 divide-y divide-border overflow-y-auto rounded-xl border border-border/70 bg-background">
+                      {selecoesResumo.map((selecao) => (
+                        <div
+                          key={chaveSelecao(selecao.tipo, selecao.tamanho)}
+                          className="flex items-center justify-between gap-3 px-3 py-2.5"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <StatusPill tone="neutral">{selecao.tipo}</StatusPill>
+                            <StatusPill tone="neutral">{selecao.tamanho}</StatusPill>
+                          </div>
+                          <StatusPill tone="info" className="tabular-nums">
+                            {selecao.quantidade}
+                          </StatusPill>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-border/70 bg-background p-3 text-center">
+                      <p className="text-sm text-muted-foreground">Nenhum item selecionado para solicitacao.</p>
+                    </div>
+                  )
+                ) : itens && itens.length > 0 ? (
+                  <div className="max-h-40 divide-y divide-border overflow-y-auto rounded-xl border border-border/70 bg-background">
                     {itens.map((item) => (
-                      <div key={item.codigo} className="flex items-center gap-2 rounded-lg border border-border/50 bg-background/75 p-2">
-                        <span className="font-mono text-xs font-semibold text-primary">{item.codigo}</span>
-                        <StatusPill tone="neutral">{item.tipo}</StatusPill>
-                        <StatusPill tone="neutral">{item.tamanho}</StatusPill>
-                        <span className="truncate text-xs text-muted-foreground">{descricaoItemLabel(item.descricao)}</span>
+                      <div key={item.codigo} className="space-y-1.5 px-3 py-2.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StatusPill tone="info" className="font-mono">{item.codigo}</StatusPill>
+                          <StatusPill tone="neutral">{item.tipo}</StatusPill>
+                          <StatusPill tone="neutral">{item.tamanho}</StatusPill>
+                        </div>
+                        <p className="truncate text-sm text-muted-foreground">{descricaoItemLabel(item.descricao)}</p>
                       </div>
                     ))}
                   </div>
-                </div>
-              </>
-            )}
+                ) : (
+                  <div className="rounded-xl border border-border/70 bg-background p-3 text-center">
+                    <p className="text-sm text-muted-foreground">Nenhum item selecionado para devolucao.</p>
+                  </div>
+                )}
+              </div>
+            </section>
           </div>
 
-          <div className="flex gap-2">
-            <Button onClick={onCancelar} disabled={loading} variant="outline" className="h-10 flex-1 rounded-xl text-xs">
+          <div className="mx-auto flex w-full max-w-md flex-col-reverse gap-3 sm:flex-row sm:justify-center">
+            <Button onClick={onCancelar} disabled={loading} variant="outline" className="h-11 w-full rounded-xl text-sm sm:w-44">
               Cancelar
             </Button>
-            <Button onClick={onConfirmar} disabled={loading} className="h-10 flex-1 rounded-xl text-xs">
+            <Button onClick={onConfirmar} disabled={loading} className="h-11 w-full rounded-xl text-sm sm:w-44">
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
               Confirmar
             </Button>
@@ -665,27 +738,29 @@ function ResultadoEtapa({
   const isEmprestimo = tipo === "emprestimo";
 
   return (
-    <Card className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)]">
-      <CardContent className="px-4 pb-5 pt-5 text-center sm:px-5">
-        <div className="mx-auto max-w-sm space-y-4">
-          <div className="flex justify-center">
-            <div className={cn(
-              "flex h-12 w-12 items-center justify-center rounded-2xl border",
-              resultado.sucesso ? "border-success/30 bg-success/10" : "border-border/70 bg-muted/45",
-            )}>
-              {resultado.sucesso ? (
-                <CheckCircle2 className="h-6 w-6 text-success" />
-              ) : (
-                <XCircle className="h-6 w-6 text-muted-foreground" />
-              )}
+    <Card className="border-border/70 bg-card/95 shadow-sm animate-in fade-in-0 slide-in-from-bottom-2">
+      <CardContent className="p-6">
+        <div className="mx-auto max-w-3xl space-y-6">
+          <div className="space-y-2 text-center">
+            <div className="flex justify-center">
+              <div
+                className={cn(
+                  "flex h-12 w-12 items-center justify-center rounded-2xl border",
+                  resultado.sucesso ? "border-success/30 bg-success/10" : "border-border/70 bg-muted/45",
+                )}
+              >
+                {resultado.sucesso ? (
+                  <CheckCircle2 className="h-6 w-6 text-success" />
+                ) : (
+                  <XCircle className="h-6 w-6 text-muted-foreground" />
+                )}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <h3 className="text-lg font-bold text-foreground">
-              {resultado.sucesso ? (isEmprestimo ? "Solicitacao Realizada!" : "Devolucao Realizada!") : "Operacao Cancelada"}
+            <h3 className="text-xl font-semibold text-foreground">
+              {resultado.sucesso ? (isEmprestimo ? "Solicitacao realizada" : "Devolucao realizada") : "Operacao cancelada"}
             </h3>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               {resultado.sucesso
                 ? isEmprestimo
                   ? "A solicitacao foi confirmada com sucesso."
@@ -694,25 +769,12 @@ function ResultadoEtapa({
             </p>
           </div>
 
-          {resultado.sucesso && resultado.itens.length > 0 && (
-            <div className="rounded-xl border border-border/70 bg-surface-2/70 p-3">
-              <p className="mb-2 text-xs font-medium text-muted-foreground">
-                {isEmprestimo ? "Itens solicitados:" : "Itens devolvidos:"}
-              </p>
-              <div className="flex flex-wrap justify-center gap-1.5">
-                {resultado.itens.map((item) => (
-                  <StatusPill key={item} tone="info" className="font-mono">
-                    {item}
-                  </StatusPill>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <Button onClick={onReset} variant="outline" className="h-9 w-full rounded-xl text-xs">
-            <RefreshCw className="h-4 w-4" />
-            Nova Operacao
-          </Button>
+          <div className="flex justify-center">
+            <Button onClick={onReset} variant="outline" className="h-11 w-full rounded-xl text-sm sm:w-48">
+              <RefreshCw className="h-4 w-4" />
+              Nova Operacao
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -814,13 +876,17 @@ function EmprestimoTab() {
     } catch (err) {
       const classificado = classificarErroBusca(err, "Nao encontramos funcionario para esta matricula.");
       setBuscaEstado(classificado.estado);
-      setBuscaMensagem(classificado.mensagem);
+      setBuscaMensagem(classificado.estado === "idle" ? null : classificado.mensagem);
       setFuncionario(null);
       setTamanhosDisponiveis([]);
       setTipoSelecionado("");
       setTamanhoSelecionado("");
       setPedido([]);
-      enviarMonitorEmEspera("Nao foi possivel localizar os dados. Aguardando nova tentativa.");
+      enviarMonitorEmEspera(
+        classificado.estado === "idle"
+          ? "Multiplos resultados localizados. Selecione uma sugestao para continuar."
+          : "Nao foi possivel localizar os dados. Aguardando nova tentativa.",
+      );
     } finally {
       setBuscaLoading(false);
     }
@@ -870,6 +936,7 @@ function EmprestimoTab() {
   }
 
   const disponivel = funcionario ? funcionario.kits_em_uso < funcionario.max_kits : false;
+  const usuarioNoLimite = Boolean(funcionario) && !disponivel;
   const maxEmprestavel = funcionario ? Math.max(0, funcionario.max_kits - funcionario.kits_em_uso) : 0;
   const estoqueTamanhoSelecionado = tamanhosDisponiveis.find(
     (row) => row.tipo === tipoSelecionado && row.tamanho === tamanhoSelecionado,
@@ -1009,205 +1076,292 @@ function EmprestimoTab() {
     setEtapa("busca");
   }
 
+  const etapaUsuario = funcionario ? "Concluido" : "--";
+  const etapaItens = usuarioNoLimite ? "Limite atingido" : totalSelecionado;
+  const etapaRevisao = usuarioNoLimite ? "Bloqueado" : podeContinuar ? "Pronto" : "Aguardando";
+  const animacaoEtapa = useDelicateTransition(`emprestimo-${etapa}-${buscaEstado}`);
+
   return (
-    <div className="w-full space-y-3 xl:pr-[25rem]">
+    <div
+      className={cn(
+        "w-full space-y-6 transition-[opacity,transform] duration-300 ease-[var(--motion-ease-standard)]",
+        animacaoEtapa && "animate-in fade-in-0 slide-in-from-bottom-2",
+      )}
+    >
       {etapa === "busca" && (
-        <div className="w-full space-y-3">
-          <Card className="w-full border-border/70 bg-gradient-to-br from-background via-accent/12 to-muted/28 shadow-[var(--shadow-soft)]">
-            <CardContent className="px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
-              <SearchSection
-                id="mat-emp"
-                matricula={matricula}
-                matriculaError={matriculaError}
-                loading={buscaLoading}
-                canClear={Boolean(matricula || funcionario || buscaEstado !== "idle")}
-                sugestoes={sugestoes}
-                sugestoesLoading={sugestoesLoading}
-                showSugestoes={matricula.trim().length >= 2 && !funcionario}
-                onMatriculaChange={onMatriculaChange}
-                onLimpar={limparTudo}
-                onSelecionarSugestao={onSelecionarSugestao}
-              />
-            </CardContent>
-          </Card>
-
-          {buscaEstado === "loading" && <BuscaSkeleton />}
-
-          {buscaEstado !== "loading" && (
-            <>
-              {(buscaEstado === "idle" || buscaEstado === "notFound" || buscaEstado === "networkError" || buscaEstado === "error") && (
-                <BuscaEstadoCard
-                  estado={buscaEstado}
-                  mensagem={buscaMensagem}
-                  onRetry={buscaEstado === "networkError" ? buscarFuncionario : undefined}
-                />
-              )}
-
-              {buscaEstado === "success" && funcionario && (
-                <div className="grid gap-3 animate-in fade-in-0 slide-in-from-bottom-2 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)] xl:items-start">
-                  <div className="space-y-3">
-                    <Card className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)]">
-                      <CardContent className="space-y-2.5 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Funcionario</p>
-                        <FuncionarioCard funcionario={funcionario} />
-                      </CardContent>
-                    </Card>
-
-                    <Card className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)]">
-                      <CardContent className="space-y-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
-                        <div className="flex items-center justify-between">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status/Operacao</p>
-                          <StatusPill tone={disponivel ? "success" : "danger"} className="text-[10px]">
-                            {disponivel ? "Disponivel" : "Limite atingido"}
-                          </StatusPill>
-                        </div>
-
-                        <div className="rounded-xl border border-border/65 bg-surface-2/60 p-3">
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs text-muted-foreground">Kits em uso</p>
-                            <p className="text-sm font-semibold tabular-nums text-foreground">
-                              {funcionario.kits_em_uso}
-                              <span className="font-normal text-muted-foreground"> / {funcionario.max_kits}</span>
-                            </p>
-                          </div>
-                          <div className="mt-2 flex items-center justify-between">
-                            <p className="text-xs text-muted-foreground">Estoque selecionado</p>
-                            <p className="text-sm font-semibold tabular-nums text-foreground">
-                              {tipoSelecionado || "-"} / {tamanhoSelecionado || "-"}
-                              <span className="font-normal text-muted-foreground"> / {estoqueTamanhoSelecionado}</span>
-                            </p>
-                          </div>
-                          <div className="mt-2 flex items-center justify-between">
-                            <p className="text-xs text-muted-foreground">Itens no carrinho</p>
-                            <p className="text-sm font-semibold tabular-nums text-foreground">
-                              {totalSelecionado}
-                              <span className="font-normal text-muted-foreground"> / {maxEmprestavel}</span>
-                            </p>
-                          </div>
-                        </div>
-
-                        <Separator />
-
-                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
-                          <div className="space-y-1">
-                            <Label htmlFor="emprestimo-tipo" className="text-xs text-muted-foreground">
-                              Tipo
-                            </Label>
-                            <Select
-                              value={tipoSelecionado}
-                              onValueChange={selecionarTipo}
-                              disabled={!disponivel || tiposDisponiveis.length === 0}
-                            >
-                              <SelectTrigger id="emprestimo-tipo" className="h-10 rounded-xl border-border/80 bg-background/85 text-xs">
-                                <SelectValue placeholder="Selecione o tipo" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {tiposDisponiveis.map((tipo) => (
-                                  <SelectItem key={tipo} value={tipo}>
-                                    {tipo}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-1">
-                            <Label htmlFor="emprestimo-tamanho" className="text-xs text-muted-foreground">
-                              Tamanho
-                            </Label>
-                            <Select
-                              value={tamanhoSelecionado}
-                              onValueChange={selecionarTamanho}
-                              disabled={!disponivel || !tipoSelecionado || tamanhosDoTipoSelecionado.length === 0}
-                            >
-                              <SelectTrigger id="emprestimo-tamanho" className="h-10 rounded-xl border-border/80 bg-background/85 text-xs">
-                                <SelectValue placeholder="Selecione o tamanho" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {tamanhosDoTipoSelecionado.map((row) => (
-                                  <SelectItem key={row.tamanho} value={row.tamanho}>
-                                    {row.tamanho} ({row.disponiveis} disp.)
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <QuantitySelector
-                            value={quantidadeSelecionada}
-                            onChange={setQuantidadeSelecionada}
-                            min={1}
-                            max={Math.max(1, maxSolicitavelAtual)}
-                            disabled={!disponivel || !tipoSelecionado || !tamanhoSelecionado || maxSolicitavelAtual === 0}
-                            label={`Quantidade (max. ${maxSolicitavelAtual})`}
-                          />
-                          <Button
-                            variant="outline"
-                            onClick={adicionarAoPedido}
-                            disabled={!podeAdicionar}
-                            className="h-10 w-full rounded-xl text-xs md:min-w-40 md:w-auto"
-                          >
-                            Adicionar
-                          </Button>
-                          {!podeAdicionar && motivoAdicionar && (
-                            <p className="text-xs text-muted-foreground sm:col-span-4" role="status">
-                              {motivoAdicionar}
-                            </p>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  <Card className="h-fit border-border/70 bg-gradient-to-b from-card/96 to-card/90 shadow-[var(--shadow-soft)] xl:sticky xl:top-2">
-                    <CardContent className="space-y-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Carrinho</p>
-                        <StatusPill tone="info" className="text-[10px]">Itens: {totalSelecionado}</StatusPill>
-                      </div>
-
-                      {pedido.length === 0 ? (
-                        <p className="rounded-xl border border-dashed border-border/70 bg-surface-2/60 px-3 py-2 text-xs text-muted-foreground">
-                          Adicione os tamanhos desejados para montar o pedido.
-                        </p>
-                      ) : (
-                        <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
-                          {pedido.map((item) => (
-                            <div
-                              key={chaveSelecao(item.tipo, item.tamanho)}
-                              className="flex items-center justify-between gap-2 rounded-xl border border-border/55 bg-background/80 px-3 py-2"
-                            >
-                              <div className="flex flex-wrap items-center gap-2">
-                                <StatusPill tone="neutral">{item.tipo}</StatusPill>
-                                <StatusPill tone="neutral">{item.tamanho}</StatusPill>
-                                <StatusPill tone="info" className="tabular-nums">
-                                  {item.quantidade}
-                                </StatusPill>
-                              </div>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-8 w-8 rounded-lg"
-                                aria-label={`Remover ${item.tipo} ${item.tamanho}`}
-                                onClick={() => removerDoPedido(item.tipo, item.tamanho)}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      <Button onClick={abrirResumo} disabled={!podeContinuar} className="h-10 w-full rounded-xl text-xs" aria-label="Continuar para resumo de solicitacao">
-                        Revisar pedido
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </CardContent>
-                  </Card>
+        <div className="grid grid-cols-12 gap-6">
+          <div className="col-span-12 space-y-6 xl:col-span-8">
+            <Card className="relative z-20 border-border/70 bg-card/95 shadow-sm">
+              <CardContent className="space-y-6 p-6">
+                <div className="space-y-2">
+                  <h2 className="text-lg font-semibold text-foreground">Identificacao</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Busque o usuario para iniciar a solicitacao.
+                  </p>
                 </div>
+
+                <SearchSection
+                  id="mat-emp"
+                  matricula={matricula}
+                  matriculaError={matriculaError}
+                  loading={buscaLoading}
+                  canClear={Boolean(matricula || funcionario || buscaEstado !== "idle")}
+                  sugestoes={sugestoes}
+                  sugestoesLoading={sugestoesLoading}
+                  showSugestoes={matricula.trim().length >= 2 && !funcionario}
+                  onMatriculaChange={onMatriculaChange}
+                  onLimpar={limparTudo}
+                  onSelecionarSugestao={onSelecionarSugestao}
+                />
+              </CardContent>
+            </Card>
+
+            <Card
+              className={cn(
+                "relative z-0 border-border/70 bg-card/95 shadow-sm",
+                buscaEstado === "idle" ? "xl:min-h-[180px]" : "xl:min-h-[240px]",
               )}
-            </>
-          )}
+            >
+              <CardContent className="space-y-4 p-4 sm:p-6">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-lg font-semibold text-foreground">Resultados</h3>
+                  <StatusPill
+                    tone={
+                      buscaEstado === "success"
+                        ? "success"
+                        : buscaEstado === "loading"
+                          ? "info"
+                          : buscaEstado === "idle"
+                            ? "neutral"
+                            : "danger"
+                    }
+                  >
+                    {buscaEstado === "success"
+                      ? "Usuario localizado"
+                      : buscaEstado === "loading"
+                        ? "Buscando"
+                        : buscaEstado === "idle"
+                          ? "Aguardando busca"
+                          : "Sem resultado"}
+                  </StatusPill>
+                </div>
+
+                {buscaEstado === "loading" ? <BuscaSkeleton /> : null}
+
+                {buscaEstado !== "loading" && (
+                  <>
+                    {(buscaEstado === "notFound" || buscaEstado === "networkError" || buscaEstado === "error") && (
+                      <BuscaEstadoCard
+                        estado={buscaEstado}
+                        mensagem={buscaMensagem}
+                        onRetry={buscaEstado === "networkError" ? buscarFuncionario : undefined}
+                      />
+                    )}
+
+                    {buscaEstado === "idle" && (
+                      <div className="rounded-xl border border-border/70 bg-surface-2/65 p-5 text-center">
+                        <Package className="mx-auto mb-4 h-8 w-8 text-muted-foreground/60" />
+                        <p className="text-sm font-semibold text-foreground">Nenhum usuario selecionado</p>
+                        <p className="text-sm text-muted-foreground">
+                          Informe matricula, nome ou codigo do kit para carregar os dados.
+                        </p>
+                      </div>
+                    )}
+
+                    {buscaEstado === "success" && funcionario && (
+                      <div className="space-y-4 animate-in fade-in-0 slide-in-from-bottom-2">
+                        <div className="rounded-xl border border-border/70 bg-background/75 p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 space-y-1">
+                              <p className="truncate text-lg font-semibold text-foreground">{funcionario.nome}</p>
+                              <p className="truncate text-sm text-muted-foreground">{funcionario.unidade}</p>
+                              <p className="truncate text-sm text-muted-foreground">{funcionario.setor}</p>
+                            </div>
+                            <StatusPill tone={usuarioNoLimite ? "danger" : "info"} className="shrink-0">
+                              {usuarioNoLimite
+                                ? `No limite: ${funcionario.kits_em_uso}/${funcionario.max_kits}`
+                                : `Em uso: ${funcionario.kits_em_uso}/${funcionario.max_kits}`}
+                            </StatusPill>
+                          </div>
+                        </div>
+
+                        {usuarioNoLimite ? (
+                          <div className="rounded-xl border border-destructive/35 bg-destructive/10 p-4">
+                            <p className="text-sm font-semibold text-foreground">Usuario no limite de solicitacoes</p>
+                            <p className="text-sm text-muted-foreground">
+                              Este usuario ja esta com {funcionario.kits_em_uso}/{funcionario.max_kits} kits em uso.
+                              Realize uma devolucao para liberar novas solicitacoes.
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <Separator />
+
+                            <section className="space-y-3">
+                              <h4 className="text-sm font-semibold text-foreground">Configurar solicitacao</h4>
+
+                              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(220px,0.9fr)_auto] lg:items-end">
+                                <div className="space-y-2">
+                                  <Label htmlFor="emprestimo-tipo" className="text-xs text-muted-foreground">
+                                    Tipo
+                                  </Label>
+                                  <Select
+                                    value={tipoSelecionado}
+                                    onValueChange={selecionarTipo}
+                                    disabled={!disponivel || tiposDisponiveis.length === 0}
+                                  >
+                                    <SelectTrigger id="emprestimo-tipo" className="h-11 rounded-xl border-border/80 bg-background text-sm">
+                                      <SelectValue placeholder="Selecione o tipo" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {tiposDisponiveis.map((tipo) => (
+                                        <SelectItem key={tipo} value={tipo}>
+                                          {tipo}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <Label htmlFor="emprestimo-tamanho" className="text-xs text-muted-foreground">
+                                    Tamanho
+                                  </Label>
+                                  <Select
+                                    value={tamanhoSelecionado}
+                                    onValueChange={selecionarTamanho}
+                                    disabled={!disponivel || !tipoSelecionado || tamanhosDoTipoSelecionado.length === 0}
+                                  >
+                                    <SelectTrigger id="emprestimo-tamanho" className="h-11 rounded-xl border-border/80 bg-background text-sm">
+                                      <SelectValue placeholder="Selecione o tamanho" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {tamanhosDoTipoSelecionado.map((row) => (
+                                        <SelectItem key={row.tamanho} value={row.tamanho}>
+                                          {row.tamanho} ({row.disponiveis} disp.)
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                <OperacaoStepper
+                                  value={quantidadeSelecionada}
+                                  onChange={setQuantidadeSelecionada}
+                                  min={1}
+                                  max={Math.max(1, maxSolicitavelAtual)}
+                                  disabled={!disponivel || !tipoSelecionado || !tamanhoSelecionado || maxSolicitavelAtual === 0}
+                                  label={`Quantidade (max. ${maxSolicitavelAtual})`}
+                                />
+                                <Button
+                                  variant="outline"
+                                  onClick={adicionarAoPedido}
+                                  disabled={!podeAdicionar}
+                                  className="h-11 w-full rounded-xl text-sm lg:min-w-48"
+                                >
+                                  Adicionar ao pedido
+                                </Button>
+                              </div>
+
+                              {!podeAdicionar && motivoAdicionar && (
+                                <p className="text-xs text-muted-foreground" role="status">
+                                  {motivoAdicionar}
+                                </p>
+                              )}
+                            </section>
+
+                            <Separator />
+
+                            <section className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-semibold text-foreground">Carrinho</h4>
+                                <StatusPill tone="info">Itens: {totalSelecionado}</StatusPill>
+                              </div>
+
+                              {pedido.length === 0 ? (
+                                <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 text-center">
+                                  <p className="text-sm font-medium text-foreground">Carrinho vazio</p>
+                                  <p className="text-sm text-muted-foreground">
+                                    Adicione tipo, tamanho e quantidade para montar o pedido.
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="divide-y divide-border rounded-xl border border-border/70 bg-background">
+                                  {pedido.map((item) => (
+                                    <div
+                                      key={chaveSelecao(item.tipo, item.tamanho)}
+                                      className="flex items-center justify-between gap-4 px-4 py-4"
+                                    >
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <StatusPill tone="neutral">{item.tipo}</StatusPill>
+                                        <StatusPill tone="neutral">{item.tamanho}</StatusPill>
+                                        <StatusPill tone="info">{item.quantidade}</StatusPill>
+                                      </div>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-9 w-9 rounded-lg"
+                                        aria-label={`Remover ${item.tipo} ${item.tamanho}`}
+                                        onClick={() => removerDoPedido(item.tipo, item.tamanho)}
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              <Button
+                                onClick={abrirResumo}
+                                disabled={!podeContinuar}
+                                className="h-11 w-full rounded-xl text-sm"
+                                aria-label="Continuar para resumo de solicitacao"
+                              >
+                                Revisar pedido
+                                <ChevronRight className="h-4 w-4" />
+                              </Button>
+                            </section>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="col-span-12 xl:col-span-4">
+            <Card className="border-border/70 bg-card/95 shadow-sm xl:sticky xl:top-32 animate-in fade-in-0 slide-in-from-right-2">
+              <CardContent className="space-y-6 p-6">
+                <div className="space-y-2">
+                  <h3 className="text-lg font-semibold text-foreground">Como funciona</h3>
+                  <p className="text-sm text-muted-foreground">Acompanhe os proximos passos da solicitacao.</p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5">
+                    <p className="text-xs text-muted-foreground">1. Usuario</p>
+                    <p className="truncate text-sm font-semibold text-foreground">{etapaUsuario}</p>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5">
+                    <p className="text-xs text-muted-foreground">2. Itens</p>
+                    <p className="text-sm font-semibold text-foreground">{etapaItens}</p>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5">
+                    <p className="text-xs text-muted-foreground">3. Revisao</p>
+                    <p className="text-sm font-semibold text-foreground">{etapaRevisao}</p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border/70 bg-primary/[0.06] p-4 transition-all duration-200 hover:-translate-y-0.5">
+                  <p className="text-sm text-muted-foreground">
+                    A Solicitação será validada no resumo.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       )}
 
@@ -1308,11 +1462,15 @@ function DevolucaoTab() {
     } catch (err) {
       const classificado = classificarErroBusca(err, "Nao encontramos funcionario para esta matricula.");
       setBuscaEstado(classificado.estado);
-      setBuscaMensagem(classificado.mensagem);
+      setBuscaMensagem(classificado.estado === "idle" ? null : classificado.mensagem);
       setFuncionario(null);
       setItens([]);
       setSelecionados(new Set());
-      enviarMonitorEmEspera("Nao foi possivel localizar os dados. Aguardando nova tentativa.");
+      enviarMonitorEmEspera(
+        classificado.estado === "idle"
+          ? "Multiplos resultados localizados. Selecione uma sugestao para continuar."
+          : "Nao foi possivel localizar os dados. Aguardando nova tentativa.",
+      );
     } finally {
       setBuscaLoading(false);
     }
@@ -1428,74 +1586,131 @@ function DevolucaoTab() {
     : buscaEstado === "success" && selecionadosCount === 0
       ? "Selecione ao menos um item."
       : null;
+  const etapaUsuario = funcionario ? "Concluido" : "--";
+  const etapaItens = selecionadosCount;
+  const etapaRevisao = podeContinuar ? "Pronto" : "Aguardando";
+  const animacaoEtapa = useDelicateTransition(`devolucao-${etapa}-${buscaEstado}`);
 
   return (
-    <div className="w-full space-y-3">
+    <div
+      className={cn(
+        "w-full space-y-6 transition-[opacity,transform] duration-300 ease-[var(--motion-ease-standard)]",
+        animacaoEtapa && "animate-in fade-in-0 slide-in-from-bottom-2",
+      )}
+    >
       {etapa === "busca" && (
-        <div className="w-full space-y-3">
-          <Card className="w-full border-border/70 bg-gradient-to-br from-background via-accent/12 to-muted/28 shadow-[var(--shadow-soft)]">
-            <CardContent className="px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
-              <SearchSection
-                id="mat-dev"
-                matricula={matricula}
-                matriculaError={matriculaError}
-                loading={buscaLoading}
-                canClear={Boolean(matricula || funcionario || itens.length > 0 || buscaEstado !== "idle")}
-                sugestoes={sugestoes}
-                sugestoesLoading={sugestoesLoading}
-                showSugestoes={matricula.trim().length >= 2 && !funcionario}
-                onMatriculaChange={onMatriculaChange}
-                onLimpar={limparTudo}
-                onSelecionarSugestao={onSelecionarSugestao}
-              />
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-12 gap-6">
+          <div className="col-span-12 space-y-6 xl:col-span-8">
+            <Card className="relative z-20 border-border/70 bg-card/95 shadow-sm">
+              <CardContent className="space-y-6 p-6">
+                <div className="space-y-2">
+                  <h2 className="text-lg font-semibold text-foreground">Identificacao</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Busque o usuario para iniciar a devolucao.
+                  </p>
+                </div>
 
-          {buscaEstado === "loading" && <BuscaSkeleton />}
-
-          {buscaEstado !== "loading" && (
-            <>
-              {(buscaEstado === "idle" || buscaEstado === "notFound" || buscaEstado === "networkError" || buscaEstado === "error") && (
-                <BuscaEstadoCard
-                  estado={buscaEstado}
-                  mensagem={buscaMensagem}
-                  onRetry={buscaEstado === "networkError" ? buscarFuncionario : undefined}
+                <SearchSection
+                  id="mat-dev"
+                  matricula={matricula}
+                  matriculaError={matriculaError}
+                  loading={buscaLoading}
+                  canClear={Boolean(matricula || funcionario || itens.length > 0 || buscaEstado !== "idle")}
+                  sugestoes={sugestoes}
+                  sugestoesLoading={sugestoesLoading}
+                  showSugestoes={matricula.trim().length >= 2 && !funcionario}
+                  onMatriculaChange={onMatriculaChange}
+                  onLimpar={limparTudo}
+                  onSelecionarSugestao={onSelecionarSugestao}
                 />
+              </CardContent>
+            </Card>
+
+            <Card
+              className={cn(
+                "relative z-0 border-border/70 bg-card/95 shadow-sm",
+                buscaEstado === "idle" ? "xl:min-h-[180px]" : "xl:min-h-[240px]",
               )}
+            >
+              <CardContent className="space-y-4 p-4 sm:p-6">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-lg font-semibold text-foreground">Resultados</h3>
+                  <StatusPill
+                    tone={
+                      buscaEstado === "success" || buscaEstado === "empty"
+                        ? "success"
+                        : buscaEstado === "loading"
+                          ? "info"
+                          : buscaEstado === "idle"
+                            ? "neutral"
+                            : "danger"
+                    }
+                  >
+                    {buscaEstado === "success" || buscaEstado === "empty"
+                      ? "Usuario localizado"
+                      : buscaEstado === "loading"
+                        ? "Buscando"
+                        : buscaEstado === "idle"
+                          ? "Aguardando busca"
+                          : "Sem resultado"}
+                  </StatusPill>
+                </div>
 
-              {(buscaEstado === "success" || buscaEstado === "empty") && funcionario && (
-                <div className="grid gap-3 animate-in fade-in-0 slide-in-from-bottom-2 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)] xl:items-start">
-                  <div className="space-y-3">
-                    <Card className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)]">
-                      <CardContent className="space-y-2.5 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Funcionario</p>
-                        <FuncionarioCard funcionario={funcionario} />
-                      </CardContent>
-                    </Card>
+                {buscaEstado === "loading" ? <BuscaSkeleton /> : null}
 
-                    <Card className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)]">
-                      <CardContent className="space-y-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
-                        <div className="flex items-center justify-between">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status/Operacao</p>
-                          <StatusPill tone={buscaEstado === "empty" ? "danger" : "info"} className="text-[10px]">
-                            {buscaEstado === "empty" ? "Sem itens" : `${itens.length} item(ns)`}
-                          </StatusPill>
+                {buscaEstado !== "loading" && (
+                  <>
+                    {(buscaEstado === "notFound" || buscaEstado === "networkError" || buscaEstado === "error") && (
+                      <BuscaEstadoCard
+                        estado={buscaEstado}
+                        mensagem={buscaMensagem}
+                        onRetry={buscaEstado === "networkError" ? buscarFuncionario : undefined}
+                      />
+                    )}
+
+                    {buscaEstado === "idle" && (
+                      <div className="rounded-xl border border-border/70 bg-surface-2/65 p-5 text-center">
+                        <Package className="mx-auto mb-4 h-8 w-8 text-muted-foreground/60" />
+                        <p className="text-sm font-semibold text-foreground">Nenhum usuario selecionado</p>
+                        <p className="text-sm text-muted-foreground">
+                          Informe matricula, nome ou codigo do kit para carregar os dados.
+                        </p>
+                      </div>
+                    )}
+
+                    {(buscaEstado === "success" || buscaEstado === "empty") && funcionario && (
+                      <div className="space-y-4 animate-in fade-in-0 slide-in-from-bottom-2">
+                        <div className="rounded-xl border border-border/70 bg-background/75 p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 space-y-1">
+                              <p className="truncate text-lg font-semibold text-foreground">{funcionario.nome}</p>
+                              <p className="truncate text-sm text-muted-foreground">{funcionario.unidade}</p>
+                              <p className="truncate text-sm text-muted-foreground">{funcionario.setor}</p>
+                            </div>
+                            <StatusPill tone={buscaEstado === "empty" ? "danger" : "info"} className="shrink-0">
+                              {buscaEstado === "empty" ? "Sem itens em uso" : `Em uso: ${itens.length}`}
+                            </StatusPill>
+                          </div>
                         </div>
 
-                        {buscaEstado === "empty" ? (
-                          <div className="rounded-xl border border-border/65 bg-surface-2/60 p-4 text-center">
-                            <Package className="mx-auto mb-2 h-7 w-7 text-muted-foreground/60" />
-                            <p className="text-sm font-medium text-foreground">Nenhum item emprestado</p>
-                            <p className="text-xs text-muted-foreground">Este funcionario nao possui itens para devolucao.</p>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex items-center justify-between">
-                              <p className="text-xs font-medium text-muted-foreground">Itens emprestados ({itens.length})</p>
-                              <p className="text-xs font-semibold text-foreground">Selecionados: {selecionadosCount}</p>
-                            </div>
+                        <Separator />
 
-                            <div className="max-h-[26rem] space-y-1.5 overflow-y-auto pr-1">
+                        <section className="space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <h4 className="text-sm font-semibold text-foreground">Itens emprestados</h4>
+                            <StatusPill tone="info">Selecionados: {selecionadosCount}</StatusPill>
+                          </div>
+
+                          {buscaEstado === "empty" ? (
+                            <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 text-center">
+                              <Package className="mx-auto mb-3 h-8 w-8 text-muted-foreground/60" />
+                              <p className="text-sm font-medium text-foreground">Nenhum item emprestado</p>
+                              <p className="text-sm text-muted-foreground">
+                                Este usuario nao possui itens para devolucao.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="max-h-[26rem] space-y-2 overflow-y-auto pr-1">
                               {itens.map((item, index) => {
                                 const checked = selecionados.has(item.codigo);
                                 return (
@@ -1513,8 +1728,8 @@ function DevolucaoTab() {
                                       }
                                     }}
                                     className={cn(
-                                      "flex cursor-pointer items-center gap-2 rounded-xl border bg-background/80 px-3 py-2 transition-all hover:border-primary/30 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 animate-in fade-in-0 slide-in-from-bottom-2",
-                                      checked ? "border-primary/40 bg-primary/[0.04]" : "border-border/50",
+                                      "flex cursor-pointer items-center gap-2 rounded-xl border bg-background px-3 py-3 transition-all hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 animate-in fade-in-0 slide-in-from-bottom-2",
+                                      checked ? "border-primary/45 bg-primary/[0.05]" : "border-border/70",
                                     )}
                                     style={{ animationDelay: `${index * 30}ms` }}
                                   >
@@ -1537,64 +1752,101 @@ function DevolucaoTab() {
                                 );
                               })}
                             </div>
-                          </>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </div>
+                          )}
+                        </section>
 
-                  <Card className="h-fit border-border/70 bg-gradient-to-b from-card/96 to-card/90 shadow-[var(--shadow-soft)] xl:sticky xl:top-2">
-                    <CardContent className="space-y-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Carrinho de devolucao</p>
-                        <StatusPill tone="info" className="text-[10px]">Itens: {selecionadosCount}</StatusPill>
-                      </div>
+                        <Separator />
 
-                      {itensSelecionados.length === 0 ? (
-                        <p className="rounded-xl border border-dashed border-border/70 bg-surface-2/60 px-3 py-2 text-xs text-muted-foreground">
-                          Selecione ao menos um item para montar o pedido.
-                        </p>
-                      ) : (
-                        <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
-                          {itensSelecionados.map((item) => (
-                            <div
-                              key={item.codigo}
-                              className="flex items-center justify-between gap-2 rounded-xl border border-border/55 bg-background/80 px-3 py-2"
-                            >
-                              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                <StatusPill tone="neutral">{item.tipo}</StatusPill>
-                                <StatusPill tone="neutral">{item.tamanho}</StatusPill>
-                                <StatusPill tone="info" className="font-mono">{item.codigo}</StatusPill>
-                              </div>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-8 w-8 rounded-lg"
-                                onClick={() => setItemSelecionado(item.codigo, false)}
-                                aria-label={`Remover ${item.codigo}`}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
+                        <section className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-semibold text-foreground">Carrinho</h4>
+                            <StatusPill tone="info">Itens: {selecionadosCount}</StatusPill>
+                          </div>
+
+                          {itensSelecionados.length === 0 ? (
+                            <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 text-center">
+                              <p className="text-sm font-medium text-foreground">Carrinho vazio</p>
+                              <p className="text-sm text-muted-foreground">
+                                Selecione os itens para montar o pedido de devolucao.
+                              </p>
                             </div>
-                          ))}
-                        </div>
-                      )}
+                          ) : (
+                            <div className="divide-y divide-border rounded-xl border border-border/70 bg-background">
+                              {itensSelecionados.map((item) => (
+                                <div key={item.codigo} className="flex items-center justify-between gap-4 px-4 py-4">
+                                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                    <StatusPill tone="neutral">{item.tipo}</StatusPill>
+                                    <StatusPill tone="neutral">{item.tamanho}</StatusPill>
+                                    <StatusPill tone="info" className="font-mono">{item.codigo}</StatusPill>
+                                  </div>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-9 w-9 rounded-lg"
+                                    onClick={() => setItemSelecionado(item.codigo, false)}
+                                    aria-label={`Remover ${item.codigo}`}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
 
-                      <Button onClick={abrirResumo} disabled={!podeContinuar} className="h-10 w-full rounded-xl text-xs" aria-label="Continuar para resumo de devolucao">
-                        Revisar pedido
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                      {!podeContinuar && motivoContinuar && (
-                        <p className="text-xs text-muted-foreground" role="status">
-                          {motivoContinuar}
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
+                          <Button
+                            onClick={abrirResumo}
+                            disabled={!podeContinuar}
+                            className="h-11 w-full rounded-xl text-sm"
+                            aria-label="Continuar para resumo de devolucao"
+                          >
+                            Revisar pedido
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                          {!podeContinuar && motivoContinuar && (
+                            <p className="text-xs text-muted-foreground" role="status">
+                              {motivoContinuar}
+                            </p>
+                          )}
+                        </section>
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="col-span-12 xl:col-span-4">
+            <Card className="border-border/70 bg-card/95 shadow-sm xl:sticky xl:top-32 animate-in fade-in-0 slide-in-from-right-2">
+              <CardContent className="space-y-6 p-6">
+                <div className="space-y-2">
+                  <h3 className="text-lg font-semibold text-foreground">Como funciona</h3>
+                  <p className="text-sm text-muted-foreground">Acompanhe os proximos passos da devolucao.</p>
                 </div>
-              )}
-            </>
-          )}
+
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5">
+                    <p className="text-xs text-muted-foreground">1. Usuario</p>
+                    <p className="truncate text-sm font-semibold text-foreground">{etapaUsuario}</p>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5">
+                    <p className="text-xs text-muted-foreground">2. Itens</p>
+                    <p className="text-sm font-semibold text-foreground">{etapaItens}</p>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5">
+                    <p className="text-xs text-muted-foreground">3. Revisao</p>
+                    <p className="text-sm font-semibold text-foreground">{etapaRevisao}</p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border/70 bg-primary/[0.06] p-4 transition-all duration-200 hover:-translate-y-0.5">
+                  <p className="text-sm text-muted-foreground">
+                    A Devolução será validada no resumo.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       )}
 
@@ -1636,8 +1888,6 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
   const [quantidadeDevolucao, setQuantidadeDevolucao] = useState(1);
   const [pedidoDevolucao, setPedidoDevolucao] = useState<SelecaoPedido[]>([]);
   const [resumoDevolucaoAberto, setResumoDevolucaoAberto] = useState(false);
-  const [pendenciaRapidaSelecionada, setPendenciaRapidaSelecionada] = useState<string | null>(null);
-  const [quantidadePendenciaRapida, setQuantidadePendenciaRapida] = useState(1);
   const { success, error } = useToast();
   const isSolicitacao = tipoOperacao === "solicitacao";
 
@@ -1824,37 +2074,9 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
     setQuantidadeDevolucao((atual) => Math.min(Math.max(1, atual), maxDevolucaoDisponivel));
   }, [maxDevolucaoDisponivel]);
 
-  const pendenciaRapidaSelecionadaRow = pendenciasDisponiveis.find(
-    (row) => chaveSelecao(row.tipo, row.tamanho) === pendenciaRapidaSelecionada,
-  );
-  const pendenciaRapidaMax = pendenciaRapidaSelecionadaRow?.quantidade_disponivel ?? 0;
-
-  useEffect(() => {
-    if (isSolicitacao) {
-      setPendenciaRapidaSelecionada(null);
-      setQuantidadePendenciaRapida(1);
-    }
-  }, [isSolicitacao]);
-
-  useEffect(() => {
-    if (!pendenciaRapidaSelecionada) {
-      setQuantidadePendenciaRapida(1);
-      return;
-    }
-
-    if (pendenciaRapidaMax <= 0) {
-      setPendenciaRapidaSelecionada(null);
-      setQuantidadePendenciaRapida(1);
-      return;
-    }
-
-    setQuantidadePendenciaRapida((atual) => Math.min(Math.max(1, atual), pendenciaRapidaMax));
-  }, [pendenciaRapidaSelecionada, pendenciaRapidaMax]);
-
   const totalPendente = pendencias.reduce((acc, row) => acc + row.quantidade_pendente, 0);
   const totalPedidoSaida = pedidoSaida.reduce((acc, row) => acc + row.quantidade, 0);
   const totalPedidoDevolucao = pedidoDevolucao.reduce((acc, row) => acc + row.quantidade, 0);
-  const pendenciasListadas = isSolicitacao ? pendencias : pendenciasDisponiveis;
   const podeAdicionarSaida =
     Boolean(setorSelecionado) &&
     Boolean(tipoSaida) &&
@@ -1871,11 +2093,6 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
     quantidadeDevolucao <= maxDevolucaoDisponivel;
   const podeRevisarSaida = Boolean(setorSelecionado) && pedidoSaida.length > 0;
   const podeRevisarDevolucao = Boolean(setorSelecionado) && pedidoDevolucao.length > 0;
-  const podeAdicionarPendenciaRapida =
-    Boolean(pendenciaRapidaSelecionadaRow) &&
-    pendenciaRapidaMax > 0 &&
-    quantidadePendenciaRapida >= 1 &&
-    quantidadePendenciaRapida <= pendenciaRapidaMax;
 
   let motivoAdicionarSaida: string | null = null;
   if (!setorSelecionado) {
@@ -1900,7 +2117,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
   } else if (pendencias.length > 0 && pendenciasDisponiveis.length === 0) {
     motivoAdicionarDevolucao = "Todas as pendencias ja foram adicionadas ao pedido.";
   } else if (!tipoDevolucao) {
-    motivoAdicionarDevolucao = "Selecione o tipo.";
+    motivoAdicionarDevolucao = null;
   } else if (!tamanhoDevolucao) {
     motivoAdicionarDevolucao = "Selecione o tamanho.";
   } else if (maxDevolucao === 0) {
@@ -1917,6 +2134,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
   const descricaoFluxo = isSolicitacao
     ? "Selecione itens no painel lateral para montar a solicitacao deste setor."
     : "Selecione pendencias no painel lateral para montar a devolucao deste setor.";
+  const animacaoFluxo = useDelicateTransition(`setor-${tipoOperacao}-${setorSelecionado}`);
 
   async function recarregarDados() {
     if (!setorSelecionado) {
@@ -1924,6 +2142,16 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
       return;
     }
     await Promise.all([carregarEstoque(), carregarPendencias(setorSelecionado)]);
+  }
+
+  function trocarSetor(value: string) {
+    setSetorSelecionado(value);
+    setPedidoSaida([]);
+    setPedidoDevolucao([]);
+    setResumoSaidaAberto(false);
+    setResumoDevolucaoAberto(false);
+    setQuantidadeSaida(1);
+    setQuantidadeDevolucao(1);
   }
 
   function adicionarSaidaAoPedido() {
@@ -1974,29 +2202,6 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
 
     adicionarLinhaPedidoDevolucao(tipoDevolucao, tamanhoDevolucao, quantidadeDevolucao);
     setQuantidadeDevolucao(1);
-  }
-
-  function selecionarPendenciaParaDevolucao(row: PendenciaDisponivelOpcao) {
-    if (isSolicitacao) return;
-    const chave = chaveSelecao(row.tipo, row.tamanho);
-    setTipoDevolucao(row.tipo);
-    setTamanhoDevolucao(row.tamanho);
-    setQuantidadeDevolucao(1);
-    setPendenciaRapidaSelecionada((atual) => (atual === chave ? null : chave));
-    setQuantidadePendenciaRapida(1);
-  }
-
-  function adicionarPendenciaRapidaAoPedido(row: PendenciaDisponivelOpcao) {
-    const max = row.quantidade_disponivel;
-    if (max <= 0) return;
-
-    const quantidade = Math.min(Math.max(1, quantidadePendenciaRapida), max);
-    adicionarLinhaPedidoDevolucao(row.tipo, row.tamanho, quantidade);
-    setTipoDevolucao(row.tipo);
-    setTamanhoDevolucao(row.tamanho);
-    setQuantidadeDevolucao(1);
-    setPendenciaRapidaSelecionada(chaveSelecao(row.tipo, row.tamanho));
-    setQuantidadePendenciaRapida(1);
   }
 
   function removerDevolucaoDoPedido(tipo: string, tamanho: string) {
@@ -2062,144 +2267,92 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
   }
 
   return (
-    <div className="w-full space-y-3">
-      <Card className="border-border/70 bg-gradient-to-r from-card/96 via-card/92 to-card/96 shadow-[var(--shadow-soft)]">
-        <CardContent className="space-y-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              {isSolicitacao ? "Solicitacao por setor" : "Devolucao por setor"}
-            </p>
-            <StatusPill tone="info" className="text-[10px]">
-              Pedido total: {totalNoCarrinho}
-            </StatusPill>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-            <div className="space-y-1">
-              <Label htmlFor="setor-operacao" className="text-xs text-muted-foreground">
-                Setor
-              </Label>
-              <Select
-                value={setorSelecionado}
-                onValueChange={(value) => {
-                  setSetorSelecionado(value);
-                  setPedidoSaida([]);
-                  setPedidoDevolucao([]);
-                  setResumoSaidaAberto(false);
-                  setResumoDevolucaoAberto(false);
-                  setPendenciaRapidaSelecionada(null);
-                  setQuantidadePendenciaRapida(1);
-                  setQuantidadeSaida(1);
-                  setQuantidadeDevolucao(1);
-                }}
-                disabled={loadingBase || setores.length === 0}
-              >
-                <SelectTrigger id="setor-operacao" className="h-10 rounded-xl border-border/80 bg-background/85 text-xs">
-                  <SelectValue placeholder="Selecione o setor" />
-                </SelectTrigger>
-                <SelectContent>
-                  {setores.map((setor) => (
-                    <SelectItem key={setor} value={setor}>
-                      {setor}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Button
-              variant="outline"
-              onClick={() => void recarregarDados()}
-              disabled={loadingBase || loadingPendencias || !setorSelecionado}
-              className="h-10 rounded-xl text-xs md:min-w-36"
-            >
-              {loadingPendencias ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              Atualizar
-            </Button>
-          </div>
-
-          {setores.length === 0 && !loadingBase && (
-            <p className="text-xs text-muted-foreground">Nenhum setor ativo disponivel para operacao.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      <div className="space-y-3">
-        <Card className="border-border/70 bg-gradient-to-b from-card/96 to-card/90 shadow-[var(--shadow-soft)]">
-          <CardContent className="space-y-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                {isSolicitacao ? "Detalhes do setor para solicitacao" : "Detalhes do setor para devolucao"}
-              </p>
-              <StatusPill tone={setorSelecionado ? "success" : "neutral"} className="text-[10px]">
-                {setorSelecionado || "Setor nao selecionado"}
-              </StatusPill>
-            </div>
-
-            {!setorSelecionado ? (
-              <div className="rounded-xl border border-border/60 bg-surface-2/60 px-4 py-5 text-center">
-                <p className="text-sm font-medium text-foreground">Selecione um setor para iniciar.</p>
-                <p className="text-xs text-muted-foreground">
-                  O painel lateral sera liberado automaticamente para montar o pedido.
-                </p>
+    <div
+      className={cn(
+        "grid grid-cols-12 gap-6 xl:items-stretch transition-[opacity,transform] duration-300 ease-[var(--motion-ease-standard)]",
+        animacaoFluxo && "animate-in fade-in-0 slide-in-from-bottom-2",
+      )}
+    >
+      <div className="col-span-12 xl:col-span-7">
+        <Card className="h-full border-border/70 bg-card/95 shadow-sm">
+          <CardContent className="space-y-6 p-6">
+            <section className="space-y-4">
+              <div className="flex items-center">
+                <h3 className="text-lg font-semibold text-foreground">Setor</h3>
               </div>
-            ) : (
-              <>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="rounded-xl border border-border/60 bg-surface-2/60 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      {isSolicitacao ? "Variacoes disponiveis" : "Variacoes pendentes"}
-                    </p>
-                    <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">{variacoesAtivas}</p>
-                    <p className="text-xs text-muted-foreground">{tiposAtivos} tipo(s) ativo(s)</p>
-                  </div>
-                  <div className="rounded-xl border border-border/60 bg-surface-2/60 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Pendencias totais</p>
-                    <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">{totalPendente}</p>
-                    <p className="text-xs text-muted-foreground">Atualizado em tempo real para o setor.</p>
-                  </div>
-                  <div className="rounded-xl border border-border/60 bg-surface-2/60 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Itens no carrinho</p>
-                    <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">{totalNoCarrinho}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {isSolicitacao ? "Pronto para confirmar solicitacao." : "Pronto para confirmar devolucao."}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-border/60 bg-surface-2/60 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Fluxo atual</p>
-                    <StatusPill tone={isSolicitacao ? "success" : "info"} className="mt-1 text-[10px]">
-                      {isSolicitacao ? "Solicitacao" : "Devolucao"}
-                    </StatusPill>
-                    <p className="mt-2 text-xs text-muted-foreground">{descricaoFluxo}</p>
-                  </div>
-                </div>
 
-                <div className="rounded-xl border border-dashed border-border/60 bg-background/65 px-3 py-2">
-                  <p className="text-xs text-muted-foreground">
-                    Selecao de itens, carrinho e revisao ficam no painel lateral para reduzir scroll e acelerar operacao.
-                  </p>
+              <div className="grid gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="setor-operacao" className="text-xs text-muted-foreground">
+                    Setor
+                  </Label>
+                  <Select
+                    value={setorSelecionado}
+                    onValueChange={trocarSetor}
+                    disabled={loadingBase || setores.length === 0}
+                  >
+                    <SelectTrigger id="setor-operacao" className="h-11 rounded-xl border-border/80 bg-background text-sm">
+                      <SelectValue placeholder="Selecione o setor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {setores.map((setor) => (
+                        <SelectItem key={setor} value={setor}>
+                          {setor}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </>
-            )}
+              </div>
+            </section>
+
+            <Separator />
+
+            <section className="space-y-4">
+              <h4 className="text-sm font-semibold text-foreground">Resumo do setor</h4>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5 animate-in fade-in-0 slide-in-from-bottom-2">
+                  <p className="text-xs text-muted-foreground">{isSolicitacao ? "Variacoes disponiveis" : "Variacoes pendentes"}</p>
+                  <p className="text-2xl font-semibold tabular-nums text-foreground">{variacoesAtivas}</p>
+                  <p className="text-xs text-muted-foreground">{tiposAtivos} tipo(s) ativo(s)</p>
+                </div>
+                <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5 animate-in fade-in-0 slide-in-from-bottom-2">
+                  <p className="text-xs text-muted-foreground">Pendencias totais</p>
+                  <p className="text-2xl font-semibold tabular-nums text-foreground">{totalPendente}</p>
+                  <p className="text-xs text-muted-foreground">Atualizado no setor</p>
+                </div>
+                <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5 animate-in fade-in-0 slide-in-from-bottom-2">
+                  <p className="text-xs text-muted-foreground">Itens no carrinho</p>
+                  <p className="text-2xl font-semibold tabular-nums text-foreground">{totalNoCarrinho}</p>
+                  <p className="text-xs text-muted-foreground">{isSolicitacao ? "Pronto para revisao" : "Pronto para devolucao"}</p>
+                </div>
+                <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5 animate-in fade-in-0 slide-in-from-bottom-2">
+                  <p className="text-xs text-muted-foreground">Fluxo atual</p>
+                  <p className="text-lg font-semibold text-foreground">{isSolicitacao ? "Solicitacao" : "Devolucao"}</p>
+                  <p className="text-xs text-muted-foreground">{descricaoFluxo}</p>
+                </div>
+              </div>
+            </section>
+
           </CardContent>
         </Card>
+      </div>
 
-        <div className="space-y-3 xl:fixed xl:right-4 xl:top-[6.5rem] xl:z-40 xl:w-[24rem] xl:max-h-[calc(100dvh-7.25rem)] xl:overflow-y-auto xl:pr-1">
-          <Card className="h-fit border-border/70 bg-gradient-to-b from-card/96 to-card/90 shadow-[var(--shadow-soft)]">
-            <CardContent className="space-y-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
+      <div className="col-span-12 xl:col-span-5">
+        <Card className="h-full overflow-hidden border-border/70 bg-card/95 shadow-sm xl:sticky xl:top-32">
+          <div className="flex h-full flex-col">
+            <CardContent className="flex-1 space-y-6 overflow-y-auto p-6">
               <div className="flex items-center justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {isSolicitacao ? "Painel lateral da solicitacao" : "Painel lateral da devolucao"}
-                </p>
-                <StatusPill tone="info" className="text-[10px]">
-                  Pedido: {totalNoCarrinho}
-                </StatusPill>
+                <h3 className="text-lg font-semibold text-foreground">
+                  {isSolicitacao ? "Solicitacao" : "Devolucao"}
+                </h3>
+                <StatusPill tone="info">Pedido: {totalNoCarrinho}</StatusPill>
               </div>
 
               {isSolicitacao ? (
                 resumoSaidaAberto ? (
-                  <div className="space-y-3 rounded-xl border border-border/70 bg-surface-2/60 p-3">
-                    <p className="text-xs font-semibold text-foreground">Resumo da solicitacao</p>
+                  <div className="space-y-4 rounded-xl border border-border/70 bg-surface-2/60 p-4 animate-in fade-in-0 slide-in-from-bottom-2">
+                    <p className="text-sm font-semibold text-foreground">Resumo da solicitacao</p>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Setor</span>
                       <StatusPill tone="neutral">{setorSelecionado || "-"}</StatusPill>
@@ -2208,11 +2361,11 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                       <span className="text-xs text-muted-foreground">Quantidade total</span>
                       <StatusPill tone="info">{totalPedidoSaida}</StatusPill>
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       {pedidoSaida.map((row) => (
                         <div
                           key={chaveSelecao(row.tipo, row.tamanho)}
-                          className="flex items-center justify-between rounded-lg border border-border/60 bg-background/80 px-3 py-2"
+                          className="flex items-center justify-between rounded-xl border border-border/60 bg-background px-4 py-4"
                         >
                           <div className="flex flex-wrap items-center gap-2">
                             <StatusPill tone="neutral">{row.tipo}</StatusPill>
@@ -2222,19 +2375,19 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                         </div>
                       ))}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="grid gap-4 md:grid-cols-2">
                       <Button
                         variant="outline"
                         onClick={() => setResumoSaidaAberto(false)}
                         disabled={loadingSaida}
-                        className="h-10 flex-1 rounded-xl text-xs"
+                        className="h-11 rounded-xl text-sm"
                       >
                         Voltar
                       </Button>
                       <Button
                         onClick={() => void confirmarSaidaSetor()}
                         disabled={loadingSaida || !podeRevisarSaida}
-                        className="h-10 flex-1 rounded-xl text-xs"
+                        className="h-11 rounded-xl text-sm"
                       >
                         {loadingSaida ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
                         Confirmar
@@ -2242,9 +2395,9 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                     </div>
                   </div>
                 ) : (
-                  <>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <div className="space-y-1">
+                  <div className="space-y-4 animate-in fade-in-0 slide-in-from-bottom-2">
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      <div className="space-y-2">
                         <Label htmlFor="setor-saida-tipo" className="text-xs text-muted-foreground">
                           Tipo
                         </Label>
@@ -2256,7 +2409,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                           }}
                           disabled={loadingBase || tiposSaida.length === 0 || !setorSelecionado}
                         >
-                          <SelectTrigger id="setor-saida-tipo" className="h-10 rounded-xl border-border/80 bg-background/85 text-xs">
+                          <SelectTrigger id="setor-saida-tipo" className="h-11 rounded-xl border-border/80 bg-background text-sm">
                             <SelectValue placeholder="Selecione o tipo" />
                           </SelectTrigger>
                           <SelectContent>
@@ -2269,7 +2422,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                         </Select>
                       </div>
 
-                      <div className="space-y-1">
+                      <div className="space-y-2">
                         <Label htmlFor="setor-saida-tamanho" className="text-xs text-muted-foreground">
                           Tamanho
                         </Label>
@@ -2281,7 +2434,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                           }}
                           disabled={loadingBase || !tipoSaida || tamanhosSaida.length === 0 || !setorSelecionado}
                         >
-                          <SelectTrigger id="setor-saida-tamanho" className="h-10 rounded-xl border-border/80 bg-background/85 text-xs">
+                          <SelectTrigger id="setor-saida-tamanho" className="h-11 rounded-xl border-border/80 bg-background text-sm">
                             <SelectValue placeholder="Selecione o tamanho" />
                           </SelectTrigger>
                           <SelectContent>
@@ -2295,8 +2448,8 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                       </div>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                      <QuantitySelector
+                    <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                      <OperacaoStepper
                         value={quantidadeSaida}
                         onChange={setQuantidadeSaida}
                         min={1}
@@ -2308,7 +2461,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                       <Button
                         onClick={adicionarSaidaAoPedido}
                         disabled={!podeAdicionarSaida || loadingSaida}
-                        className="h-10 w-full rounded-xl text-xs sm:min-w-40"
+                        className="h-11 w-full rounded-xl text-sm md:min-w-48"
                         variant="outline"
                       >
                         Adicionar ao pedido
@@ -2318,21 +2471,21 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                       <p className="text-xs text-muted-foreground">{motivoAdicionarSaida}</p>
                     )}
 
-                    <div className="space-y-1.5 rounded-2xl border border-border/70 bg-surface-2/60 p-3">
+                    <div className="space-y-2 rounded-xl border border-border/70 bg-surface-2/60 p-4">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-medium text-muted-foreground">Carrinho de solicitacao</p>
-                        <p className="text-xs font-semibold text-foreground">{pedidoSaida.length} selecao(oes)</p>
+                        <p className="text-sm font-medium text-muted-foreground">Carrinho de solicitacao</p>
+                        <p className="text-sm font-semibold text-foreground">{pedidoSaida.length} selecao(oes)</p>
                       </div>
                       {pedidoSaida.length === 0 ? (
-                        <p className="rounded-xl border border-dashed border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+                        <p className="rounded-xl border border-border/70 bg-background p-6 text-sm text-muted-foreground">
                           Adicione os tamanhos para montar a solicitacao.
                         </p>
                       ) : (
-                        <div className="max-h-56 space-y-1.5 overflow-y-auto pr-1">
+                        <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
                           {pedidoSaida.map((row) => (
                             <div
                               key={chaveSelecao(row.tipo, row.tamanho)}
-                              className="flex items-center justify-between rounded-xl border border-border/55 bg-background/80 px-3 py-2"
+                              className="flex items-center justify-between rounded-xl border border-border/55 bg-background px-4 py-4"
                             >
                               <div className="flex flex-wrap items-center gap-2">
                                 <StatusPill tone="neutral">{row.tipo}</StatusPill>
@@ -2342,7 +2495,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-8 w-8 rounded-lg"
+                                className="h-9 w-9 rounded-lg"
                                 onClick={() => removerSaidaDoPedido(row.tipo, row.tamanho)}
                                 aria-label={`Remover ${row.tipo} ${row.tamanho}`}
                               >
@@ -2357,17 +2510,17 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                     <Button
                       onClick={() => setResumoSaidaAberto(true)}
                       disabled={!podeRevisarSaida || loadingSaida}
-                      className="h-10 w-full rounded-xl text-xs"
+                      className="h-11 w-full rounded-xl text-sm"
                     >
                       Revisar pedido
                       <ChevronRight className="h-4 w-4" />
                     </Button>
-                  </>
+                  </div>
                 )
               ) : (
                 resumoDevolucaoAberto ? (
-                  <div className="space-y-3 rounded-xl border border-border/70 bg-surface-2/60 p-3">
-                    <p className="text-xs font-semibold text-foreground">Resumo da devolucao</p>
+                  <div className="space-y-4 rounded-xl border border-border/70 bg-surface-2/60 p-4 animate-in fade-in-0 slide-in-from-bottom-2">
+                    <p className="text-sm font-semibold text-foreground">Resumo da devolucao</p>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Setor</span>
                       <StatusPill tone="neutral">{setorSelecionado || "-"}</StatusPill>
@@ -2376,11 +2529,11 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                       <span className="text-xs text-muted-foreground">Quantidade total</span>
                       <StatusPill tone="info">{totalPedidoDevolucao}</StatusPill>
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       {pedidoDevolucao.map((row) => (
                         <div
                           key={chaveSelecao(row.tipo, row.tamanho)}
-                          className="flex items-center justify-between rounded-lg border border-border/60 bg-background/80 px-3 py-2"
+                          className="flex items-center justify-between rounded-xl border border-border/60 bg-background px-4 py-4"
                         >
                           <div className="flex flex-wrap items-center gap-2">
                             <StatusPill tone="neutral">{row.tipo}</StatusPill>
@@ -2390,19 +2543,19 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                         </div>
                       ))}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="grid gap-4 md:grid-cols-2">
                       <Button
                         variant="outline"
                         onClick={() => setResumoDevolucaoAberto(false)}
                         disabled={loadingDevolucao}
-                        className="h-10 flex-1 rounded-xl text-xs"
+                        className="h-11 rounded-xl text-sm"
                       >
                         Voltar
                       </Button>
                       <Button
                         onClick={() => void confirmarDevolucaoSetor()}
                         disabled={loadingDevolucao || !podeRevisarDevolucao}
-                        className="h-10 flex-1 rounded-xl text-xs"
+                        className="h-11 rounded-xl text-sm"
                       >
                         {loadingDevolucao ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
                         Confirmar
@@ -2410,9 +2563,9 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                     </div>
                   </div>
                 ) : (
-                  <>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <div className="space-y-1">
+                  <div className="space-y-4 animate-in fade-in-0 slide-in-from-bottom-2">
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      <div className="space-y-2">
                         <Label htmlFor="setor-dev-tipo" className="text-xs text-muted-foreground">
                           Tipo
                         </Label>
@@ -2424,7 +2577,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                           }}
                           disabled={!setorSelecionado || tiposPendentes.length === 0 || loadingPendencias}
                         >
-                          <SelectTrigger id="setor-dev-tipo" className="h-10 rounded-xl border-border/80 bg-background/85 text-xs">
+                          <SelectTrigger id="setor-dev-tipo" className="h-11 rounded-xl border-border/80 bg-background text-sm">
                             <SelectValue placeholder="Selecione o tipo" />
                           </SelectTrigger>
                           <SelectContent>
@@ -2437,7 +2590,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                         </Select>
                       </div>
 
-                      <div className="space-y-1">
+                      <div className="space-y-2">
                         <Label htmlFor="setor-dev-tamanho" className="text-xs text-muted-foreground">
                           Tamanho
                         </Label>
@@ -2449,7 +2602,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                           }}
                           disabled={!setorSelecionado || !tipoDevolucao || pendenciasDoTipo.length === 0 || loadingPendencias}
                         >
-                          <SelectTrigger id="setor-dev-tamanho" className="h-10 rounded-xl border-border/80 bg-background/85 text-xs">
+                          <SelectTrigger id="setor-dev-tamanho" className="h-11 rounded-xl border-border/80 bg-background text-sm">
                             <SelectValue placeholder="Selecione o tamanho" />
                           </SelectTrigger>
                           <SelectContent>
@@ -2463,8 +2616,8 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                       </div>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                      <QuantitySelector
+                    <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                      <OperacaoStepper
                         value={quantidadeDevolucao}
                         onChange={setQuantidadeDevolucao}
                         min={1}
@@ -2476,7 +2629,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                       <Button
                         onClick={adicionarDevolucaoAoPedido}
                         disabled={!podeAdicionarDevolucao || loadingDevolucao}
-                        className="h-10 w-full rounded-xl text-xs sm:min-w-40"
+                        className="h-11 w-full rounded-xl text-sm md:min-w-48"
                         variant="outline"
                       >
                         Adicionar ao pedido
@@ -2486,21 +2639,21 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                       <p className="text-xs text-muted-foreground">{motivoAdicionarDevolucao}</p>
                     )}
 
-                    <div className="space-y-1.5 rounded-2xl border border-border/70 bg-surface-2/60 p-3">
+                    <div className="space-y-2 rounded-xl border border-border/70 bg-surface-2/60 p-4">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-medium text-muted-foreground">Carrinho de devolucao</p>
-                        <p className="text-xs font-semibold text-foreground">{pedidoDevolucao.length} selecao(oes)</p>
+                        <p className="text-sm font-medium text-muted-foreground">Carrinho de devolucao</p>
+                        <p className="text-sm font-semibold text-foreground">{pedidoDevolucao.length} selecao(oes)</p>
                       </div>
                       {pedidoDevolucao.length === 0 ? (
-                        <p className="rounded-xl border border-dashed border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+                        <p className="rounded-xl border border-border/70 bg-background p-6 text-sm text-muted-foreground">
                           Adicione os tamanhos para montar a devolucao.
                         </p>
                       ) : (
-                        <div className="max-h-56 space-y-1.5 overflow-y-auto pr-1">
+                        <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
                           {pedidoDevolucao.map((row) => (
                             <div
                               key={chaveSelecao(row.tipo, row.tamanho)}
-                              className="flex items-center justify-between rounded-xl border border-border/55 bg-background/80 px-3 py-2"
+                              className="flex items-center justify-between rounded-xl border border-border/55 bg-background px-4 py-4"
                             >
                               <div className="flex flex-wrap items-center gap-2">
                                 <StatusPill tone="neutral">{row.tipo}</StatusPill>
@@ -2510,7 +2663,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-8 w-8 rounded-lg"
+                                className="h-9 w-9 rounded-lg"
                                 onClick={() => removerDevolucaoDoPedido(row.tipo, row.tamanho)}
                                 aria-label={`Remover ${row.tipo} ${row.tamanho}`}
                               >
@@ -2525,132 +2678,20 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
                     <Button
                       onClick={() => setResumoDevolucaoAberto(true)}
                       disabled={!podeRevisarDevolucao || loadingDevolucao}
-                      className="h-10 w-full rounded-xl text-xs"
+                      className="sticky bottom-0 z-10 h-11 w-full rounded-xl border border-border/70 bg-primary text-sm"
                     >
                       Revisar pedido
                       <ChevronRight className="h-4 w-4" />
                     </Button>
-                  </>
+                  </div>
                 )
               )}
+
             </CardContent>
-          </Card>
-
-          <Card className="h-fit border-border/70 bg-gradient-to-b from-card/96 to-card/90 shadow-[var(--shadow-soft)]">
-            <CardContent className="space-y-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
-              <div className="flex items-center justify-between">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Pendencias em aberto</p>
-                <StatusPill tone={totalPendente > 0 ? "danger" : "success"} className="text-[10px]">
-                  {totalPendente > 0 ? `${totalPendente} pendente(s)` : "Sem pendencias"}
-                </StatusPill>
-              </div>
-
-              {loadingPendencias ? (
-                <div className="rounded-xl border border-border/60 bg-surface-2/65 p-3">
-                  <p className="text-xs text-muted-foreground">Atualizando pendencias do setor...</p>
-                </div>
-              ) : pendencias.length === 0 ? (
-                <div className="rounded-xl border border-border/60 bg-surface-2/65 p-3 text-center">
-                  <p className="text-sm font-medium text-foreground">Nenhuma pendencia para o setor selecionado.</p>
-                  <p className="text-xs text-muted-foreground">Saidas e devolucoes estao balanceadas.</p>
-                </div>
-              ) : !isSolicitacao && pendenciasListadas.length === 0 ? (
-                <div className="rounded-xl border border-border/60 bg-surface-2/65 p-3 text-center">
-                  <p className="text-sm font-medium text-foreground">Todas as pendencias ja estao no pedido.</p>
-                  <p className="text-xs text-muted-foreground">Revise e confirme para concluir a devolucao.</p>
-                </div>
-              ) : (
-                <div className="max-h-[24rem] space-y-1.5 overflow-y-auto pr-1">
-                  {pendenciasListadas.map((row, index) => {
-                    const chave = chaveSelecao(row.tipo, row.tamanho);
-                    const quantidadeDisponivelRow =
-                      isPendenciaDisponivelOpcao(row) ? row.quantidade_disponivel : row.quantidade_pendente;
-                    const selecionada = !isSolicitacao && pendenciaRapidaSelecionada === chave;
-
-                    return (
-                      <div
-                        key={`${row.setor}-${row.tipo}-${row.tamanho}`}
-                        className="rounded-xl border border-border/60 bg-background/80 px-3 py-2 animate-in fade-in-0 slide-in-from-bottom-2"
-                        style={{ animationDelay: `${index * 35}ms` }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!isSolicitacao && isPendenciaDisponivelOpcao(row)) {
-                              selecionarPendenciaParaDevolucao(row);
-                            }
-                          }}
-                          disabled={isSolicitacao}
-                          className="flex w-full items-center justify-between gap-2 text-left"
-                        >
-                          <div className="flex flex-wrap items-center gap-2">
-                            <StatusPill tone="neutral">{row.tipo}</StatusPill>
-                            <StatusPill tone="neutral">{row.tamanho}</StatusPill>
-                          </div>
-                          <StatusPill tone="danger">{quantidadeDisponivelRow} pend.</StatusPill>
-                        </button>
-
-                        {!isSolicitacao && selecionada && isPendenciaDisponivelOpcao(row) && (
-                          <div className="mt-2 grid gap-2 rounded-xl border border-border/60 bg-surface-2/55 p-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                            <QuantitySelector
-                              value={quantidadePendenciaRapida}
-                              onChange={setQuantidadePendenciaRapida}
-                              min={1}
-                              max={Math.max(1, row.quantidade_disponivel)}
-                              label={`Qtd. para adicionar (max. ${row.quantidade_disponivel})`}
-                            />
-                            <Button
-                              onClick={() => adicionarPendenciaRapidaAoPedido(row)}
-                              disabled={!podeAdicionarPendenciaRapida || loadingDevolucao}
-                              className="h-10 rounded-xl text-xs sm:min-w-32"
-                              variant="outline"
-                            >
-                              Adicionar
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+          </div>
+        </Card>
       </div>
     </div>
-  );
-}
-
-function OperacaoDestinoTabs({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
-  const isSolicitacao = tipoOperacao === "solicitacao";
-
-  return (
-    <Tabs defaultValue="usuario" className="w-full space-y-3">
-      <TabsList className="mx-auto grid h-auto w-full max-w-xl grid-cols-2 gap-1 rounded-full border border-border/70 bg-gradient-to-r from-surface-2/95 via-background/92 to-surface-2/95 p-1 shadow-[0_14px_30px_-24px_hsl(201_58%_32%_/_0.85)]">
-        <TabsTrigger
-          value="usuario"
-          className="gap-2 rounded-full border border-transparent py-2 text-[13px] font-semibold tracking-wide text-muted-foreground transition-all duration-200 data-[state=active]:border-primary/20 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/18 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
-        >
-          <UserRound className="h-4 w-4" />
-          <span className="font-medium">Usuario</span>
-        </TabsTrigger>
-        <TabsTrigger
-          value="setor"
-          className="gap-2 rounded-full border border-transparent py-2 text-[13px] font-semibold tracking-wide text-muted-foreground transition-all duration-200 data-[state=active]:border-emerald-300/45 data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500/18 data-[state=active]:to-teal-500/10 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm dark:data-[state=active]:text-emerald-300"
-        >
-          <Building2 className="h-4 w-4" />
-          <span className="font-medium">Setor</span>
-        </TabsTrigger>
-      </TabsList>
-
-      <TabsContent value="usuario" className="mt-3 w-full">
-        {isSolicitacao ? <EmprestimoTab /> : <DevolucaoTab />}
-      </TabsContent>
-      <TabsContent value="setor" className="mt-3 w-full">
-        <SetorOperacoesTab tipoOperacao={tipoOperacao} />
-      </TabsContent>
-    </Tabs>
   );
 }
 
@@ -2658,6 +2699,11 @@ export function SetorPage() {
   useEffect(() => {
     enviarMonitorEmEspera("Aguardando uma operacao na tela principal.");
   }, []);
+
+  const [tipoOperacao, setTipoOperacao] = useState<OperacaoTipo>("solicitacao");
+  const [destinoOperacao, setDestinoOperacao] = useState<"usuario" | "setor">("usuario");
+  const animacaoContexto = useDelicateTransition(`contexto-${tipoOperacao}-${destinoOperacao}`);
+  const animacaoConteudo = useDelicateTransition(`conteudo-${tipoOperacao}-${destinoOperacao}`);
 
   return (
     <div className="relative flex h-dvh flex-col overflow-hidden bg-background animate-in fade-in-0">
@@ -2669,56 +2715,88 @@ export function SetorPage() {
 
       <Header />
       <main className="relative min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[1280px] p-4 sm:p-6">
-          <Card className="w-full border-border/80 bg-card/95 shadow-[0_30px_60px_-34px_hsl(200_76%_20%_/_0.65)] backdrop-blur-xl animate-in fade-in-50 slide-in-from-bottom-8 duration-700">
-            <CardHeader className="border-b border-border/65 bg-gradient-to-r from-primary/8 via-transparent to-accent/14 px-4 pb-4 pt-4 sm:px-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/28 bg-gradient-to-br from-primary/18 via-background to-accent/45 p-2.5 shadow-[0_10px_26px_-18px_hsl(198_68%_24%_/_0.68)]">
-                    <img src="/logo-privativos.png" alt="Privativos" className="h-full w-full rounded-lg object-cover" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">Privativos</p>
-                    <CardTitle className="text-lg font-bold sm:text-2xl">Operacoes</CardTitle>
-                    <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
-                      Gerencie solicitacoes e devolucoes para usuarios e setores.
-                    </p>
-                  </div>
-                </div>
-
-                <StatusPill tone="info" className="text-[10px]">
-                  Fluxo operacional ativo
-                </StatusPill>
+        <div className="mx-auto w-full max-w-[1320px] px-6 py-6">
+          <section className="grid grid-cols-12 gap-6">
+            <div className="col-span-12 flex flex-wrap items-start justify-between gap-6">
+              <div className="space-y-2">
+                <h1 className="text-3xl font-bold text-foreground">Operacoes</h1>
+                <p className="text-sm text-muted-foreground">
+                  Gerencie solicitacoes e devolucoes para usuarios e setores.
+                </p>
               </div>
-            </CardHeader>
-            <CardContent className="px-4 pb-4 pt-5 sm:px-5 sm:pb-5">
-              <Tabs defaultValue="solicitacao" className="w-full space-y-3">
-                <TabsList className="mx-auto grid h-auto w-full max-w-2xl grid-cols-2 gap-1 rounded-full border border-border/70 bg-gradient-to-r from-surface-2/95 via-background/92 to-surface-2/95 p-1 shadow-[0_16px_36px_-26px_hsl(200_60%_30%_/_0.85)]">
-                  <TabsTrigger
-                    value="solicitacao"
-                    className="gap-2 rounded-full border border-transparent py-2 text-[13px] font-semibold tracking-wide text-muted-foreground transition-all duration-200 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/18 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
-                  >
-                    <Package className="h-4 w-4" />
-                    <span className="font-medium">Solicitacao</span>
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="devolucao"
-                    className="gap-2 rounded-full border border-transparent py-2 text-[13px] font-semibold tracking-wide text-muted-foreground transition-all duration-200 data-[state=active]:border-sky-300/45 data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500/18 data-[state=active]:to-cyan-500/10 data-[state=active]:text-sky-700 data-[state=active]:shadow-sm dark:data-[state=active]:text-sky-300"
-                  >
-                    <Undo2 className="h-4 w-4" />
-                    <span className="font-medium">Devolucao</span>
-                  </TabsTrigger>
-                </TabsList>
+              <StatusPill tone="info">Fluxo operacional ativo</StatusPill>
+            </div>
+          </section>
 
-                <TabsContent value="solicitacao" className="mt-3 w-full">
-                  <OperacaoDestinoTabs tipoOperacao="solicitacao" />
-                </TabsContent>
-                <TabsContent value="devolucao" className="mt-3 w-full">
-                  <OperacaoDestinoTabs tipoOperacao="devolucao" />
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+          <section
+            className={cn(
+              "mt-6 grid grid-cols-12 gap-6 transition-[opacity,transform] duration-300 ease-[var(--motion-ease-standard)]",
+              animacaoContexto && "animate-in fade-in-0 slide-in-from-bottom-2",
+            )}
+          >
+            <div className="col-span-12">
+              <div className="relative overflow-visible rounded-2xl border border-border/75 bg-card/95 p-4 shadow-[var(--shadow-soft)]">
+                <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-surface-2/70 via-transparent to-accent/18" />
+
+                <div className="relative grid gap-4 lg:grid-cols-2">
+                  <Tabs value={tipoOperacao} onValueChange={(value) => setTipoOperacao(value as OperacaoTipo)} className="w-full space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Operacao</p>
+                    <TabsList className="grid h-10 w-full grid-cols-2 gap-1 rounded-xl border border-border/75 bg-background/70 p-1 shadow-[var(--shadow-soft)]">
+                      <TabsTrigger
+                        value="solicitacao"
+                        className="h-8 gap-2 rounded-lg border border-transparent text-[13px] font-semibold text-muted-foreground transition-all duration-200 hover:bg-accent/35 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/16 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+                      >
+                        <Package className="h-4 w-4" />
+                        Solicitacao
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="devolucao"
+                        className="h-8 gap-2 rounded-lg border border-transparent text-[13px] font-semibold text-muted-foreground transition-all duration-200 hover:bg-accent/35 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/16 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+                      >
+                        <Undo2 className="h-4 w-4" />
+                        Devolucao
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+
+                  <Tabs value={destinoOperacao} onValueChange={(value) => setDestinoOperacao(value as "usuario" | "setor")} className="w-full space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Destino</p>
+                    <TabsList className="grid h-10 w-full grid-cols-2 gap-1 rounded-xl border border-border/75 bg-background/70 p-1 shadow-[var(--shadow-soft)]">
+                      <TabsTrigger
+                        value="usuario"
+                        className="h-8 gap-2 rounded-lg border border-transparent text-[13px] font-semibold text-muted-foreground transition-all duration-200 hover:bg-accent/35 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/16 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+                      >
+                        <UserRound className="h-4 w-4" />
+                        Usuario
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="setor"
+                        className="h-8 gap-2 rounded-lg border border-transparent text-[13px] font-semibold text-muted-foreground transition-all duration-200 hover:bg-accent/35 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/16 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+                      >
+                        <Building2 className="h-4 w-4" />
+                        Setor
+                      </TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            className={cn(
+              "mt-6 grid grid-cols-12 gap-6 transition-[opacity,transform] duration-300 ease-[var(--motion-ease-standard)]",
+              animacaoConteudo && "animate-in fade-in-0 slide-in-from-bottom-2",
+            )}
+          >
+            <div className="col-span-12">
+              {destinoOperacao === "usuario"
+                ? tipoOperacao === "solicitacao"
+                  ? <EmprestimoTab />
+                  : <DevolucaoTab />
+                : <SetorOperacoesTab tipoOperacao={tipoOperacao} />}
+            </div>
+          </section>
         </div>
       </main>
       <Footer />

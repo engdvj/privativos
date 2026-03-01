@@ -29,6 +29,7 @@ const TABELA_DENSE_CLASS = `${TABELA_CONTAINER_CLASS} [--table-inline-gap:0.95re
 const FILTRO_BAR_CLASS = "gap-1.5 md:flex-nowrap md:items-end";
 const SECTION_HEADER_CLASS = "gap-2 px-3 pb-2 pt-3 sm:px-4 sm:pb-2 sm:pt-4";
 const SECTION_CONTENT_CLASS = "space-y-2.5 px-3 pb-3 pt-0 sm:px-4 sm:pb-4";
+const FUNCIONARIOS_POR_PAGINA = 10;
 
 export function FuncionariosTab() {
   const [rows, setRows] = useState<FuncionarioRow[]>([]);
@@ -43,6 +44,7 @@ export function FuncionariosTab() {
   const [filtroSetor, setFiltroSetor] = useState("todos");
   const [filtroFuncao, setFiltroFuncao] = useState("todos");
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "inativo">("todos");
+  const [paginaFuncionarios, setPaginaFuncionarios] = useState(1);
   const [funcionarioParaExcluir, setFuncionarioParaExcluir] = useState<FuncionarioRow | null>(null);
   const { success, error } = useToast();
   const { openFuncionario } = useGlobalDetail();
@@ -318,6 +320,23 @@ export function FuncionariosTab() {
     [rowsFiltradas],
   );
   const inativosFiltrados = rowsFiltradas.length - ativosFiltrados;
+  const totalPaginasFuncionarios = Math.max(1, Math.ceil(rowsFiltradas.length / FUNCIONARIOS_POR_PAGINA));
+  const rowsPaginadas = useMemo(() => {
+    const inicio = (paginaFuncionarios - 1) * FUNCIONARIOS_POR_PAGINA;
+    return rowsFiltradas.slice(inicio, inicio + FUNCIONARIOS_POR_PAGINA);
+  }, [rowsFiltradas, paginaFuncionarios]);
+  const inicioPaginaFuncionarios = rowsFiltradas.length === 0 ? 0 : (paginaFuncionarios - 1) * FUNCIONARIOS_POR_PAGINA + 1;
+  const fimPaginaFuncionarios = Math.min(paginaFuncionarios * FUNCIONARIOS_POR_PAGINA, rowsFiltradas.length);
+
+  useEffect(() => {
+    setPaginaFuncionarios(1);
+  }, [busca, filtroUnidade, filtroSetor, filtroFuncao, filtroStatus]);
+
+  useEffect(() => {
+    if (paginaFuncionarios > totalPaginasFuncionarios) {
+      setPaginaFuncionarios(totalPaginasFuncionarios);
+    }
+  }, [paginaFuncionarios, totalPaginasFuncionarios]);
 
   async function criar() {
     const matriculaNormalizada = novo.matricula.trim();
@@ -509,7 +528,7 @@ export function FuncionariosTab() {
             </Select>
             <Button
               size="icon"
-              className="h-8 w-8 shrink-0 rounded-lg bg-gradient-to-r from-primary to-primary/85 text-primary-foreground"
+              className="h-8 w-8 shrink-0 rounded-lg border-0 bg-primary text-primary-foreground shadow-[var(--shadow-soft)] transition-all duration-200 hover:bg-sky-500 hover:animate-pulse"
               onClick={() => setOpenCreateModal(true)}
               aria-label="Novo funcionario"
               title="Novo funcionario"
@@ -536,7 +555,7 @@ export function FuncionariosTab() {
               { key: "status", title: "Status", align: "center", width: "10%", sortValue: (row) => row.statusAtivo },
               { key: "acoes", title: "Acoes", align: "center", width: "8%" },
             ]}
-            rows={rowsFiltradas}
+            rows={rowsPaginadas}
             getRowKey={(row) => row.matricula}
             onRowClick={(row) => {
               void openFuncionario(row.matricula);
@@ -608,7 +627,7 @@ export function FuncionariosTab() {
               <EmptyState compact title="Nenhum funcionario encontrado." />
             </div>
           ) : (
-            rowsFiltradas.map((row) => {
+            rowsPaginadas.map((row) => {
               const unidadesExibicao = unidadesLabel(row);
               const setoresExibicao = setoresLabel(row);
               const funcoesExibicao = funcoesLabel(row);
@@ -672,6 +691,34 @@ export function FuncionariosTab() {
               );
             })
           )}
+        </div>
+
+        <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[10px] text-muted-foreground">
+            {inicioPaginaFuncionarios}-{fimPaginaFuncionarios} de {rowsFiltradas.length} | Pagina {paginaFuncionarios} de {totalPaginasFuncionarios}
+          </p>
+          <div className="flex min-w-[220px] justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
+              onClick={() => setPaginaFuncionarios((paginaAtual) => Math.max(1, paginaAtual - 1))}
+              disabled={paginaFuncionarios === 1}
+            >
+              Anterior
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
+              onClick={() => setPaginaFuncionarios((paginaAtual) => Math.min(totalPaginasFuncionarios, paginaAtual + 1))}
+              disabled={paginaFuncionarios === totalPaginasFuncionarios}
+            >
+              Proxima
+            </Button>
+          </div>
         </div>
       </SectionCard>
 

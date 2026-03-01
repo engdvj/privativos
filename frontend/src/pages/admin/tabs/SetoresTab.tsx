@@ -18,13 +18,26 @@ import { useGlobalDetail } from "@/components/global-detail/GlobalDetailProvider
 import { Building2, Pencil, Plus, Save, Trash2 } from "lucide-react";
 import type { CatalogoRow, FuncionarioRow } from "../types";
 
-const FUNCIONARIOS_POR_PAGINA = 8;
+const SETORES_POR_PAGINA = 10;
+const FUNCIONARIOS_POR_PAGINA = 10;
 
 interface SetorFuncionariosResponse {
   pagina: number;
   limite: number;
   total: number;
   rows: FuncionarioRow[];
+}
+
+interface SetorItemEmprestadoRow {
+  codigo: string;
+  descricao: string | null;
+  tipo: string;
+  tamanho: string;
+  status: "disponivel" | "emprestado" | "inativo";
+  statusAtivo: boolean;
+  solicitanteMatricula: string | null;
+  setorSolicitante: string | null;
+  dataEmprestimo: string | null;
 }
 
 const FILTRO_INPUT_CLASS =
@@ -38,6 +51,10 @@ const FILTRO_BAR_CLASS = "gap-1.5 md:flex-nowrap md:items-end";
 const SECTION_HEADER_CLASS = "gap-2 px-3 pb-2 pt-3 sm:px-4 sm:pb-2 sm:pt-4";
 const SECTION_CONTENT_CLASS = "space-y-2.5 px-3 pb-3 pt-0 sm:px-4 sm:pb-4";
 
+function normalizarTexto(valor: string | null | undefined) {
+  return (valor ?? "").trim().toLowerCase();
+}
+
 export function SetoresTab() {
   const [rows, setRows] = useState<CatalogoRow[]>([]);
   const [unidades, setUnidades] = useState<CatalogoRow[]>([]);
@@ -49,6 +66,7 @@ export function SetoresTab() {
   const [busca, setBusca] = useState("");
   const [filtroUnidade, setFiltroUnidade] = useState("todos");
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "inativo">("todos");
+  const [paginaSetores, setPaginaSetores] = useState(1);
   const [nomeNovo, setNomeNovo] = useState("");
   const [unidadesNovo, setUnidadesNovo] = useState<string[]>([]);
   const [edicao, setEdicao] = useState({ nome: "", status_ativo: true, unidades: [] as string[] });
@@ -58,6 +76,8 @@ export function SetoresTab() {
   const [totalFuncionariosSetor, setTotalFuncionariosSetor] = useState(0);
   const [paginaFuncionariosSetor, setPaginaFuncionariosSetor] = useState(1);
   const [loadingFuncionariosSetor, setLoadingFuncionariosSetor] = useState(false);
+  const [itensEmprestadosSetor, setItensEmprestadosSetor] = useState<SetorItemEmprestadoRow[]>([]);
+  const [loadingItensEmprestadosSetor, setLoadingItensEmprestadosSetor] = useState(false);
   const { success, error } = useToast();
   const { openFuncionario } = useGlobalDetail();
 
@@ -112,6 +132,23 @@ export function SetoresTab() {
     [rowsFiltradas],
   );
   const inativosFiltrados = rowsFiltradas.length - ativosFiltrados;
+  const totalPaginasSetores = Math.max(1, Math.ceil(rowsFiltradas.length / SETORES_POR_PAGINA));
+  const rowsPaginadas = useMemo(() => {
+    const inicio = (paginaSetores - 1) * SETORES_POR_PAGINA;
+    return rowsFiltradas.slice(inicio, inicio + SETORES_POR_PAGINA);
+  }, [rowsFiltradas, paginaSetores]);
+  const inicioPaginaSetores = rowsFiltradas.length === 0 ? 0 : (paginaSetores - 1) * SETORES_POR_PAGINA + 1;
+  const fimPaginaSetores = Math.min(paginaSetores * SETORES_POR_PAGINA, rowsFiltradas.length);
+
+  useEffect(() => {
+    setPaginaSetores(1);
+  }, [busca, filtroUnidade, filtroStatus]);
+
+  useEffect(() => {
+    if (paginaSetores > totalPaginasSetores) {
+      setPaginaSetores(totalPaginasSetores);
+    }
+  }, [paginaSetores, totalPaginasSetores]);
 
   const carregarFuncionariosSetor = useCallback(async () => {
     if (!setorSelecionado) {
@@ -141,6 +178,35 @@ export function SetoresTab() {
     if (!setorSelecionado) return;
     void carregarFuncionariosSetor();
   }, [setorSelecionado, paginaFuncionariosSetor, carregarFuncionariosSetor]);
+
+  const carregarItensEmprestadosSetor = useCallback(async () => {
+    if (!setorSelecionado) {
+      return;
+    }
+
+    setLoadingItensEmprestadosSetor(true);
+    try {
+      const itens = await api.get<SetorItemEmprestadoRow[]>("/admin/itens?include_inactive=true");
+      const setorSelecionadoNormalizado = normalizarTexto(setorSelecionado.nome);
+      const filtrados = itens
+        .filter((item) =>
+          item.status === "emprestado"
+          && item.statusAtivo
+          && normalizarTexto(item.setorSolicitante) === setorSelecionadoNormalizado,
+        )
+        .sort((a, b) => a.codigo.localeCompare(b.codigo));
+      setItensEmprestadosSetor(filtrados);
+    } catch (err) {
+      error(err instanceof Error ? err.message : "Erro ao carregar itens emprestados do setor");
+    } finally {
+      setLoadingItensEmprestadosSetor(false);
+    }
+  }, [error, setorSelecionado]);
+
+  useEffect(() => {
+    if (!setorSelecionado) return;
+    void carregarItensEmprestadosSetor();
+  }, [setorSelecionado, carregarItensEmprestadosSetor]);
 
   const totalPaginasFuncionariosSetor = Math.max(
     1,
@@ -175,21 +241,7 @@ export function SetoresTab() {
     setPaginaFuncionariosSetor(1);
     setFuncionariosSetor([]);
     setTotalFuncionariosSetor(0);
-  }
-
-  function setoresLabel(row: FuncionarioRow) {
-    const setores = row.setores?.length ? row.setores : row.setor ? [row.setor] : [];
-    return setores.join(", ") || "-";
-  }
-
-  function unidadesLabel(row: FuncionarioRow) {
-    const unidades = row.unidades?.length ? row.unidades : row.unidade ? [row.unidade] : [];
-    return unidades.join(", ") || "-";
-  }
-
-  function funcoesLabel(row: FuncionarioRow) {
-    const funcoes = row.funcoes?.length ? row.funcoes : row.funcao ? [row.funcao] : [];
-    return funcoes.join(", ") || "-";
+    setItensEmprestadosSetor([]);
   }
 
   async function criar() {
@@ -355,7 +407,7 @@ export function SetoresTab() {
             </Select>
             <Button
               size="icon"
-              className="h-8 w-8 shrink-0 rounded-lg bg-gradient-to-r from-primary to-primary/85 text-primary-foreground"
+              className="h-8 w-8 shrink-0 rounded-lg border-0 bg-primary text-primary-foreground shadow-[var(--shadow-soft)] transition-all duration-200 hover:bg-sky-500 hover:animate-pulse"
               onClick={() => setOpenCreateModal(true)}
               aria-label="Novo setor"
               title="Novo setor"
@@ -380,7 +432,7 @@ export function SetoresTab() {
               { key: "status", title: "Status", align: "center", width: "14%", sortValue: (row) => row.statusAtivo },
               { key: "acoes", title: "Acoes", align: "center", width: "14%" },
             ]}
-            rows={rowsFiltradas}
+            rows={rowsPaginadas}
             getRowKey={(row) => row.id}
             onRowClick={(row) => abrirFuncionariosSetor(row)}
             loading={loading}
@@ -444,7 +496,7 @@ export function SetoresTab() {
               <EmptyState compact title="Nenhum setor encontrado." />
             </div>
           ) : (
-            rowsFiltradas.map((row) => (
+            rowsPaginadas.map((row) => (
               <article
                 key={row.id}
                 className="rounded-xl border border-border/70 bg-surface-2/85 p-3 shadow-[var(--shadow-soft)]"
@@ -499,126 +551,19 @@ export function SetoresTab() {
             ))
           )}
         </div>
-      </SectionCard>
 
-      <Modal
-        open={Boolean(setorSelecionado)}
-        onClose={() => setSetorSelecionado(null)}
-        title={setorSelecionado ? `Funcionarios vinculados - ${setorSelecionado.nome}` : "Funcionarios vinculados"}
-        description="Lista de funcionarios atualmente associados a este setor."
-        maxWidthClassName="max-w-5xl"
-      >
-        <div className="space-y-2.5">
-          <div className="text-[11px] text-muted-foreground">
-            {inicioFuncionariosSetor}-{fimFuncionariosSetor} de {totalFuncionariosSetor} | Pagina{" "}
-            {paginaFuncionariosSetor} de {totalPaginasFuncionariosSetor}
-          </div>
-
-          <div className="hidden md:block">
-            <DataTable
-              columns={[
-                {
-                  key: "matricula",
-                  title: "Matricula",
-                  width: "18%",
-                  className: "font-mono font-semibold",
-                  sortValue: (row) => row.matricula,
-                },
-                { key: "nome", title: "Nome", width: "22%", sortValue: (row) => row.nome },
-                { key: "unidades", title: "Unidades", width: "20%", sortValue: (row) => unidadesLabel(row) },
-                { key: "setores", title: "Setores", width: "20%", sortValue: (row) => setoresLabel(row) },
-                { key: "funcao", title: "Funcoes", width: "18%", sortValue: (row) => funcoesLabel(row) },
-                { key: "status", title: "Status", align: "center", width: "20%", sortValue: (row) => row.statusAtivo },
-              ]}
-              rows={funcionariosSetor}
-              getRowKey={(row) => row.matricula}
-              onRowClick={(row) => {
-                void openFuncionario(row.matricula);
-              }}
-              loading={loadingFuncionariosSetor}
-              emptyMessage="Nenhum funcionario vinculado a este setor."
-              minWidthClassName="min-w-[980px]"
-              containerClassName={TABELA_DENSE_CLASS}
-              renderRow={(row) => (
-                <>
-                <td>{row.matricula}</td>
-                <td className="max-w-0 truncate" title={row.nome}>{row.nome}</td>
-                <td className="max-w-0 truncate" title={unidadesLabel(row)}>{unidadesLabel(row)}</td>
-                <td className="max-w-0 truncate" title={setoresLabel(row)}>{setoresLabel(row)}</td>
-                  <td className="max-w-0 truncate" title={funcoesLabel(row)}>{funcoesLabel(row)}</td>
-                  <td>
-                    <div className="flex justify-center">
-                      <StatusPill tone={row.statusAtivo ? "success" : "danger"} className="text-[10px]">
-                        {row.statusAtivo ? "ativo" : "inativo"}
-                      </StatusPill>
-                    </div>
-                  </td>
-                </>
-              )}
-            />
-          </div>
-
-          <div className="space-y-2 md:hidden">
-            {loadingFuncionariosSetor ? (
-              Array.from({ length: 2 }).map((_, index) => (
-                <div key={`func-setor-skeleton-${index}`} className="rounded-xl border border-border/70 bg-surface-2/80 p-3">
-                  <div className="h-3 w-20 animate-pulse rounded bg-muted/70" />
-                  <div className="mt-2 h-2.5 w-full animate-pulse rounded bg-muted/60" />
-                  <div className="mt-1.5 h-2.5 w-3/4 animate-pulse rounded bg-muted/45" />
-                </div>
-              ))
-            ) : funcionariosSetor.length === 0 ? (
-              <div className="rounded-xl border border-border/70 bg-surface-2/80 px-3 py-5">
-                <EmptyState compact title="Nenhum funcionario vinculado." />
-              </div>
-            ) : (
-              funcionariosSetor.map((row) => (
-                <article
-                  key={row.matricula}
-                  className="rounded-xl border border-border/70 bg-surface-2/85 p-3 shadow-[var(--shadow-soft)]"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <button
-                      type="button"
-                      className="font-mono text-sm font-semibold text-primary underline-offset-2 hover:underline"
-                      onClick={() => {
-                        void openFuncionario(row.matricula);
-                      }}
-                    >
-                      {row.matricula}
-                    </button>
-                    <StatusPill tone={row.statusAtivo ? "success" : "danger"} className="text-[10px]">
-                      {row.statusAtivo ? "ativo" : "inativo"}
-                    </StatusPill>
-                  </div>
-                  <p className="mt-1 text-sm font-medium text-foreground">{row.nome}</p>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide">Unidades</p>
-                      <p className="truncate text-foreground" title={unidadesLabel(row)}>{unidadesLabel(row)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide">Funcoes</p>
-                      <p className="truncate text-foreground" title={funcoesLabel(row)}>{funcoesLabel(row)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide">Setores</p>
-                      <p className="truncate text-foreground" title={setoresLabel(row)}>{setoresLabel(row)}</p>
-                    </div>
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
-
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[10px] text-muted-foreground">
+            {inicioPaginaSetores}-{fimPaginaSetores} de {rowsFiltradas.length} | Pagina {paginaSetores} de {totalPaginasSetores}
+          </p>
+          <div className="flex min-w-[220px] justify-end gap-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 text-[11px]"
-              onClick={() => setPaginaFuncionariosSetor((prev) => Math.max(1, prev - 1))}
-              disabled={paginaFuncionariosSetor === 1 || loadingFuncionariosSetor}
+              className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
+              onClick={() => setPaginaSetores((paginaAtual) => Math.max(1, paginaAtual - 1))}
+              disabled={paginaSetores === 1}
             >
               Anterior
             </Button>
@@ -626,16 +571,135 @@ export function SetoresTab() {
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 text-[11px]"
-              onClick={() =>
-                setPaginaFuncionariosSetor((prev) =>
-                  Math.min(totalPaginasFuncionariosSetor, prev + 1),
-                )
-              }
-              disabled={paginaFuncionariosSetor >= totalPaginasFuncionariosSetor || loadingFuncionariosSetor}
+              className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
+              onClick={() => setPaginaSetores((paginaAtual) => Math.min(totalPaginasSetores, paginaAtual + 1))}
+              disabled={paginaSetores === totalPaginasSetores}
             >
               Proxima
             </Button>
+          </div>
+        </div>
+      </SectionCard>
+
+      <Modal
+        open={Boolean(setorSelecionado)}
+        onClose={() => setSetorSelecionado(null)}
+        title={setorSelecionado ? `Funcionarios vinculados - ${setorSelecionado.nome}` : "Funcionarios vinculados"}
+        description="Lista de funcionarios associados e itens atualmente emprestados para este setor."
+        maxWidthClassName="max-w-5xl"
+      >
+        <div className="space-y-4">
+          <div className="space-y-2.5">
+            <h4 className="text-sm font-semibold text-foreground">Funcionarios vinculados</h4>
+            <div className="text-[11px] text-muted-foreground">
+              {inicioFuncionariosSetor}-{fimFuncionariosSetor} de {totalFuncionariosSetor} | Pagina{" "}
+              {paginaFuncionariosSetor} de {totalPaginasFuncionariosSetor}
+            </div>
+
+            <div className="space-y-2">
+              {loadingFuncionariosSetor ? (
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={`func-setor-skeleton-${index}`} className="rounded-xl border border-border/70 bg-surface-2/80 p-3">
+                    <div className="h-3 w-20 animate-pulse rounded bg-muted/70" />
+                    <div className="mt-2 h-2.5 w-full animate-pulse rounded bg-muted/60" />
+                    <div className="mt-1.5 h-2.5 w-3/4 animate-pulse rounded bg-muted/45" />
+                  </div>
+                  ))}
+                </div>
+              ) : funcionariosSetor.length === 0 ? (
+                <div className="rounded-xl border border-border/70 bg-surface-2/80 px-3 py-5">
+                  <EmptyState compact title="Nenhum funcionario vinculado." />
+                </div>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {funcionariosSetor.map((row) => (
+                    <button
+                      type="button"
+                      key={row.matricula}
+                      className="rounded-xl border border-border/70 bg-surface-2/85 p-3 text-left shadow-[var(--shadow-soft)] transition-colors hover:bg-accent/20"
+                      onClick={() => {
+                        void openFuncionario(row.matricula);
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-mono text-sm font-semibold text-primary">
+                          {row.matricula}
+                        </span>
+                        <StatusPill tone={row.statusAtivo ? "success" : "danger"} className="text-[10px]">
+                          {row.statusAtivo ? "ativo" : "inativo"}
+                        </StatusPill>
+                      </div>
+                      <p className="mt-1 text-sm font-medium text-foreground">{row.nome}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-[11px]"
+                onClick={() => setPaginaFuncionariosSetor((prev) => Math.max(1, prev - 1))}
+                disabled={paginaFuncionariosSetor === 1 || loadingFuncionariosSetor}
+              >
+                Anterior
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 text-[11px]"
+                onClick={() =>
+                  setPaginaFuncionariosSetor((prev) =>
+                    Math.min(totalPaginasFuncionariosSetor, prev + 1),
+                  )
+                }
+                disabled={paginaFuncionariosSetor >= totalPaginasFuncionariosSetor || loadingFuncionariosSetor}
+              >
+                Proxima
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2.5">
+            <h4 className="text-sm font-semibold text-foreground">Itens emprestados para este setor</h4>
+            <p className="text-[11px] text-muted-foreground">Total: {itensEmprestadosSetor.length}</p>
+
+            <div className="space-y-2">
+              {loadingItensEmprestadosSetor ? (
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <div key={`item-setor-skeleton-${index}`} className="rounded-xl border border-border/70 bg-surface-2/80 p-3">
+                      <div className="h-3 w-20 animate-pulse rounded bg-muted/70" />
+                      <div className="mt-2 h-2.5 w-full animate-pulse rounded bg-muted/60" />
+                      <div className="mt-1.5 h-2.5 w-3/4 animate-pulse rounded bg-muted/45" />
+                    </div>
+                  ))}
+                </div>
+              ) : itensEmprestadosSetor.length === 0 ? (
+                <div className="rounded-xl border border-border/70 bg-surface-2/80 px-3 py-5">
+                  <EmptyState compact title="Nenhum item emprestado." />
+                </div>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {itensEmprestadosSetor.map((row) => (
+                    <article
+                      key={row.codigo}
+                      className="rounded-xl border border-border/70 bg-surface-2/85 p-3 shadow-[var(--shadow-soft)]"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-mono text-sm font-semibold text-foreground">{row.codigo}</p>
+                        <StatusPill tone="info" className="text-[10px]">emprestado</StatusPill>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </Modal>

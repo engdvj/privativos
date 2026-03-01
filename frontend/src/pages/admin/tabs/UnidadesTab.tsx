@@ -18,7 +18,8 @@ import { useGlobalDetail } from "@/components/global-detail/GlobalDetailProvider
 import { Building2, Pencil, Plus, Save, Trash2 } from "lucide-react";
 import type { CatalogoRow, FuncionarioRow } from "../types";
 
-const FUNCIONARIOS_POR_PAGINA = 8;
+const UNIDADES_POR_PAGINA = 10;
+const FUNCIONARIOS_POR_PAGINA = 10;
 
 interface UnidadeFuncionariosResponse {
   pagina: number;
@@ -47,6 +48,7 @@ export function UnidadesTab() {
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "inativo">("todos");
+  const [paginaUnidades, setPaginaUnidades] = useState(1);
   const [nomeNovo, setNomeNovo] = useState("");
   const [edicao, setEdicao] = useState({ nome: "", status_ativo: true });
   const [unidadeParaExcluir, setUnidadeParaExcluir] = useState<CatalogoRow | null>(null);
@@ -88,6 +90,23 @@ export function UnidadesTab() {
     [rowsFiltradas],
   );
   const inativosFiltrados = rowsFiltradas.length - ativosFiltrados;
+  const totalPaginasUnidades = Math.max(1, Math.ceil(rowsFiltradas.length / UNIDADES_POR_PAGINA));
+  const rowsPaginadas = useMemo(() => {
+    const inicio = (paginaUnidades - 1) * UNIDADES_POR_PAGINA;
+    return rowsFiltradas.slice(inicio, inicio + UNIDADES_POR_PAGINA);
+  }, [rowsFiltradas, paginaUnidades]);
+  const inicioPaginaUnidades = rowsFiltradas.length === 0 ? 0 : (paginaUnidades - 1) * UNIDADES_POR_PAGINA + 1;
+  const fimPaginaUnidades = Math.min(paginaUnidades * UNIDADES_POR_PAGINA, rowsFiltradas.length);
+
+  useEffect(() => {
+    setPaginaUnidades(1);
+  }, [busca, filtroStatus]);
+
+  useEffect(() => {
+    if (paginaUnidades > totalPaginasUnidades) {
+      setPaginaUnidades(totalPaginasUnidades);
+    }
+  }, [paginaUnidades, totalPaginasUnidades]);
 
   const carregarFuncionariosUnidade = useCallback(async () => {
     if (!unidadeSelecionada) {
@@ -257,7 +276,7 @@ export function UnidadesTab() {
             </Select>
             <Button
               size="icon"
-              className="h-8 w-8 shrink-0 rounded-lg bg-gradient-to-r from-primary to-primary/85 text-primary-foreground"
+              className="h-8 w-8 shrink-0 rounded-lg border-0 bg-primary text-primary-foreground shadow-[var(--shadow-soft)] transition-all duration-200 hover:bg-sky-500 hover:animate-pulse"
               onClick={() => setOpenCreateModal(true)}
               aria-label="Nova unidade"
               title="Nova unidade"
@@ -281,7 +300,7 @@ export function UnidadesTab() {
               { key: "status", title: "Status", align: "center", width: "18%", sortValue: (row) => row.statusAtivo },
               { key: "acoes", title: "Acoes", align: "center", width: "20%" },
             ]}
-            rows={rowsFiltradas}
+            rows={rowsPaginadas}
             getRowKey={(row) => row.id}
             onRowClick={(row) => abrirFuncionariosUnidade(row)}
             loading={loading}
@@ -344,7 +363,7 @@ export function UnidadesTab() {
               <EmptyState compact title="Nenhuma unidade encontrada." />
             </div>
           ) : (
-            rowsFiltradas.map((row) => (
+            rowsPaginadas.map((row) => (
               <article
                 key={row.id}
                 className="rounded-xl border border-border/70 bg-surface-2/85 p-3 shadow-[var(--shadow-soft)]"
@@ -396,6 +415,34 @@ export function UnidadesTab() {
             ))
           )}
         </div>
+
+        <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[10px] text-muted-foreground">
+            {inicioPaginaUnidades}-{fimPaginaUnidades} de {rowsFiltradas.length} | Pagina {paginaUnidades} de {totalPaginasUnidades}
+          </p>
+          <div className="flex min-w-[220px] justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
+              onClick={() => setPaginaUnidades((paginaAtual) => Math.max(1, paginaAtual - 1))}
+              disabled={paginaUnidades === 1}
+            >
+              Anterior
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
+              onClick={() => setPaginaUnidades((paginaAtual) => Math.min(totalPaginasUnidades, paginaAtual + 1))}
+              disabled={paginaUnidades === totalPaginasUnidades}
+            >
+              Proxima
+            </Button>
+          </div>
+        </div>
       </SectionCard>
 
       <Modal
@@ -411,100 +458,60 @@ export function UnidadesTab() {
             {paginaFuncionariosUnidade} de {totalPaginasFuncionariosUnidade}
           </div>
 
-          <div className="hidden md:block">
-            <DataTable
-              columns={[
-                {
-                  key: "matricula",
-                  title: "Matricula",
-                  width: "18%",
-                  className: "font-mono font-semibold",
-                  sortValue: (row) => row.matricula,
-                },
-                { key: "nome", title: "Nome", width: "22%", sortValue: (row) => row.nome },
-                { key: "unidades", title: "Unidades", width: "20%", sortValue: (row) => unidadesLabel(row) },
-                { key: "setores", title: "Setores", width: "20%", sortValue: (row) => setoresLabel(row) },
-                { key: "funcao", title: "Funcoes", width: "18%", sortValue: (row) => funcoesLabel(row) },
-                { key: "status", title: "Status", align: "center", width: "20%", sortValue: (row) => row.statusAtivo },
-              ]}
-              rows={funcionariosUnidade}
-              getRowKey={(row) => row.matricula}
-              onRowClick={(row) => {
-                void openFuncionario(row.matricula);
-              }}
-              loading={loadingFuncionariosUnidade}
-              emptyMessage="Nenhum funcionario vinculado a esta unidade."
-              minWidthClassName="min-w-[980px]"
-              containerClassName={TABELA_DENSE_CLASS}
-              renderRow={(row) => (
-                <>
-                <td>{row.matricula}</td>
-                <td className="max-w-0 truncate" title={row.nome}>{row.nome}</td>
-                <td className="max-w-0 truncate" title={unidadesLabel(row)}>{unidadesLabel(row)}</td>
-                <td className="max-w-0 truncate" title={setoresLabel(row)}>{setoresLabel(row)}</td>
-                  <td className="max-w-0 truncate" title={funcoesLabel(row)}>{funcoesLabel(row)}</td>
-                  <td>
-                    <div className="flex justify-center">
-                      <StatusPill tone={row.statusAtivo ? "success" : "danger"} className="text-[10px]">
-                        {row.statusAtivo ? "ativo" : "inativo"}
-                      </StatusPill>
-                    </div>
-                  </td>
-                </>
-              )}
-            />
-          </div>
-
-          <div className="space-y-2 md:hidden">
+          <div className="space-y-2">
             {loadingFuncionariosUnidade ? (
-              Array.from({ length: 2 }).map((_, index) => (
-                <div key={`func-setor-skeleton-${index}`} className="rounded-xl border border-border/70 bg-surface-2/80 p-3">
-                  <div className="h-3 w-20 animate-pulse rounded bg-muted/70" />
-                  <div className="mt-2 h-2.5 w-full animate-pulse rounded bg-muted/60" />
-                  <div className="mt-1.5 h-2.5 w-3/4 animate-pulse rounded bg-muted/45" />
-                </div>
-              ))
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={`func-unidade-skeleton-${index}`} className="rounded-xl border border-border/70 bg-surface-2/80 p-3">
+                    <div className="h-3 w-20 animate-pulse rounded bg-muted/70" />
+                    <div className="mt-2 h-2.5 w-full animate-pulse rounded bg-muted/60" />
+                    <div className="mt-1.5 h-2.5 w-3/4 animate-pulse rounded bg-muted/45" />
+                  </div>
+                ))}
+              </div>
             ) : funcionariosUnidade.length === 0 ? (
               <div className="rounded-xl border border-border/70 bg-surface-2/80 px-3 py-5">
                 <EmptyState compact title="Nenhum funcionario vinculado." />
               </div>
             ) : (
-              funcionariosUnidade.map((row) => (
-                <article
-                  key={row.matricula}
-                  className="rounded-xl border border-border/70 bg-surface-2/85 p-3 shadow-[var(--shadow-soft)]"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <button
-                      type="button"
-                      className="font-mono text-sm font-semibold text-primary underline-offset-2 hover:underline"
-                      onClick={() => {
-                        void openFuncionario(row.matricula);
-                      }}
-                    >
-                      {row.matricula}
-                    </button>
-                    <StatusPill tone={row.statusAtivo ? "success" : "danger"} className="text-[10px]">
-                      {row.statusAtivo ? "ativo" : "inativo"}
-                    </StatusPill>
-                  </div>
-                  <p className="mt-1 text-sm font-medium text-foreground">{row.nome}</p>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide">Unidades</p>
-                      <p className="truncate text-foreground" title={unidadesLabel(row)}>{unidadesLabel(row)}</p>
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {funcionariosUnidade.map((row) => (
+                  <article
+                    key={row.matricula}
+                    className="rounded-xl border border-border/70 bg-surface-2/85 p-3 shadow-[var(--shadow-soft)]"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <button
+                        type="button"
+                        className="font-mono text-sm font-semibold text-primary underline-offset-2 hover:underline"
+                        onClick={() => {
+                          void openFuncionario(row.matricula);
+                        }}
+                      >
+                        {row.matricula}
+                      </button>
+                      <StatusPill tone={row.statusAtivo ? "success" : "danger"} className="text-[10px]">
+                        {row.statusAtivo ? "ativo" : "inativo"}
+                      </StatusPill>
                     </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide">Funcoes</p>
-                      <p className="truncate text-foreground" title={funcoesLabel(row)}>{funcoesLabel(row)}</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{row.nome}</p>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                      <div className="rounded-lg border border-border/70 bg-background/70 px-2 py-1.5">
+                        <p className="text-[10px] uppercase tracking-wide">Unidades</p>
+                        <p className="truncate text-foreground" title={unidadesLabel(row)}>{unidadesLabel(row)}</p>
+                      </div>
+                      <div className="rounded-lg border border-border/70 bg-background/70 px-2 py-1.5">
+                        <p className="text-[10px] uppercase tracking-wide">Funcoes</p>
+                        <p className="truncate text-foreground" title={funcoesLabel(row)}>{funcoesLabel(row)}</p>
+                      </div>
+                      <div className="col-span-2 rounded-lg border border-border/70 bg-background/70 px-2 py-1.5">
+                        <p className="text-[10px] uppercase tracking-wide">Setores</p>
+                        <p className="truncate text-foreground" title={setoresLabel(row)}>{setoresLabel(row)}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide">Setores</p>
-                      <p className="truncate text-foreground" title={setoresLabel(row)}>{setoresLabel(row)}</p>
-                    </div>
-                  </div>
-                </article>
-              ))
+                  </article>
+                ))}
+              </div>
             )}
           </div>
 
