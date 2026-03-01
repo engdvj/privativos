@@ -6,21 +6,29 @@ import { AppError } from "../errors/app-error.js";
 import { sseManager } from "../sse/sse-manager.js";
 import { LoanService } from "../services/loan-service.js";
 import { ReturnService } from "../services/return-service.js";
+import { SectorOperationService } from "../services/sector-operation-service.js";
 import { ValidationQueueService } from "../services/validation-queue-service.js";
 
 const queueService = new ValidationQueueService();
 const loanService = new LoanService();
 const returnService = new ReturnService();
+const sectorOperationService = new SectorOperationService();
 const tamanhoSchema = z
   .string()
   .min(1)
   .max(20)
   .transform((value) => value.trim().toUpperCase());
+const tipoItemSchema = z
+  .string()
+  .max(100)
+  .transform((value) => value.trim().replace(/\s+/g, " "))
+  .refine((value) => value.length > 0, "Tipo do item invalido");
 
 const gerarCodigoSchema = z.object({
   matricula: z.string().min(1).max(20),
   tipo: z.enum(["emprestimo", "devolucao"]),
   quantidade: z.coerce.number().int().positive(),
+  tipo_item: tipoItemSchema.optional(),
   tamanho: tamanhoSchema.optional(),
   item_codigos: z.array(z.string().min(1).max(50)).optional(),
 });
@@ -38,10 +46,12 @@ const cancelarSchema = z.object({
 
 const buscaGlobalSchema = z.object({
   q: z.string().min(1).max(150),
+  modo: z.enum(["operacao", "global"]).optional().default("operacao"),
 });
 
 const buscaSugestoesSchema = z.object({
   q: z.string().min(2).max(150),
+  escopo: z.enum(["operacao", "global"]).optional().default("operacao"),
 });
 
 const historicoDetalhesSchema = z.object({
@@ -210,6 +220,11 @@ function formatarFuncaoLabel(funcoes: string[]) {
   return funcoes.join(", ");
 }
 
+function formatarDescricaoItem(descricao: string | null | undefined) {
+  const normalizada = (descricao ?? "").trim();
+  return normalizada;
+}
+
 export const opsRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     "/ops/stream",
@@ -244,6 +259,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
           codigo: pending.payload.codigo,
           tipo: pending.tipo,
           quantidade: pending.payload.quantidade,
+          tipo_item: pending.payload.tipo_item ?? null,
           tamanho: pending.payload.tamanho ?? null,
           item_codigos: pending.payload.item_codigos,
         });
@@ -282,6 +298,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         tipo: pending.tipo,
         codigo: pending.payload.codigo,
         quantidade: pending.payload.quantidade,
+        tipo_item: pending.payload.tipo_item ?? null,
         tamanho: pending.payload.tamanho ?? null,
         item_codigos: pending.payload.item_codigos,
       });
@@ -318,8 +335,8 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
       }
 
-      if (parsed.data.tipo === "emprestimo" && !parsed.data.tamanho) {
-        throw new AppError(400, "INVALID_ITEM_SIZE", "Emprestimo exige tamanho");
+      if (parsed.data.tipo === "emprestimo" && (!parsed.data.tipo_item || !parsed.data.tamanho)) {
+        throw new AppError(400, "INVALID_ITEM_FILTERS", "Emprestimo exige tipo de item e tamanho");
       }
 
       if (parsed.data.tipo === "devolucao") {
@@ -340,6 +357,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         matricula: parsed.data.matricula,
         tipo: parsed.data.tipo,
         quantidade: parsed.data.quantidade,
+        tipoItem: parsed.data.tipo_item,
         tamanho: parsed.data.tamanho,
         itemCodigos: parsed.data.item_codigos,
         operadorNome: operador,
@@ -350,6 +368,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         matricula: parsed.data.matricula,
         tipo: parsed.data.tipo,
         quantidade: parsed.data.quantidade,
+        tipo_item: parsed.data.tipo_item ?? null,
         tamanho: parsed.data.tamanho ?? null,
         operador_nome: operador,
       });
@@ -430,11 +449,13 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         if (!payload.tamanho) {
           throw new AppError(409, "INVALID_ITEM_SIZE", "Codigo pendente sem tamanho informado");
         }
+        const tipoItem = payload.tipo_item?.trim() || "Sem tipo";
 
         const result = await loanService.registrarEmprestimo({
           matricula: parsed.data.matricula,
           operadorNome: payload.operador_nome,
           quantidade: payload.quantidade,
+          tipo: tipoItem,
           tamanho: payload.tamanho,
         });
 
@@ -444,6 +465,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
           evento: "loan.created",
           matricula: parsed.data.matricula,
           itens: result.itens_emprestados,
+          tipo_item: tipoItem,
           tamanho: payload.tamanho,
           operador_nome: payload.operador_nome,
         });
@@ -477,6 +499,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       const schema = z.object({
         matricula: z.string().min(1).max(20),
         quantidade: z.coerce.number().int().positive(),
+        tipo_item: tipoItemSchema,
         tamanho: tamanhoSchema,
       });
 
@@ -496,6 +519,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         matricula: parsed.data.matricula,
         operadorNome: operador,
         quantidade: parsed.data.quantidade,
+        tipo: parsed.data.tipo_item,
         tamanho: parsed.data.tamanho,
       });
 
@@ -503,6 +527,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         evento: "loan.created_direto",
         matricula: parsed.data.matricula,
         itens: result.itens_emprestados,
+        tipo_item: parsed.data.tipo_item,
         tamanho: parsed.data.tamanho,
         operador_nome: operador,
       });
@@ -560,7 +585,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
     },
     async (_request, reply) => {
       const rows = await prisma.item.groupBy({
-        by: ["tamanho"],
+        by: ["tipo", "tamanho"],
         where: {
           status: "disponivel",
           statusAtivo: true,
@@ -568,17 +593,139 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         _count: {
           _all: true,
         },
-        orderBy: {
-          tamanho: "asc",
-        },
+        orderBy: [{ tipo: "asc" }, { tamanho: "asc" }],
       });
 
       return reply.status(200).send(
         rows.map((row) => ({
+          tipo: row.tipo,
           tamanho: row.tamanho,
           disponiveis: row._count._all,
         })),
       );
+    },
+  );
+
+  app.get(
+    "/ops/setores-disponiveis",
+    {
+      preHandler: [authenticate, authorize(["setor"])],
+    },
+    async (_request, reply) => {
+      const setores = await sectorOperationService.listarSetoresAtivos();
+      return reply.status(200).send({ setores });
+    },
+  );
+
+  app.post(
+    "/ops/saida-setor-direta",
+    {
+      preHandler: [authenticate, authorize(["setor"])],
+    },
+    async (request, reply) => {
+      const schema = z.object({
+        setor: z.string().min(1).max(100),
+        quantidade: z.coerce.number().int().positive(),
+        tipo_item: tipoItemSchema,
+        tamanho: tamanhoSchema,
+      });
+
+      const parsed = schema.safeParse(request.body);
+
+      if (!parsed.success) {
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      }
+
+      const operador = request.user?.nomeCompleto;
+
+      if (!operador) {
+        throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
+      }
+
+      const result = await sectorOperationService.registrarSaidaSetor({
+        setor: parsed.data.setor,
+        operadorNome: operador,
+        quantidade: parsed.data.quantidade,
+        tipo: parsed.data.tipo_item,
+        tamanho: parsed.data.tamanho,
+      });
+
+      app.log.info({
+        evento: "loan.setor.created_direto",
+        setor: result.setor,
+        itens: result.itens_emprestados,
+        quantidade: parsed.data.quantidade,
+        tipo_item: parsed.data.tipo_item,
+        tamanho: parsed.data.tamanho,
+        operador_nome: operador,
+      });
+
+      return reply.status(200).send(result);
+    },
+  );
+
+  app.post(
+    "/ops/devolucao-setor-direta",
+    {
+      preHandler: [authenticate, authorize(["setor"])],
+    },
+    async (request, reply) => {
+      const schema = z.object({
+        setor: z.string().min(1).max(100),
+        quantidade: z.coerce.number().int().positive(),
+        tipo_item: tipoItemSchema,
+        tamanho: tamanhoSchema,
+      });
+
+      const parsed = schema.safeParse(request.body);
+
+      if (!parsed.success) {
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      }
+
+      const operador = request.user?.nomeCompleto;
+
+      if (!operador) {
+        throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
+      }
+
+      const result = await sectorOperationService.registrarDevolucaoSetor({
+        setor: parsed.data.setor,
+        operadorNome: operador,
+        quantidade: parsed.data.quantidade,
+        tipo: parsed.data.tipo_item,
+        tamanho: parsed.data.tamanho,
+      });
+
+      app.log.info({
+        evento: "return.setor.created_direto",
+        setor: result.setor,
+        itens: result.itens_devolvidos,
+        quantidade: parsed.data.quantidade,
+        tipo_item: parsed.data.tipo_item,
+        tamanho: parsed.data.tamanho,
+        operador_nome: operador,
+      });
+
+      return reply.status(200).send(result);
+    },
+  );
+
+  app.get(
+    "/ops/pendencias-setor",
+    {
+      preHandler: [authenticate, authorize(["setor"])],
+    },
+    async (request, reply) => {
+      const query = z.object({ setor: z.string().min(1).max(100).optional() }).parse(request.query);
+      const pendencias = await sectorOperationService.listarPendenciasSetor(query.setor);
+      const totalPendente = pendencias.reduce((acc, row) => acc + row.quantidade_pendente, 0);
+
+      return reply.status(200).send({
+        setor: query.setor ?? null,
+        total_pendente: totalPendente,
+        pendencias,
+      });
     },
   );
 
@@ -599,6 +746,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         select: {
           codigo: true,
           descricao: true,
+          tipo: true,
           tamanho: true,
         },
         orderBy: { codigo: "asc" },
@@ -711,6 +859,190 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const query = buscaSugestoesSchema.parse(request.query);
       const termo = query.q.trim();
+      const escopo = query.escopo;
+
+      if (escopo === "global") {
+        const [funcionarios, kits, setores, unidades, funcoes] = await Promise.all([
+          prisma.funcionario.findMany({
+            where: {
+              OR: [
+                { matricula: { contains: termo, mode: "insensitive" } },
+                { nome: { contains: termo, mode: "insensitive" } },
+                { unidade: { contains: termo, mode: "insensitive" } },
+                { setor: { contains: termo, mode: "insensitive" } },
+                { funcao: { contains: termo, mode: "insensitive" } },
+              ],
+            },
+            select: {
+              matricula: true,
+              nome: true,
+              unidade: true,
+              setor: true,
+              funcao: true,
+              statusAtivo: true,
+              unidades: {
+                include: {
+                  unidade: {
+                    select: { nome: true },
+                  },
+                },
+                orderBy: {
+                  unidade: { nome: "asc" },
+                },
+              },
+              funcoes: {
+                include: {
+                  funcao: {
+                    select: { nome: true },
+                  },
+                },
+                orderBy: {
+                  funcao: { nome: "asc" },
+                },
+              },
+              setores: {
+                include: {
+                  setor: {
+                    select: { nome: true },
+                  },
+                },
+                orderBy: {
+                  setor: { nome: "asc" },
+                },
+              },
+            },
+            orderBy: [{ nome: "asc" }, { matricula: "asc" }],
+            take: 5,
+          }),
+          prisma.item.findMany({
+            where: {
+              OR: [
+                { codigo: { contains: termo, mode: "insensitive" } },
+                { descricao: { contains: termo, mode: "insensitive" } },
+                { tipo: { contains: termo, mode: "insensitive" } },
+                { tamanho: { contains: termo, mode: "insensitive" } },
+                { solicitanteMatricula: { contains: termo, mode: "insensitive" } },
+                { setorSolicitante: { contains: termo, mode: "insensitive" } },
+              ],
+            },
+            select: {
+              codigo: true,
+              descricao: true,
+              tipo: true,
+              tamanho: true,
+              status: true,
+              statusAtivo: true,
+              solicitanteMatricula: true,
+              setorSolicitante: true,
+            },
+            orderBy: [{ codigo: "asc" }],
+            take: 5,
+          }),
+          prisma.setor.findMany({
+            where: { nome: { contains: termo, mode: "insensitive" } },
+            select: {
+              nome: true,
+              statusAtivo: true,
+              _count: {
+                select: {
+                  unidades: true,
+                  funcionarios: true,
+                },
+              },
+            },
+            orderBy: { nome: "asc" },
+            take: 5,
+          }),
+          prisma.unidade.findMany({
+            where: { nome: { contains: termo, mode: "insensitive" } },
+            select: {
+              nome: true,
+              statusAtivo: true,
+              _count: {
+                select: {
+                  setores: true,
+                  funcionarios: true,
+                },
+              },
+            },
+            orderBy: { nome: "asc" },
+            take: 5,
+          }),
+          prisma.funcao.findMany({
+            where: { nome: { contains: termo, mode: "insensitive" } },
+            select: {
+              nome: true,
+              statusAtivo: true,
+              _count: {
+                select: {
+                  funcionarios: true,
+                },
+              },
+            },
+            orderBy: { nome: "asc" },
+            take: 5,
+          }),
+        ]);
+
+        const sugestoes = [
+          ...funcionarios.map((funcionario) => {
+            const setoresFuncionario = extrairSetoresFuncionario(
+              funcionario.setor,
+              funcionario.setores.map((item) => item.setor.nome),
+            );
+            const unidadesFuncionario = extrairUnidadesFuncionario(
+              funcionario.unidade,
+              funcionario.unidades.map((item) => item.unidade.nome),
+            );
+            const funcoesFuncionario = extrairFuncoesFuncionario(
+              funcionario.funcao,
+              funcionario.funcoes.map((item) => item.funcao.nome),
+            );
+
+            return {
+              tipo: "funcionario" as const,
+              chave: funcionario.matricula,
+              titulo: funcionario.nome,
+              subtitulo: `Funcionario | Matricula ${funcionario.matricula} | ${formatarUnidadeLabel(unidadesFuncionario)} | ${formatarSetorLabel(setoresFuncionario)} | ${formatarFuncaoLabel(funcoesFuncionario)} | ${funcionario.statusAtivo ? "Ativo" : "Inativo"}`,
+            };
+          }),
+          ...kits.map((kit) => ({
+            tipo: "kit" as const,
+            chave: kit.codigo,
+            titulo: `Kit ${kit.codigo}`,
+            subtitulo: [
+              "Kit",
+              kit.tipo,
+              formatarDescricaoItem(kit.descricao),
+              `Tam: ${kit.tamanho}`,
+              `Status: ${kit.status}`,
+              kit.solicitanteMatricula ? `Matricula atual: ${kit.solicitanteMatricula}` : "",
+              kit.setorSolicitante ? `Setor atual: ${kit.setorSolicitante}` : "",
+              kit.statusAtivo ? "" : "Inativo",
+            ].filter(Boolean).join(" | "),
+          })),
+          ...setores.map((setor) => ({
+            tipo: "setor" as const,
+            chave: setor.nome,
+            titulo: setor.nome,
+            subtitulo: `Setor | ${setor.statusAtivo ? "Ativo" : "Inativo"} | ${setor._count.unidades} unidades | ${setor._count.funcionarios} funcionarios`,
+          })),
+          ...unidades.map((unidade) => ({
+            tipo: "unidade" as const,
+            chave: unidade.nome,
+            titulo: unidade.nome,
+            subtitulo: `Unidade | ${unidade.statusAtivo ? "Ativa" : "Inativa"} | ${unidade._count.setores} setores | ${unidade._count.funcionarios} funcionarios`,
+          })),
+          ...funcoes.map((funcao) => ({
+            tipo: "funcao" as const,
+            chave: funcao.nome,
+            titulo: funcao.nome,
+            subtitulo: `Funcao | ${funcao.statusAtivo ? "Ativa" : "Inativa"} | ${funcao._count.funcionarios} funcionarios`,
+          })),
+        ];
+
+        return reply.status(200).send({ sugestoes: sugestoes.slice(0, 18) });
+      }
 
       const [funcionarios, kits] = await Promise.all([
         prisma.funcionario.findMany({
@@ -766,18 +1098,21 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
             OR: [
               { codigo: { contains: termo, mode: "insensitive" } },
               { descricao: { contains: termo, mode: "insensitive" } },
+              { tipo: { contains: termo, mode: "insensitive" } },
               { tamanho: { contains: termo, mode: "insensitive" } },
             ],
           },
-          select: {
-            codigo: true,
-            descricao: true,
-            tamanho: true,
-            status: true,
-            solicitanteMatricula: true,
-          },
-          orderBy: [{ codigo: "asc" }],
-          take: 4,
+        select: {
+          codigo: true,
+          descricao: true,
+          tipo: true,
+          tamanho: true,
+          status: true,
+          solicitanteMatricula: true,
+          setorSolicitante: true,
+        },
+        orderBy: [{ codigo: "asc" }],
+        take: 4,
         }),
       ]);
 
@@ -807,7 +1142,14 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
           tipo: "kit" as const,
           chave: kit.codigo,
           titulo: `Kit ${kit.codigo}`,
-          subtitulo: `${kit.descricao} | Tam: ${kit.tamanho} | Status: ${kit.status}${kit.solicitanteMatricula ? ` | Matricula atual: ${kit.solicitanteMatricula}` : ""}`,
+          subtitulo: [
+            kit.tipo,
+            formatarDescricaoItem(kit.descricao),
+            `Tam: ${kit.tamanho}`,
+            `Status: ${kit.status}`,
+            kit.solicitanteMatricula ? `Matricula atual: ${kit.solicitanteMatricula}` : "",
+            kit.setorSolicitante ? `Setor atual: ${kit.setorSolicitante}` : "",
+          ].filter(Boolean).join(" | "),
         })),
       ];
 
@@ -823,6 +1165,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const query = buscaGlobalSchema.parse(request.query);
       const termo = query.q.trim();
+      const modo = query.modo;
 
       const kit = await prisma.item.findFirst({
         where: {
@@ -834,10 +1177,12 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         select: {
           codigo: true,
           descricao: true,
+          tipo: true,
           tamanho: true,
           status: true,
           statusAtivo: true,
           solicitanteMatricula: true,
+          setorSolicitante: true,
           dataEmprestimo: true,
         },
       });
@@ -876,10 +1221,12 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
           kit: {
             codigo: kit.codigo,
             descricao: kit.descricao,
+            tipo: kit.tipo,
             tamanho: kit.tamanho,
             status: kit.status,
             status_ativo: kit.statusAtivo,
             solicitante_matricula: kit.solicitanteMatricula,
+            setor_solicitante: kit.setorSolicitante,
             data_emprestimo: kit.dataEmprestimo,
           },
           historico: {
@@ -903,7 +1250,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
 
       const funcionarios = await prisma.funcionario.findMany({
         where: {
-          statusAtivo: true,
+          ...(modo === "operacao" ? { statusAtivo: true } : {}),
           OR: [
             {
               matricula: {
@@ -917,6 +1264,28 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
                 mode: "insensitive",
               },
             },
+            ...(modo === "global"
+              ? [
+                  {
+                    unidade: {
+                      contains: termo,
+                      mode: "insensitive" as const,
+                    },
+                  },
+                  {
+                    setor: {
+                      contains: termo,
+                      mode: "insensitive" as const,
+                    },
+                  },
+                  {
+                    funcao: {
+                      contains: termo,
+                      mode: "insensitive" as const,
+                    },
+                  },
+                ]
+              : []),
           ],
         },
         select: {
@@ -958,8 +1327,175 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
           },
         },
         orderBy: [{ nome: "asc" }, { matricula: "asc" }],
-        take: 8,
+        take: modo === "global" ? 10 : 8,
       });
+
+      const funcionarioExato = funcionarios.find(
+        (funcionario) => funcionario.matricula.toLowerCase() === termo.toLowerCase(),
+      );
+
+      if (modo === "global" && !funcionarioExato) {
+        const [kits, setores, unidades, funcoes] = await Promise.all([
+          prisma.item.findMany({
+            where: {
+              OR: [
+                { codigo: { contains: termo, mode: "insensitive" } },
+                { descricao: { contains: termo, mode: "insensitive" } },
+                { tipo: { contains: termo, mode: "insensitive" } },
+                { tamanho: { contains: termo, mode: "insensitive" } },
+                { solicitanteMatricula: { contains: termo, mode: "insensitive" } },
+                { setorSolicitante: { contains: termo, mode: "insensitive" } },
+              ],
+            },
+            select: {
+              codigo: true,
+              descricao: true,
+              tipo: true,
+              tamanho: true,
+              status: true,
+              statusAtivo: true,
+              solicitanteMatricula: true,
+              setorSolicitante: true,
+            },
+            orderBy: { codigo: "asc" },
+            take: 10,
+          }),
+          prisma.setor.findMany({
+            where: { nome: { contains: termo, mode: "insensitive" } },
+            select: {
+              id: true,
+              nome: true,
+              statusAtivo: true,
+              _count: {
+                select: {
+                  unidades: true,
+                  funcionarios: true,
+                },
+              },
+            },
+            orderBy: { nome: "asc" },
+            take: 10,
+          }),
+          prisma.unidade.findMany({
+            where: { nome: { contains: termo, mode: "insensitive" } },
+            select: {
+              id: true,
+              nome: true,
+              statusAtivo: true,
+              _count: {
+                select: {
+                  setores: true,
+                  funcionarios: true,
+                },
+              },
+            },
+            orderBy: { nome: "asc" },
+            take: 10,
+          }),
+          prisma.funcao.findMany({
+            where: { nome: { contains: termo, mode: "insensitive" } },
+            select: {
+              id: true,
+              nome: true,
+              statusAtivo: true,
+              _count: {
+                select: {
+                  funcionarios: true,
+                },
+              },
+            },
+            orderBy: { nome: "asc" },
+            take: 10,
+          }),
+        ]);
+
+        const funcionariosResumo = funcionarios.map((funcionario) => {
+          const setoresFuncionario = extrairSetoresFuncionario(
+            funcionario.setor,
+            funcionario.setores.map((item) => item.setor.nome),
+          );
+          const unidadesFuncionario = extrairUnidadesFuncionario(
+            funcionario.unidade,
+            funcionario.unidades.map((item) => item.unidade.nome),
+          );
+          const funcoesFuncionario = extrairFuncoesFuncionario(
+            funcionario.funcao,
+            funcionario.funcoes.map((item) => item.funcao.nome),
+          );
+
+          return {
+            matricula: funcionario.matricula,
+            nome: funcionario.nome,
+            unidade: formatarUnidadeLabel(unidadesFuncionario),
+            unidades: unidadesFuncionario,
+            setor: formatarSetorLabel(setoresFuncionario),
+            setores: setoresFuncionario,
+            funcao: funcionario.funcao,
+            funcoes: funcoesFuncionario,
+            status_ativo: funcionario.statusAtivo,
+          };
+        });
+
+        const kitsResumo = kits.map((item) => ({
+          codigo: item.codigo,
+          descricao: item.descricao,
+          tipo: item.tipo,
+          tamanho: item.tamanho,
+          status: item.status,
+          status_ativo: item.statusAtivo,
+          solicitante_matricula: item.solicitanteMatricula,
+          setor_solicitante: item.setorSolicitante,
+        }));
+
+        const setoresResumo = setores.map((setor) => ({
+          id: setor.id,
+          nome: setor.nome,
+          status_ativo: setor.statusAtivo,
+          total_unidades: setor._count.unidades,
+          total_funcionarios: setor._count.funcionarios,
+        }));
+
+        const unidadesResumo = unidades.map((unidade) => ({
+          id: unidade.id,
+          nome: unidade.nome,
+          status_ativo: unidade.statusAtivo,
+          total_setores: unidade._count.setores,
+          total_funcionarios: unidade._count.funcionarios,
+        }));
+
+        const funcoesResumo = funcoes.map((funcao) => ({
+          id: funcao.id,
+          nome: funcao.nome,
+          status_ativo: funcao.statusAtivo,
+          total_funcionarios: funcao._count.funcionarios,
+        }));
+
+        const totalResultados =
+          funcionariosResumo.length +
+          kitsResumo.length +
+          setoresResumo.length +
+          unidadesResumo.length +
+          funcoesResumo.length;
+
+        if (totalResultados === 0) {
+          return reply.status(200).send({
+            tipo: "nao_encontrado",
+            consulta: termo,
+          });
+        }
+
+        return reply.status(200).send({
+          tipo: "resultados_globais",
+          consulta: termo,
+          resultados: {
+            funcionarios: funcionariosResumo,
+            kits: kitsResumo,
+            setores: setoresResumo,
+            unidades: unidadesResumo,
+            funcoes: funcoesResumo,
+          },
+        });
+      }
 
       if (funcionarios.length === 0) {
         return reply.status(200).send({
@@ -967,10 +1503,6 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
           consulta: termo,
         });
       }
-
-      const funcionarioExato = funcionarios.find(
-        (funcionario) => funcionario.matricula.toLowerCase() === termo.toLowerCase(),
-      );
 
       if (!funcionarioExato && funcionarios.length > 1) {
         return reply.status(200).send({
@@ -1028,6 +1560,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
           select: {
             codigo: true,
             descricao: true,
+            tipo: true,
             tamanho: true,
             dataEmprestimo: true,
           },
@@ -1076,6 +1609,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         itens_emprestados: itensEmprestados.map((item) => ({
           codigo: item.codigo,
           descricao: item.descricao,
+          tipo: item.tipo,
           tamanho: item.tamanho,
           data_emprestimo: item.dataEmprestimo,
         })),

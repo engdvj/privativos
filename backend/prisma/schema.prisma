@@ -48,6 +48,7 @@ model Setor {
   atualizadoPor String?  @map("atualizado_por") @db.VarChar(150)
   atualizadoEm DateTime? @map("atualizado_em") @db.Timestamptz(6)
 
+  unidades    SetorUnidade[]
   funcionarios FuncionarioSetor[]
 
   @@map("setores")
@@ -61,9 +62,25 @@ model Unidade {
   atualizadoPor String?  @map("atualizado_por") @db.VarChar(150)
   atualizadoEm DateTime? @map("atualizado_em") @db.Timestamptz(6)
 
+  setores      SetorUnidade[]
   funcionarios FuncionarioUnidade[]
 
   @@map("unidades")
+}
+
+model SetorUnidade {
+  id        Int      @id @default(autoincrement())
+  setorId   Int      @map("setor_id")
+  unidadeId Int      @map("unidade_id")
+  criadoEm  DateTime @default(now()) @map("criado_em") @db.Timestamptz(6)
+
+  setor   Setor   @relation(fields: [setorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  unidade Unidade @relation(fields: [unidadeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([setorId, unidadeId], map: "setor_unidades_setor_id_unidade_id_key")
+  @@index([setorId], map: "idx_setor_unidades_setor")
+  @@index([unidadeId], map: "idx_setor_unidades_unidade")
+  @@map("setor_unidades")
 }
 
 model FuncionarioSetor {
@@ -127,10 +144,12 @@ model FuncionarioFuncao {
 model Item {
   id                   Int       @id @default(autoincrement())
   codigo               String    @unique @db.VarChar(50)
-  descricao            String    @db.VarChar(200)
+  descricao            String?   @db.VarChar(200)
+  tipo                 String    @default("Sem tipo") @db.VarChar(100)
   tamanho              String    @default("UNICO") @db.VarChar(20)
   status               StatusItem
   solicitanteMatricula String?   @map("solicitante_matricula") @db.VarChar(20)
+  setorSolicitante     String?   @map("setor_solicitante") @db.VarChar(100)
   dataEmprestimo       DateTime? @map("data_emprestimo") @db.Timestamptz(6)
   statusAtivo          Boolean   @default(true) @map("status_ativo")
   criadoEm             DateTime  @default(now()) @map("criado_em") @db.Timestamptz(6)
@@ -141,6 +160,8 @@ model Item {
 
   @@index([status], map: "idx_itens_status")
   @@index([solicitanteMatricula], map: "idx_itens_solicitante")
+  @@index([setorSolicitante], map: "idx_itens_setor_solicitante")
+  @@index([tipo, tamanho, status, statusAtivo], map: "idx_itens_tipo_tamanho_status_ativo")
   @@map("itens")
 }
 
@@ -151,9 +172,13 @@ model Solicitacao {
   nomeFuncionario String  @map("nome_funcionario") @db.VarChar(150)
   itemCodigo     String   @map("item_codigo") @db.VarChar(50)
   operadorNome   String   @map("operador_nome") @db.VarChar(150)
+  origemOperacao String   @default("colaborador") @map("origem_operacao") @db.VarChar(20)
+  setorSolicitante String? @map("setor_solicitante") @db.VarChar(100)
 
   @@index([matricula], map: "idx_solicitacoes_matricula")
   @@index([timestamp], map: "idx_solicitacoes_timestamp")
+  @@index([origemOperacao], map: "idx_solicitacoes_origem_operacao")
+  @@index([setorSolicitante], map: "idx_solicitacoes_setor_solicitante")
   @@map("solicitacoes")
 }
 
@@ -164,9 +189,13 @@ model Devolucao {
   nomeFuncionario String  @map("nome_funcionario") @db.VarChar(150)
   itemCodigo     String   @map("item_codigo") @db.VarChar(50)
   operadorNome   String   @map("operador_nome") @db.VarChar(150)
+  origemOperacao String   @default("colaborador") @map("origem_operacao") @db.VarChar(20)
+  setorSolicitante String? @map("setor_solicitante") @db.VarChar(100)
 
   @@index([matricula], map: "idx_devolucoes_matricula")
   @@index([timestamp], map: "idx_devolucoes_timestamp")
+  @@index([origemOperacao], map: "idx_devolucoes_origem_operacao")
+  @@index([setorSolicitante], map: "idx_devolucoes_setor_solicitante")
   @@map("devolucoes")
 }
 

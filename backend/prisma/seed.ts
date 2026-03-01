@@ -49,7 +49,22 @@ async function main() {
     },
   });
 
-  await prisma.setor.upsert({
+  const unidadePadrao = await prisma.unidade.upsert({
+    where: { nome: "Unidade Geral" },
+    update: {
+      statusAtivo: true,
+      atualizadoPor: "sistema",
+      atualizadoEm: new Date(),
+    },
+    create: {
+      nome: "Unidade Geral",
+      statusAtivo: true,
+      atualizadoPor: "sistema",
+      atualizadoEm: new Date(),
+    },
+  });
+
+  const setorPadrao = await prisma.setor.upsert({
     where: { nome: "Almoxarifado" },
     update: {
       statusAtivo: true,
@@ -61,6 +76,20 @@ async function main() {
       statusAtivo: true,
       atualizadoPor: "sistema",
       atualizadoEm: new Date(),
+    },
+  });
+
+  await prisma.setorUnidade.upsert({
+    where: {
+      setorId_unidadeId: {
+        setorId: setorPadrao.id,
+        unidadeId: unidadePadrao.id,
+      },
+    },
+    update: {},
+    create: {
+      setorId: setorPadrao.id,
+      unidadeId: unidadePadrao.id,
     },
   });
 

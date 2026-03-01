@@ -33,6 +33,7 @@ type BackupCredencial = {
 type BackupSetor = {
   nome: string;
   statusAtivo: boolean;
+  unidades?: string[];
   criadoEm: string | Date;
   atualizadoPor?: string | null;
   atualizadoEm?: string | Date | null;
@@ -70,10 +71,12 @@ type FuncionarioComSetores = {
 
 type BackupItem = {
   codigo: string;
-  descricao: string;
+  descricao?: string | null;
+  tipo?: string;
   tamanho: string;
   status: "disponivel" | "emprestado" | "inativo";
   solicitanteMatricula?: string | null;
+  setorSolicitante?: string | null;
   dataEmprestimo?: string | Date | null;
   statusAtivo: boolean;
   criadoEm: string | Date;
@@ -87,6 +90,8 @@ type BackupSolicitacao = {
   nomeFuncionario: string;
   itemCodigo: string;
   operadorNome: string;
+  origemOperacao?: "colaborador" | "setor";
+  setorSolicitante?: string | null;
 };
 
 type BackupDevolucao = BackupSolicitacao;
@@ -165,6 +170,17 @@ export class AdminService {
       throw new AppError(404, "UNIDADE_NOT_FOUND", "Unidade nao encontrada");
     }
 
+    if (input.statusAtivo === false && before.statusAtivo) {
+      const setoresSemAlternativa = await this.setoresSemUnidadeAtivaAlternativa(id);
+      if (setoresSemAlternativa.length > 0) {
+        throw new AppError(
+          409,
+          "UNIDADE_SETOR_CONFLITO",
+          `Unidade nao pode ser inativada porque deixaria setores sem unidade ativa (${setoresSemAlternativa.slice(0, 10).join(", ")})`,
+        );
+      }
+    }
+
     const now = new Date();
     const updated = await prisma.unidade.update({
       where: { id },
@@ -217,6 +233,15 @@ export class AdminService {
       );
     }
 
+    const setoresSemAlternativa = await this.setoresSemUnidadeAtivaAlternativa(id);
+    if (setoresSemAlternativa.length > 0) {
+      throw new AppError(
+        409,
+        "UNIDADE_SETOR_CONFLITO",
+        `Unidade nao pode ser apagada porque deixaria setores sem unidade ativa (${setoresSemAlternativa.slice(0, 10).join(", ")})`,
+      );
+    }
+
     await prisma.unidade.delete({ where: { id } });
 
     await this.audit({
@@ -234,6 +259,16 @@ export class AdminService {
       where: includeInactive ? undefined : { statusAtivo: true },
       orderBy: [{ nome: "asc" }],
       include: {
+        unidades: {
+          include: {
+            unidade: {
+              select: { nome: true },
+            },
+          },
+          orderBy: {
+            unidade: { nome: "asc" },
+          },
+        },
         _count: {
           select: {
             funcionarios: true,
@@ -242,20 +277,74 @@ export class AdminService {
       },
     });
 
-    return rows.map(({ _count, ...row }) => ({
+    return rows.map(({ _count, unidades, ...row }) => ({
       ...row,
+      unidades: unidades.map((item) => item.unidade.nome),
       totalFuncionarios: _count.funcionarios,
     }));
   }
 
-  async createSetor(input: { nome: string; operador: string }) {
-    const created = await prisma.setor.create({
-      data: {
-        nome: input.nome,
+  async createSetor(input: { nome: string; unidades?: string[]; operador: string }) {
+    const unidadesSolicitadas = this.normalizarListaNomes(input.unidades ?? []);
+    const unidadesAtivas = await prisma.unidade.findMany({
+      where: {
         statusAtivo: true,
-        atualizadoPor: input.operador,
-        atualizadoEm: new Date(),
+        ...(unidadesSolicitadas.length > 0 ? { nome: { in: unidadesSolicitadas } } : {}),
       },
+      select: {
+        id: true,
+        nome: true,
+      },
+      orderBy: {
+        nome: "asc",
+      },
+    });
+
+    if (unidadesSolicitadas.length > 0) {
+      this.validarUnidadesAtivas(unidadesSolicitadas, unidadesAtivas.map((row) => row.nome));
+    }
+
+    if (unidadesAtivas.length === 0) {
+      throw new AppError(
+        400,
+        "UNIDADE_INVALIDA",
+        "Setor precisa estar vinculado a pelo menos uma unidade ativa",
+      );
+    }
+
+    const created = await prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const setor = await tx.setor.create({
+        data: {
+          nome: input.nome,
+          statusAtivo: true,
+          atualizadoPor: input.operador,
+          atualizadoEm: now,
+        },
+      });
+
+      await tx.setorUnidade.createMany({
+        data: unidadesAtivas.map((unidade) => ({
+          setorId: setor.id,
+          unidadeId: unidade.id,
+        })),
+      });
+
+      return tx.setor.findUniqueOrThrow({
+        where: { id: setor.id },
+        include: {
+          unidades: {
+            include: {
+              unidade: {
+                select: { nome: true },
+              },
+            },
+            orderBy: {
+              unidade: { nome: "asc" },
+            },
+          },
+        },
+      });
     });
 
     await this.audit({
@@ -264,53 +353,180 @@ export class AdminService {
       operacao: "INSERT",
       registroId: String(created.id),
       dadosAntes: null,
-      dadosDepois: created,
+      dadosDepois: {
+        ...created,
+        unidades: created.unidades.map((item) => item.unidade.nome),
+      },
     });
 
-    return created;
+    return {
+      ...created,
+      unidades: created.unidades.map((item) => item.unidade.nome),
+    };
   }
 
   async updateSetor(
     id: number,
-    input: { nome?: string; statusAtivo?: boolean; operador: string },
+    input: { nome?: string; unidades?: string[]; statusAtivo?: boolean; operador: string },
   ) {
-    const before = await prisma.setor.findUnique({ where: { id } });
+    const before = await prisma.setor.findUnique({
+      where: { id },
+      include: {
+        unidades: {
+          include: {
+            unidade: {
+              select: { nome: true },
+            },
+          },
+          orderBy: {
+            unidade: { nome: "asc" },
+          },
+        },
+      },
+    });
     if (!before) {
       throw new AppError(404, "SETOR_NOT_FOUND", "Setor nao encontrado");
     }
 
-    const now = new Date();
-    const updated = await prisma.setor.update({
-      where: { id },
-      data: {
-        nome: input.nome,
-        statusAtivo: input.statusAtivo,
-        atualizadoPor: input.operador,
-        atualizadoEm: now,
-      },
-    });
+    const atualizarUnidades = input.unidades !== undefined;
+    const unidadesSolicitadas = this.normalizarListaNomes(input.unidades ?? []);
+    const unidadesAtivas = atualizarUnidades
+      ? await prisma.unidade.findMany({
+          where: {
+            statusAtivo: true,
+            nome: { in: unidadesSolicitadas },
+          },
+          select: {
+            id: true,
+            nome: true,
+          },
+        })
+      : [];
 
-    if (input.nome && input.nome !== before.nome) {
-      await prisma.funcionario.updateMany({
-        where: { setor: before.nome },
+    if (atualizarUnidades && unidadesSolicitadas.length === 0) {
+      throw new AppError(
+        400,
+        "UNIDADE_INVALIDA",
+        "Setor precisa estar vinculado a pelo menos uma unidade ativa",
+      );
+    }
+
+    if (atualizarUnidades) {
+      this.validarUnidadesAtivas(unidadesSolicitadas, unidadesAtivas.map((row) => row.nome));
+    }
+
+    if (atualizarUnidades) {
+      const unidadesPermitidas = new Set(unidadesSolicitadas);
+      const funcionariosVinculados = await prisma.funcionarioSetor.findMany({
+        where: { setorId: id },
+        select: {
+          funcionarioMatricula: true,
+          funcionario: {
+            select: {
+              unidade: true,
+              unidades: {
+                include: {
+                  unidade: {
+                    select: { nome: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const conflitos = funcionariosVinculados
+        .filter((row) => {
+          const unidadesFuncionario = this.normalizarUnidades(
+            row.funcionario.unidades.map((item) => item.unidade.nome),
+            row.funcionario.unidade,
+          );
+          return !unidadesFuncionario.some((nome) => unidadesPermitidas.has(nome));
+        })
+        .map((row) => row.funcionarioMatricula);
+
+      if (conflitos.length > 0) {
+        throw new AppError(
+          409,
+          "SETOR_UNIDADE_CONFLITO",
+          `Setor nao pode perder vinculo com as unidades atuais dos funcionarios (${conflitos.slice(0, 10).join(", ")})`,
+        );
+      }
+    }
+
+    const now = new Date();
+    const updated = await prisma.$transaction(async (tx) => {
+      const setor = await tx.setor.update({
+        where: { id },
         data: {
-          setor: input.nome,
+          nome: input.nome,
+          statusAtivo: input.statusAtivo,
           atualizadoPor: input.operador,
           atualizadoEm: now,
         },
       });
-    }
+
+      if (input.nome && input.nome !== before.nome) {
+        await tx.funcionario.updateMany({
+          where: { setor: before.nome },
+          data: {
+            setor: input.nome,
+            atualizadoPor: input.operador,
+            atualizadoEm: now,
+          },
+        });
+      }
+
+      if (atualizarUnidades) {
+        await tx.setorUnidade.deleteMany({
+          where: { setorId: id },
+        });
+
+        await tx.setorUnidade.createMany({
+          data: unidadesAtivas.map((unidade) => ({
+            setorId: id,
+            unidadeId: unidade.id,
+          })),
+        });
+      }
+
+      return tx.setor.findUniqueOrThrow({
+        where: { id: setor.id },
+        include: {
+          unidades: {
+            include: {
+              unidade: {
+                select: { nome: true },
+              },
+            },
+            orderBy: {
+              unidade: { nome: "asc" },
+            },
+          },
+        },
+      });
+    });
+
+    const beforeAuditoria = {
+      ...before,
+      unidades: before.unidades.map((item) => item.unidade.nome),
+    };
+    const afterAuditoria = {
+      ...updated,
+      unidades: updated.unidades.map((item) => item.unidade.nome),
+    };
 
     await this.audit({
       operador: input.operador,
       entidade: "setores",
       operacao: "UPDATE",
       registroId: String(id),
-      dadosAntes: before,
-      dadosDepois: updated,
+      dadosAntes: beforeAuditoria,
+      dadosDepois: afterAuditoria,
     });
 
-    return updated;
+    return afterAuditoria;
   }
 
   async deleteSetor(id: number, operador: string) {
@@ -683,6 +899,13 @@ export class AdminService {
         select: {
           id: true,
           nome: true,
+          unidades: {
+            include: {
+              unidade: {
+                select: { nome: true },
+              },
+            },
+          },
         },
       }),
       prisma.funcao.findMany({
@@ -722,6 +945,16 @@ export class AdminService {
     this.validarUnidadesAtivas(unidadesNormalizadas, unidadesAtivas.map((row) => row.nome));
     this.validarSetoresAtivos(setoresNormalizados, setoresAtivos.map((row) => row.nome));
     this.validarFuncoesAtivas(funcoesNormalizadas, funcoesAtivas.map((row) => row.nome));
+    this.validarSetoresCompativeisComUnidades({
+      setoresSolicitados: setoresNormalizados,
+      unidadesSolicitadas: unidadesNormalizadas,
+      setorPrincipal: setoresNormalizados[0],
+      unidadePrincipal: unidadesNormalizadas[0],
+      setoresDisponiveis: setoresAtivos.map((setor) => ({
+        nome: setor.nome,
+        unidades: setor.unidades.map((item) => item.unidade.nome),
+      })),
+    });
 
     if (funcionarioComMatricula) {
       throw new AppError(409, "MATRICULA_DUPLICADA", "Ja existe funcionario com esta matricula");
@@ -922,6 +1155,13 @@ export class AdminService {
             select: {
               id: true,
               nome: true,
+              unidades: {
+                include: {
+                  unidade: {
+                    select: { nome: true },
+                  },
+                },
+              },
             },
           })
         : Promise.resolve([]),
@@ -965,6 +1205,56 @@ export class AdminService {
 
     if (atualizarFuncoes) {
       this.validarFuncoesAtivas(funcoesNormalizadas, funcoesAtivas.map((row) => row.nome));
+    }
+
+    const setoresAtuaisFuncionario = this.normalizarSetores(
+      before.setores.map((item) => item.setor.nome),
+      before.setor,
+    );
+    const setoresParaCompatibilidade = atualizarSetores
+      ? setoresAtivos.map((setor) => ({
+          nome: setor.nome,
+          unidades: setor.unidades.map((item) => item.unidade.nome),
+        }))
+      : atualizarUnidades
+        ? (
+            await prisma.setor.findMany({
+              where: {
+                nome: { in: setoresAtuaisFuncionario },
+              },
+              select: {
+                nome: true,
+                unidades: {
+                  include: {
+                    unidade: {
+                      select: { nome: true },
+                    },
+                  },
+                },
+              },
+            })
+          ).map((setor) => ({
+            nome: setor.nome,
+            unidades: setor.unidades.map((item) => item.unidade.nome),
+          }))
+        : [];
+
+    if (atualizarUnidades || atualizarSetores) {
+      const unidadesReferencia = atualizarUnidades
+        ? unidadesNormalizadas
+        : this.normalizarUnidades(
+            before.unidades.map((item) => item.unidade.nome),
+            before.unidade,
+          );
+      const setoresReferencia = atualizarSetores ? setoresNormalizados : setoresAtuaisFuncionario;
+
+      this.validarSetoresCompativeisComUnidades({
+        setoresSolicitados: setoresReferencia,
+        unidadesSolicitadas: unidadesReferencia,
+        setorPrincipal: setoresReferencia[0],
+        unidadePrincipal: unidadesReferencia[0],
+        setoresDisponiveis: setoresParaCompatibilidade,
+      });
     }
 
     if (funcionarioComMesmoNome) {
@@ -1125,7 +1415,8 @@ export class AdminService {
 
   async createItem(input: {
     codigo: string;
-    descricao: string;
+    descricao?: string | null;
+    tipo: string;
     tamanho: string;
     status?: StatusItem;
     operador: string;
@@ -1133,7 +1424,8 @@ export class AdminService {
     const created = await prisma.item.create({
       data: {
         codigo: input.codigo,
-        descricao: input.descricao,
+        descricao: input.descricao ?? null,
+        tipo: input.tipo,
         tamanho: input.tamanho,
         status: input.status ?? "disponivel",
         statusAtivo: true,
@@ -1158,7 +1450,9 @@ export class AdminService {
   async updateItem(
     codigo: string,
     input: {
-      descricao?: string;
+      codigo?: string;
+      descricao?: string | null;
+      tipo?: string;
       tamanho?: string;
       status?: StatusItem;
       statusAtivo?: boolean;
@@ -1183,25 +1477,58 @@ export class AdminService {
       throw new AppError(409, "ITEM_EMPRESTADO", `Item emprestado para ${detalhes}`);
     }
 
+    const novoCodigo = input.codigo?.trim();
+    const codigoAtualizado = novoCodigo && novoCodigo !== before.codigo ? novoCodigo : undefined;
+
+    if (codigoAtualizado) {
+      const conflito = await prisma.item.findUnique({
+        where: { codigo: codigoAtualizado },
+        select: { codigo: true },
+      });
+
+      if (conflito) {
+        throw new AppError(409, "ITEM_CODE_ALREADY_EXISTS", "Codigo do item ja cadastrado");
+      }
+    }
+
     const shouldForceInactive = input.statusAtivo === false;
 
-    const updated = await prisma.item.update({
-      where: { codigo },
-      data: {
-        descricao: input.descricao,
-        tamanho: input.tamanho,
-        status: shouldForceInactive ? "inativo" : input.status,
-        statusAtivo: input.statusAtivo,
-        atualizadoPor: input.operador,
-        atualizadoEm: new Date(),
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const itemAtualizado = await tx.item.update({
+        where: { codigo },
+        data: {
+          codigo: codigoAtualizado,
+          descricao: input.descricao,
+          tipo: input.tipo,
+          tamanho: input.tamanho,
+          status: shouldForceInactive ? "inativo" : input.status,
+          statusAtivo: input.statusAtivo,
+          atualizadoPor: input.operador,
+          atualizadoEm: new Date(),
+        },
+      });
+
+      if (codigoAtualizado) {
+        await Promise.all([
+          tx.solicitacao.updateMany({
+            where: { itemCodigo: codigo },
+            data: { itemCodigo: codigoAtualizado },
+          }),
+          tx.devolucao.updateMany({
+            where: { itemCodigo: codigo },
+            data: { itemCodigo: codigoAtualizado },
+          }),
+        ]);
+      }
+
+      return itemAtualizado;
     });
 
     await this.audit({
       operador: input.operador,
       entidade: "itens",
       operacao: "UPDATE",
-      registroId: codigo,
+      registroId: codigoAtualizado ?? codigo,
       dadosAntes: before,
       dadosDepois: updated,
     });
@@ -1515,6 +1842,16 @@ export class AdminService {
           criadoEm: true,
           atualizadoPor: true,
           atualizadoEm: true,
+          unidades: {
+            include: {
+              unidade: {
+                select: { nome: true },
+              },
+            },
+            orderBy: {
+              unidade: { nome: "asc" },
+            },
+          },
         },
       }),
       prisma.funcao.findMany({
@@ -1576,9 +1913,11 @@ export class AdminService {
         select: {
           codigo: true,
           descricao: true,
+          tipo: true,
           tamanho: true,
           status: true,
           solicitanteMatricula: true,
+          setorSolicitante: true,
           dataEmprestimo: true,
           statusAtivo: true,
           criadoEm: true,
@@ -1594,6 +1933,8 @@ export class AdminService {
           nomeFuncionario: true,
           itemCodigo: true,
           operadorNome: true,
+          origemOperacao: true,
+          setorSolicitante: true,
         },
       }),
       prisma.devolucao.findMany({
@@ -1604,6 +1945,8 @@ export class AdminService {
           nomeFuncionario: true,
           itemCodigo: true,
           operadorNome: true,
+          origemOperacao: true,
+          setorSolicitante: true,
         },
       }),
       prisma.auditoria.findMany({
@@ -1645,6 +1988,16 @@ export class AdminService {
         atualizadoEm: row.atualizadoEm,
       };
     });
+    const setoresBackup = setores.map((row) => ({
+      nome: row.nome,
+      statusAtivo: row.statusAtivo,
+      unidades: row.unidades
+        .map((item) => item.unidade.nome)
+        .filter(Boolean),
+      criadoEm: row.criadoEm,
+      atualizadoPor: row.atualizadoPor,
+      atualizadoEm: row.atualizadoEm,
+    }));
 
     return {
       versao_formato: BACKUP_FORMAT_VERSION,
@@ -1654,7 +2007,7 @@ export class AdminService {
         configuracoes,
         credenciais,
         unidades,
-        setores,
+        setores: setoresBackup,
         funcoes,
         funcionarios: funcionariosBackup,
         itens,
@@ -1672,6 +2025,13 @@ export class AdminService {
     operador: string;
   }) {
     const alvos = input.alvos && input.alvos.length > 0 ? [...new Set(input.alvos)] : [...RESET_DB_TARGETS];
+    if (alvos.includes("unidades") && !alvos.includes("setores")) {
+      throw new AppError(
+        400,
+        "INVALID_PAYLOAD",
+        "Reset de unidades exige reset de setores para manter o vinculo setor-unidade consistente",
+      );
+    }
     const contagens = this.criarContadoresReset();
     const now = new Date();
     const preservarUsuarioAtual = input.preservarUsuarioAtual !== false && Boolean(input.usuarioAtual);
@@ -1916,13 +2276,77 @@ export class AdminService {
         });
       }
 
+      const [setoresDisponiveisParaVinculo, unidadesDisponiveisParaVinculo] = await Promise.all([
+        tx.setor.findMany({
+          select: { id: true, nome: true },
+        }),
+        tx.unidade.findMany({
+          select: { id: true, nome: true },
+        }),
+      ]);
+
+      if (setoresDisponiveisParaVinculo.length > 0) {
+        if (unidadesDisponiveisParaVinculo.length === 0) {
+          throw new AppError(
+            400,
+            "INVALID_PAYLOAD",
+            "Backup invalido: setores cadastrados sem unidades disponiveis",
+          );
+        }
+
+        const setorIdByNome = new Map(setoresDisponiveisParaVinculo.map((row) => [row.nome, row.id]));
+        const unidadeIdByNome = new Map(unidadesDisponiveisParaVinculo.map((row) => [row.nome, row.id]));
+        const unidadesFallback = unidadesDisponiveisParaVinculo.map((row) => row.nome);
+
+        const setorUnidadesData = input.backup.dados.setores.flatMap((row) => {
+          const setorId = setorIdByNome.get(row.nome);
+          if (!setorId) {
+            return [];
+          }
+
+          const unidadesSetor = this.normalizarListaNomes(row.unidades ?? []);
+          const unidadesVinculadas = unidadesSetor.length > 0 ? unidadesSetor : unidadesFallback;
+          const unidadesInvalidas = unidadesVinculadas.filter((nome) => !unidadeIdByNome.has(nome));
+
+          if (unidadesInvalidas.length > 0) {
+            throw new AppError(
+              400,
+              "INVALID_PAYLOAD",
+              `Backup invalido: setor ${row.nome} referencia unidades inexistentes (${unidadesInvalidas.slice(0, 10).join(", ")})`,
+            );
+          }
+
+          return unidadesVinculadas.map((unidadeNome) => ({
+            setorId,
+            unidadeId: unidadeIdByNome.get(unidadeNome)!,
+          }));
+        });
+
+        if (setorUnidadesData.length > 0) {
+          await tx.setorUnidade.createMany({
+            data: setorUnidadesData,
+            skipDuplicates: true,
+          });
+        }
+      }
+
       if (input.backup.dados.funcionarios.length > 0) {
         const [unidadesDisponiveis, setoresDisponiveis, funcoesDisponiveis] = await Promise.all([
           tx.unidade.findMany({
             select: { id: true, nome: true },
           }),
           tx.setor.findMany({
-            select: { id: true, nome: true },
+            select: {
+              id: true,
+              nome: true,
+              unidades: {
+                include: {
+                  unidade: {
+                    select: { nome: true },
+                  },
+                },
+              },
+            },
           }),
           tx.funcao.findMany({
             select: { id: true, nome: true },
@@ -1930,6 +2354,12 @@ export class AdminService {
         ]);
         const unidadeIdByNome = new Map(unidadesDisponiveis.map((row) => [row.nome, row.id]));
         const setorIdByNome = new Map(setoresDisponiveis.map((row) => [row.nome, row.id]));
+        const setorUnidadesByNome = new Map(
+          setoresDisponiveis.map((row) => [
+            row.nome,
+            new Set(row.unidades.map((item) => item.unidade.nome)),
+          ]),
+        );
         const funcaoIdByNome = new Map(funcoesDisponiveis.map((row) => [row.nome, row.id]));
 
         const funcionariosNormalizados = input.backup.dados.funcionarios.map((row) => {
@@ -2015,6 +2445,43 @@ export class AdminService {
           );
         }
 
+        const setoresIncompativeis = [...new Set(
+          funcionariosNormalizados.flatMap((item) =>
+            item.setores.filter((setorNome) => {
+              const unidadesSetor = setorUnidadesByNome.get(setorNome);
+              if (!unidadesSetor || unidadesSetor.size === 0) {
+                return true;
+              }
+              return !item.unidades.some((unidadeNome) => unidadesSetor.has(unidadeNome));
+            }),
+          ),
+        )];
+
+        if (setoresIncompativeis.length > 0) {
+          throw new AppError(
+            400,
+            "INVALID_PAYLOAD",
+            `Backup invalido: setores sem vinculacao com unidades dos funcionarios (${setoresIncompativeis.slice(0, 10).join(", ")})`,
+          );
+        }
+
+        const principaisIncompativeis = funcionariosNormalizados
+          .filter((item) => {
+            const setorPrincipal = item.setores[0];
+            const unidadePrincipal = item.unidades[0];
+            const unidadesSetor = setorUnidadesByNome.get(setorPrincipal);
+            return !unidadesSetor || !unidadesSetor.has(unidadePrincipal);
+          })
+          .map((item) => item.row.matricula);
+
+        if (principaisIncompativeis.length > 0) {
+          throw new AppError(
+            400,
+            "INVALID_PAYLOAD",
+            `Backup invalido: setor principal sem vinculacao com unidade principal (${principaisIncompativeis.slice(0, 10).join(", ")})`,
+          );
+        }
+
         await tx.funcionario.createMany({
           data: funcionariosNormalizados.map(({ row, unidades, setores, funcoes }) => ({
             matricula: row.matricula,
@@ -2064,7 +2531,8 @@ export class AdminService {
         await tx.item.createMany({
           data: input.backup.dados.itens.map((row) => ({
             codigo: row.codigo,
-            descricao: row.descricao,
+            descricao: row.descricao ?? null,
+            tipo: row.tipo?.trim() || "Sem tipo",
             tamanho: row.tamanho,
             status:
               row.status === "emprestado"
@@ -2073,6 +2541,7 @@ export class AdminService {
                   ? StatusItem.inativo
                   : StatusItem.disponivel,
             solicitanteMatricula: row.solicitanteMatricula,
+            setorSolicitante: row.setorSolicitante,
             dataEmprestimo: this.toDateOrNull(row.dataEmprestimo),
             statusAtivo: row.statusAtivo,
             criadoEm: this.toDateOrNull(row.criadoEm) ?? now,
@@ -2090,6 +2559,8 @@ export class AdminService {
             nomeFuncionario: row.nomeFuncionario,
             itemCodigo: row.itemCodigo,
             operadorNome: row.operadorNome,
+            origemOperacao: this.normalizarOrigemOperacao(row.origemOperacao),
+            setorSolicitante: row.setorSolicitante ?? null,
           })),
         });
       }
@@ -2102,6 +2573,8 @@ export class AdminService {
             nomeFuncionario: row.nomeFuncionario,
             itemCodigo: row.itemCodigo,
             operadorNome: row.operadorNome,
+            origemOperacao: this.normalizarOrigemOperacao(row.origemOperacao),
+            setorSolicitante: row.setorSolicitante ?? null,
           })),
         });
       }
@@ -2219,6 +2692,10 @@ export class AdminService {
     return normalizada;
   }
 
+  private normalizarOrigemOperacao(origem?: string | null): "colaborador" | "setor" {
+    return origem === "setor" ? "setor" : "colaborador";
+  }
+
   private normalizarNome(nome: string) {
     const normalizado = nome.trim();
     if (!normalizado) {
@@ -2281,6 +2758,48 @@ export class AdminService {
     }
   }
 
+  private validarSetoresCompativeisComUnidades(input: {
+    setoresSolicitados: string[];
+    unidadesSolicitadas: string[];
+    setorPrincipal?: string;
+    unidadePrincipal?: string;
+    setoresDisponiveis: Array<{ nome: string; unidades: string[] }>;
+  }) {
+    const setoresByNome = new Map(
+      input.setoresDisponiveis.map((setor) => [
+        setor.nome,
+        new Set(this.normalizarListaNomes(setor.unidades)),
+      ]),
+    );
+
+    const setoresSemCompatibilidade = input.setoresSolicitados.filter((setorNome) => {
+      const unidadesSetor = setoresByNome.get(setorNome);
+      if (!unidadesSetor || unidadesSetor.size === 0) {
+        return true;
+      }
+      return !input.unidadesSolicitadas.some((unidadeNome) => unidadesSetor.has(unidadeNome));
+    });
+
+    if (setoresSemCompatibilidade.length > 0) {
+      throw new AppError(
+        400,
+        "SETOR_UNIDADE_INCOMPATIVEL",
+        `Setor sem vinculo com as unidades selecionadas: ${setoresSemCompatibilidade.join(", ")}`,
+      );
+    }
+
+    if (input.setorPrincipal && input.unidadePrincipal) {
+      const unidadesSetorPrincipal = setoresByNome.get(input.setorPrincipal);
+      if (!unidadesSetorPrincipal?.has(input.unidadePrincipal)) {
+        throw new AppError(
+          400,
+          "SETOR_UNIDADE_INCOMPATIVEL",
+          "Setor principal precisa estar vinculado a unidade principal",
+        );
+      }
+    }
+  }
+
   private validarFuncoesAtivas(funcoesSolicitadas: string[], funcoesAtivas: string[]) {
     const ativas = new Set(funcoesAtivas);
     const invalidas = funcoesSolicitadas.filter((nome) => !ativas.has(nome));
@@ -2292,6 +2811,39 @@ export class AdminService {
         `Funcao invalida ou inativa: ${invalidas.join(", ")}`,
       );
     }
+  }
+
+  private async setoresSemUnidadeAtivaAlternativa(unidadeId: number) {
+    const setoresVinculados = await prisma.setor.findMany({
+      where: {
+        unidades: {
+          some: {
+            unidadeId,
+          },
+        },
+      },
+      select: {
+        nome: true,
+        unidades: {
+          include: {
+            unidade: {
+              select: {
+                id: true,
+                statusAtivo: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return setoresVinculados
+      .filter((setor) =>
+        !setor.unidades.some(
+          (vinculo) => vinculo.unidade.id !== unidadeId && vinculo.unidade.statusAtivo,
+        ),
+      )
+      .map((setor) => setor.nome);
   }
 
   private mapFuncionarioComSetores(row: {

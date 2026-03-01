@@ -38,6 +38,7 @@ describe("LoanService", () => {
         matricula: "123",
         operadorNome: "Setor",
         quantidade: 1,
+        tipo: "KIT",
         tamanho: "M",
       }),
     ).rejects.toMatchObject({ code: "MAX_KITS_REACHED" });

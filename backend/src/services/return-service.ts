@@ -56,6 +56,7 @@ export class ReturnService {
         data: {
           status: "disponivel",
           solicitanteMatricula: null,
+          setorSolicitante: null,
           dataEmprestimo: null,
           atualizadoPor: input.operadorNome,
           atualizadoEm: now,
@@ -69,6 +70,8 @@ export class ReturnService {
             nomeFuncionario: funcionario.nome,
             itemCodigo: itemCode,
             operadorNome: input.operadorNome,
+            origemOperacao: "colaborador",
+            setorSolicitante: null,
           },
         });
       }

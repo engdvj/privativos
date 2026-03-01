@@ -10,6 +10,7 @@ export interface QueuePayload {
   codigo: string;
   operador_nome: string;
   quantidade: number;
+  tipo_item?: string | null;
   tamanho?: string | null;
   item_codigos: string[];
   criado_em: string;
@@ -20,6 +21,7 @@ export class ValidationQueueService {
     matricula: string;
     tipo: TipoOperacao;
     quantidade: number;
+    tipoItem?: string;
     tamanho?: string;
     itemCodigos?: string[];
     operadorNome: string;
@@ -40,6 +42,7 @@ export class ValidationQueueService {
       codigo,
       operador_nome: input.operadorNome,
       quantidade: input.quantidade,
+      tipo_item: input.tipoItem ?? null,
       tamanho: input.tamanho ?? null,
       item_codigos: [...new Set(input.itemCodigos ?? [])],
       criado_em: new Date().toISOString(),
@@ -148,6 +151,7 @@ export class ValidationQueueService {
       codigo: payload.codigo,
       tipo,
       quantidade: payload.quantidade,
+      tipo_item: payload.tipo_item ?? null,
       tamanho: payload.tamanho ?? null,
       item_codigos: payload.item_codigos,
     });

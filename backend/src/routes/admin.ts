@@ -15,6 +15,16 @@ const tamanhoSchema = z
   .min(1)
   .max(20)
   .transform((value) => value.trim().toUpperCase());
+const tipoItemSchema = z
+  .string()
+  .max(100)
+  .transform((value) => value.trim().replace(/\s+/g, " "))
+  .refine((value) => value.length > 0, "Tipo do item invalido");
+const codigoItemSchema = z
+  .string()
+  .max(50)
+  .transform((value) => value.trim())
+  .refine((value) => value.length > 0, "Codigo do item invalido");
 const unidadesSchema = z.array(z.string().min(1).max(100)).min(1);
 const setoresSchema = z.array(z.string().min(1).max(100)).min(1);
 const funcoesSchema = z.array(z.string().min(1).max(100)).min(1);
@@ -58,14 +68,17 @@ const funcionarioUpdateSchema = z.object({
 });
 
 const itemCreateSchema = z.object({
-  codigo: z.string().min(1).max(50),
-  descricao: z.string().min(1).max(200),
+  codigo: codigoItemSchema,
+  descricao: z.string().max(200).nullable().optional(),
+  tipo: tipoItemSchema,
   tamanho: tamanhoSchema,
   status: z.enum(["disponivel", "emprestado", "inativo"]).optional(),
 });
 
 const itemUpdateSchema = z.object({
-  descricao: z.string().min(1).max(200).optional(),
+  codigo: codigoItemSchema.optional(),
+  descricao: z.string().max(200).nullable().optional(),
+  tipo: tipoItemSchema.optional(),
   tamanho: tamanhoSchema.optional(),
   status: z.enum(["disponivel", "emprestado", "inativo"]).optional(),
   status_ativo: z.boolean().optional(),
@@ -130,6 +143,7 @@ const backupDataSchema = z.object({
     z.object({
       nome: z.string().min(1).max(100),
       statusAtivo: z.boolean(),
+      unidades: z.array(z.string().min(1).max(100)).optional(),
       criadoEm: dateLikeSchema,
       atualizadoPor: z.string().max(150).nullable().optional(),
       atualizadoEm: dateLikeSchema.nullable().optional(),
@@ -172,10 +186,12 @@ const backupDataSchema = z.object({
   itens: z.array(
     z.object({
       codigo: z.string().min(1).max(50),
-      descricao: z.string().min(1).max(200),
+      descricao: z.string().max(200).nullable().optional(),
+      tipo: z.string().min(1).max(100).optional(),
       tamanho: z.string().min(1).max(20),
       status: z.enum(["disponivel", "emprestado", "inativo"]),
       solicitanteMatricula: z.string().max(20).nullable().optional(),
+      setorSolicitante: z.string().max(100).nullable().optional(),
       dataEmprestimo: dateLikeSchema.nullable().optional(),
       statusAtivo: z.boolean(),
       criadoEm: dateLikeSchema,
@@ -190,6 +206,8 @@ const backupDataSchema = z.object({
       nomeFuncionario: z.string().min(1).max(150),
       itemCodigo: z.string().min(1).max(50),
       operadorNome: z.string().min(1).max(150),
+      origemOperacao: z.enum(["colaborador", "setor"]).optional(),
+      setorSolicitante: z.string().max(100).nullable().optional(),
     }),
   ),
   devolucoes: z.array(
@@ -199,6 +217,8 @@ const backupDataSchema = z.object({
       nomeFuncionario: z.string().min(1).max(150),
       itemCodigo: z.string().min(1).max(50),
       operadorNome: z.string().min(1).max(150),
+      origemOperacao: z.enum(["colaborador", "setor"]).optional(),
+      setorSolicitante: z.string().max(100).nullable().optional(),
     }),
   ),
   auditoria: z.array(
@@ -233,12 +253,24 @@ const catalogoUpdateSchema = z.object({
   status_ativo: z.boolean().optional(),
 });
 
+const setorCreateSchema = z.object({
+  nome: z.string().min(1).max(100),
+  unidades: z.array(z.string().min(1).max(100)).min(1).optional(),
+});
+
+const setorUpdateSchema = z.object({
+  nome: z.string().min(1).max(100).optional(),
+  unidades: z.array(z.string().min(1).max(100)).min(1).optional(),
+  status_ativo: z.boolean().optional(),
+});
+
 const dashboardFiltrosSchema = z.object({
   data_inicio: z.string().min(1).optional(),
   data_fim: z.string().min(1).optional(),
   unidade: z.string().min(1).max(100).optional(),
   setor: z.string().min(1).max(100).optional(),
   matricula: z.string().min(1).max(20).optional(),
+  origem: z.enum(["colaborador", "setor"]).optional(),
 });
 
 const setorFuncionariosQuerySchema = z.object({
@@ -252,6 +284,14 @@ function parseBool(value: unknown) {
     return false;
   }
   return value === "1" || value.toLowerCase() === "true";
+}
+
+function normalizarTextoOpcional(value: string | null | undefined) {
+  if (value == null) {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 function ensureSuperadmin(request: { user?: { kind?: string; perfil?: string } }) {
@@ -419,7 +459,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/admin/setores", async (request, reply) => {
-    const parsed = catalogoCreateSchema.safeParse(request.body);
+    const parsed = setorCreateSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
     }
@@ -429,13 +469,17 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
     }
 
-    const row = await adminService.createSetor({ nome: parsed.data.nome, operador });
+    const row = await adminService.createSetor({
+      nome: parsed.data.nome,
+      unidades: parsed.data.unidades,
+      operador,
+    });
     return reply.status(201).send(row);
   });
 
   app.put("/admin/setores/:id", async (request, reply) => {
     const params = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
-    const parsed = catalogoUpdateSchema.safeParse(request.body);
+    const parsed = setorUpdateSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
     }
@@ -447,6 +491,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
 
     const row = await adminService.updateSetor(params.id, {
       nome: parsed.data.nome,
+      unidades: parsed.data.unidades,
       statusAtivo: parsed.data.status_ativo,
       operador,
     });
@@ -531,12 +576,19 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
     }
 
-    const row = await adminService.createItem({ ...parsed.data, operador });
+    const row = await adminService.createItem({
+      codigo: parsed.data.codigo,
+      descricao: normalizarTextoOpcional(parsed.data.descricao),
+      tipo: parsed.data.tipo,
+      tamanho: parsed.data.tamanho,
+      status: parsed.data.status,
+      operador,
+    });
     return reply.status(201).send(row);
   });
 
   app.put("/admin/itens/:codigo", async (request, reply) => {
-    const params = z.object({ codigo: z.string().min(1).max(50) }).parse(request.params);
+    const params = z.object({ codigo: codigoItemSchema }).parse(request.params);
     const parsed = itemUpdateSchema.safeParse(request.body);
 
     if (!parsed.success) {
@@ -549,7 +601,11 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const row = await adminService.updateItem(params.codigo, {
-      descricao: parsed.data.descricao,
+      codigo: parsed.data.codigo,
+      descricao: parsed.data.descricao === undefined
+        ? undefined
+        : normalizarTextoOpcional(parsed.data.descricao),
+      tipo: parsed.data.tipo,
       tamanho: parsed.data.tamanho,
       status: parsed.data.status,
       statusAtivo: parsed.data.status_ativo,
@@ -560,7 +616,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.delete("/admin/itens/:codigo", async (request, reply) => {
-    const params = z.object({ codigo: z.string().min(1).max(50) }).parse(request.params);
+    const params = z.object({ codigo: codigoItemSchema }).parse(request.params);
     const operador = request.user?.nomeCompleto;
     if (!operador) {
       throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");

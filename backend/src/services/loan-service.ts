@@ -10,9 +10,15 @@ export class LoanService {
     matricula: string;
     operadorNome: string;
     quantidade: number;
+    tipo: string;
     tamanho: string;
   }) {
+    const tipo = input.tipo.trim().replace(/\s+/g, " ");
     const tamanho = input.tamanho.trim().toUpperCase();
+
+    if (!tipo) {
+      throw new AppError(400, "INVALID_ITEM_TYPE", "Tipo do item invalido");
+    }
 
     if (!tamanho) {
       throw new AppError(400, "INVALID_ITEM_SIZE", "Tamanho do item invalido");
@@ -57,6 +63,7 @@ export class LoanService {
         FROM itens
         WHERE status = 'disponivel'
           AND status_ativo = true
+          AND tipo = ${tipo}
           AND tamanho = ${tamanho}
         ORDER BY codigo ASC
         FOR UPDATE SKIP LOCKED
@@ -67,7 +74,7 @@ export class LoanService {
         throw new AppError(
           409,
           "INSUFFICIENT_ITEMS",
-          "Nao ha itens suficientes disponiveis para o tamanho informado",
+          "Nao ha itens suficientes disponiveis para o tipo e tamanho informados",
         );
       }
 
@@ -82,6 +89,7 @@ export class LoanService {
         data: {
           status: "emprestado",
           solicitanteMatricula: input.matricula,
+          setorSolicitante: null,
           dataEmprestimo: now,
           atualizadoPor: input.operadorNome,
           atualizadoEm: now,
@@ -95,6 +103,8 @@ export class LoanService {
             nomeFuncionario: funcionario.nome,
             itemCodigo: itemCode,
             operadorNome: input.operadorNome,
+            origemOperacao: "colaborador",
+            setorSolicitante: null,
           },
         });
       }
