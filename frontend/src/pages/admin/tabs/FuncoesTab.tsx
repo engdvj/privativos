@@ -14,8 +14,9 @@ import { SectionCard } from "@/components/ui/section-card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { TableActions } from "@/components/ui/table-actions";
 import { useToast } from "@/components/ui/use-toast";
+import { useGlobalDetail } from "@/components/global-detail/GlobalDetailProvider";
 import { Pencil, Plus, Save, Trash2, UserCog } from "lucide-react";
-import type { CatalogoRow } from "../types";
+import type { CatalogoRow, FuncionarioRow } from "../types";
 
 const FILTRO_INPUT_CLASS =
   "h-8 rounded-xl border-border/80 bg-background/85 text-xs dark:border-border/90 dark:bg-background/70";
@@ -28,6 +29,14 @@ const FILTRO_BAR_CLASS = "gap-1.5 md:flex-nowrap md:items-end";
 const SECTION_HEADER_CLASS = "gap-2 px-3 pb-2 pt-3 sm:px-4 sm:pb-2 sm:pt-4";
 const SECTION_CONTENT_CLASS = "space-y-2.5 px-3 pb-3 pt-0 sm:px-4 sm:pb-4";
 const FUNCOES_POR_PAGINA = 10;
+const FUNCIONARIOS_POR_PAGINA = 10;
+
+interface FuncaoFuncionariosResponse {
+  pagina: number;
+  limite: number;
+  total: number;
+  rows: FuncionarioRow[];
+}
 
 export function FuncoesTab() {
   const [rows, setRows] = useState<CatalogoRow[]>([]);
@@ -42,7 +51,13 @@ export function FuncoesTab() {
   const [nomeNovo, setNomeNovo] = useState("");
   const [edicao, setEdicao] = useState({ nome: "", status_ativo: true });
   const [funcaoParaExcluir, setFuncaoParaExcluir] = useState<CatalogoRow | null>(null);
+  const [funcaoSelecionada, setFuncaoSelecionada] = useState<CatalogoRow | null>(null);
+  const [funcionariosFuncao, setFuncionariosFuncao] = useState<FuncionarioRow[]>([]);
+  const [totalFuncionariosFuncao, setTotalFuncionariosFuncao] = useState(0);
+  const [paginaFuncionariosFuncao, setPaginaFuncionariosFuncao] = useState(1);
+  const [loadingFuncionariosFuncao, setLoadingFuncionariosFuncao] = useState(false);
   const { success, error } = useToast();
+  const { openFuncionario } = useGlobalDetail();
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -91,6 +106,61 @@ export function FuncoesTab() {
       setPaginaFuncoes(totalPaginasFuncoes);
     }
   }, [paginaFuncoes, totalPaginasFuncoes]);
+
+  const carregarFuncionariosFuncao = useCallback(async () => {
+    if (!funcaoSelecionada) {
+      return;
+    }
+
+    setLoadingFuncionariosFuncao(true);
+    try {
+      const query = new URLSearchParams({
+        pagina: String(paginaFuncionariosFuncao),
+        limite: String(FUNCIONARIOS_POR_PAGINA),
+        include_inactive: "true",
+      });
+      const data = await api.get<FuncaoFuncionariosResponse>(
+        `/admin/funcoes/${funcaoSelecionada.id}/funcionarios?${query.toString()}`,
+      );
+      setFuncionariosFuncao(data.rows);
+      setTotalFuncionariosFuncao(data.total);
+    } catch (err) {
+      error(err instanceof Error ? err.message : "Erro ao carregar funcionarios da funcao");
+    } finally {
+      setLoadingFuncionariosFuncao(false);
+    }
+  }, [error, funcaoSelecionada, paginaFuncionariosFuncao]);
+
+  useEffect(() => {
+    if (!funcaoSelecionada) return;
+    void carregarFuncionariosFuncao();
+  }, [funcaoSelecionada, paginaFuncionariosFuncao, carregarFuncionariosFuncao]);
+
+  const totalPaginasFuncionariosFuncao = Math.max(
+    1,
+    Math.ceil(totalFuncionariosFuncao / FUNCIONARIOS_POR_PAGINA),
+  );
+  const inicioFuncionariosFuncao =
+    totalFuncionariosFuncao === 0
+      ? 0
+      : (paginaFuncionariosFuncao - 1) * FUNCIONARIOS_POR_PAGINA + 1;
+  const fimFuncionariosFuncao = Math.min(
+    paginaFuncionariosFuncao * FUNCIONARIOS_POR_PAGINA,
+    totalFuncionariosFuncao,
+  );
+
+  useEffect(() => {
+    if (paginaFuncionariosFuncao > totalPaginasFuncionariosFuncao) {
+      setPaginaFuncionariosFuncao(totalPaginasFuncionariosFuncao);
+    }
+  }, [paginaFuncionariosFuncao, totalPaginasFuncionariosFuncao]);
+
+  function abrirFuncionariosFuncao(row: CatalogoRow) {
+    setFuncaoSelecionada(row);
+    setPaginaFuncionariosFuncao(1);
+    setFuncionariosFuncao([]);
+    setTotalFuncionariosFuncao(0);
+  }
 
   async function criar() {
     if (!nomeNovo.trim()) {
@@ -203,20 +273,30 @@ export function FuncoesTab() {
         <div className="hidden md:block">
           <DataTable
             columns={[
-              { key: "nome", title: "Nome", width: "60%", sortValue: (row) => row.nome },
-              { key: "status", title: "Status", align: "center", width: "20%", sortValue: (row) => row.statusAtivo },
+              { key: "nome", title: "Nome", width: "44%", sortValue: (row) => row.nome },
+              {
+                key: "total",
+                title: "Total funcionarios",
+                align: "center",
+                width: "18%",
+                sortValue: (row) => row.totalFuncionarios ?? 0,
+              },
+              { key: "status", title: "Status", align: "center", width: "18%", sortValue: (row) => row.statusAtivo },
               { key: "acoes", title: "Acoes", align: "center", width: "20%" },
             ]}
             rows={rowsPaginadas}
             getRowKey={(row) => row.id}
-            onRowClick={(row) => abrirEdicao(row)}
+            onRowClick={(row) => abrirFuncionariosFuncao(row)}
             loading={loading}
             emptyMessage="Nenhuma funcao encontrada."
-            minWidthClassName="min-w-[620px]"
+            minWidthClassName="min-w-[760px]"
             containerClassName={TABELA_DENSE_CLASS}
             renderRow={(row) => (
               <>
                 <td className="max-w-0 truncate" title={row.nome}>{row.nome}</td>
+                <td>
+                  <div className="text-center font-semibold">{row.totalFuncionarios ?? 0}</div>
+                </td>
                 <td>
                   <div className="flex justify-center">
                     <StatusPill tone={row.statusAtivo ? "success" : "danger"} className="text-[10px]">
@@ -276,7 +356,7 @@ export function FuncoesTab() {
                   <button
                     type="button"
                     className="text-sm font-semibold text-primary underline-offset-2 hover:underline"
-                    onClick={() => abrirEdicao(row)}
+                    onClick={() => abrirFuncionariosFuncao(row)}
                   >
                     {row.nome}
                   </button>
@@ -284,7 +364,18 @@ export function FuncoesTab() {
                     {row.statusAtivo ? "ativo" : "inativo"}
                   </StatusPill>
                 </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Funcionarios vinculados: <span className="font-semibold text-foreground">{row.totalFuncionarios ?? 0}</span>
+                </p>
                 <div className="mt-2 flex justify-end gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-[11px]"
+                    onClick={() => abrirFuncionariosFuncao(row)}
+                  >
+                    Ver vinculados
+                  </Button>
                   <Button
                     size="icon"
                     variant="ghost"
@@ -337,6 +428,90 @@ export function FuncoesTab() {
           </div>
         </div>
       </SectionCard>
+
+      <Modal
+        open={Boolean(funcaoSelecionada)}
+        onClose={() => setFuncaoSelecionada(null)}
+        title={funcaoSelecionada ? `Funcionarios vinculados - ${funcaoSelecionada.nome}` : "Funcionarios vinculados"}
+        description="Lista de funcionarios atualmente associados a esta funcao."
+        maxWidthClassName="max-w-5xl"
+      >
+        <div className="space-y-4">
+          <h4 className="text-sm font-semibold text-foreground">Funcionarios vinculados</h4>
+          <div className="text-[11px] text-muted-foreground">
+            {inicioFuncionariosFuncao}-{fimFuncionariosFuncao} de {totalFuncionariosFuncao} | Pagina{" "}
+            {paginaFuncionariosFuncao} de {totalPaginasFuncionariosFuncao}
+          </div>
+
+          <div className="space-y-2">
+            {loadingFuncionariosFuncao ? (
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={`func-funcao-skeleton-${index}`} className="rounded-xl border border-border/70 bg-surface-2/80 p-3">
+                    <div className="h-3 w-20 animate-pulse rounded bg-muted/70" />
+                    <div className="mt-2 h-2.5 w-full animate-pulse rounded bg-muted/60" />
+                    <div className="mt-1.5 h-2.5 w-3/4 animate-pulse rounded bg-muted/45" />
+                  </div>
+                ))}
+              </div>
+            ) : funcionariosFuncao.length === 0 ? (
+              <div className="rounded-xl border border-border/70 bg-surface-2/80 px-3 py-5">
+                <EmptyState compact title="Nenhum funcionario vinculado." />
+              </div>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {funcionariosFuncao.map((row) => (
+                  <button
+                    type="button"
+                    key={row.matricula}
+                    className="rounded-xl border border-border/70 bg-surface-2/85 p-3 text-left shadow-[var(--shadow-soft)] transition-colors hover:bg-accent/20"
+                    onClick={() => {
+                      void openFuncionario(row.matricula);
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-mono text-sm font-semibold text-primary">
+                        {row.matricula}
+                      </span>
+                      <StatusPill tone={row.statusAtivo ? "success" : "danger"} className="text-[10px]">
+                        {row.statusAtivo ? "ativo" : "inativo"}
+                      </StatusPill>
+                    </div>
+                    <p className="mt-1 text-sm font-medium text-foreground">{row.nome}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-[11px]"
+              onClick={() => setPaginaFuncionariosFuncao((prev) => Math.max(1, prev - 1))}
+              disabled={paginaFuncionariosFuncao === 1 || loadingFuncionariosFuncao}
+            >
+              Anterior
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-[11px]"
+              onClick={() =>
+                setPaginaFuncionariosFuncao((prev) =>
+                  Math.min(totalPaginasFuncionariosFuncao, prev + 1),
+                )
+              }
+              disabled={paginaFuncionariosFuncao >= totalPaginasFuncionariosFuncao || loadingFuncionariosFuncao}
+            >
+              Proxima
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={openCreateModal}

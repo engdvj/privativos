@@ -12,8 +12,12 @@ import {
   CalendarDays,
   Building2,
   UserCog,
+  ChevronLeft,
+  ChevronDown,
+  ChevronUp,
   ChevronRight,
   Pencil,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
@@ -31,6 +35,7 @@ const NOVO_TAMANHO_OPTION = "__novo_tamanho__";
 const NOVO_TIPO_OPTION = "__novo_tipo__";
 const TAMANHOS_PADRAO = ["UNICO", "PP", "P", "M", "G", "GG", "XG"];
 const TIPOS_PADRAO = ["Kit roupa", "Lencol", "Sem tipo"];
+const CATALOGO_ITENS_POR_PAGINA = 5;
 
 interface HistoricoEvento {
   timestamp: string;
@@ -509,11 +514,18 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
   const [opcoesTamanhoKit, setOpcoesTamanhoKit] = useState<string[]>(TAMANHOS_PADRAO);
   const [criandoNovoTipoKit, setCriandoNovoTipoKit] = useState(false);
   const [novoTipoKit, setNovoTipoKit] = useState("");
+  const [tipoKitEditando, setTipoKitEditando] = useState<string | null>(null);
   const [criandoNovoTamanhoKit, setCriandoNovoTamanhoKit] = useState(false);
   const [novoTamanhoKit, setNovoTamanhoKit] = useState("");
+  const [ordemUnidadesCatalogo, setOrdemUnidadesCatalogo] = useState<"asc" | "desc">("asc");
+  const [ordemSetoresCatalogo, setOrdemSetoresCatalogo] = useState<"asc" | "desc">("asc");
+  const [ordemFuncoesCatalogo, setOrdemFuncoesCatalogo] = useState<"asc" | "desc">("asc");
+  const [paginaUnidadesCatalogo, setPaginaUnidadesCatalogo] = useState(1);
+  const [paginaSetoresCatalogo, setPaginaSetoresCatalogo] = useState(1);
+  const [paginaFuncoesCatalogo, setPaginaFuncoesCatalogo] = useState(1);
   const [historicoModalOpen, setHistoricoModalOpen] = useState(false);
   const [historicoPagina, setHistoricoPagina] = useState(1);
-  const [historicoLimite] = useState(20);
+  const [historicoLimite] = useState(3);
   const [historicoTotal, setHistoricoTotal] = useState(0);
   const [historicoCiclos, setHistoricoCiclos] = useState<HistoricoCiclo[]>([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
@@ -537,6 +549,66 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
     }
     return setorCompativelComUnidadesCatalogo(setor, unidadesSelecionadas);
   }, [setorByNome]);
+  const unidadesCatalogoOrdenadas = useMemo(() => {
+    const lista = [...unidades].sort((a, b) =>
+      a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }),
+    );
+    return ordemUnidadesCatalogo === "asc" ? lista : lista.reverse();
+  }, [ordemUnidadesCatalogo, unidades]);
+  const setoresCatalogoOrdenados = useMemo(() => {
+    const lista = [...setores].sort((a, b) =>
+      a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }),
+    );
+    return ordemSetoresCatalogo === "asc" ? lista : lista.reverse();
+  }, [ordemSetoresCatalogo, setores]);
+  const funcoesCatalogoOrdenadas = useMemo(() => {
+    const lista = [...funcoes].sort((a, b) =>
+      a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }),
+    );
+    return ordemFuncoesCatalogo === "asc" ? lista : lista.reverse();
+  }, [funcoes, ordemFuncoesCatalogo]);
+  const totalPaginasUnidadesCatalogo = Math.max(
+    1,
+    Math.ceil(unidadesCatalogoOrdenadas.length / CATALOGO_ITENS_POR_PAGINA),
+  );
+  const totalPaginasSetoresCatalogo = Math.max(
+    1,
+    Math.ceil(setoresCatalogoOrdenados.length / CATALOGO_ITENS_POR_PAGINA),
+  );
+  const totalPaginasFuncoesCatalogo = Math.max(
+    1,
+    Math.ceil(funcoesCatalogoOrdenadas.length / CATALOGO_ITENS_POR_PAGINA),
+  );
+  const unidadesCatalogoPaginadas = useMemo(() => {
+    const inicio = (paginaUnidadesCatalogo - 1) * CATALOGO_ITENS_POR_PAGINA;
+    return unidadesCatalogoOrdenadas.slice(inicio, inicio + CATALOGO_ITENS_POR_PAGINA);
+  }, [paginaUnidadesCatalogo, unidadesCatalogoOrdenadas]);
+  const setoresCatalogoPaginados = useMemo(() => {
+    const inicio = (paginaSetoresCatalogo - 1) * CATALOGO_ITENS_POR_PAGINA;
+    return setoresCatalogoOrdenados.slice(inicio, inicio + CATALOGO_ITENS_POR_PAGINA);
+  }, [paginaSetoresCatalogo, setoresCatalogoOrdenados]);
+  const funcoesCatalogoPaginadas = useMemo(() => {
+    const inicio = (paginaFuncoesCatalogo - 1) * CATALOGO_ITENS_POR_PAGINA;
+    return funcoesCatalogoOrdenadas.slice(inicio, inicio + CATALOGO_ITENS_POR_PAGINA);
+  }, [funcoesCatalogoOrdenadas, paginaFuncoesCatalogo]);
+
+  useEffect(() => {
+    if (paginaUnidadesCatalogo > totalPaginasUnidadesCatalogo) {
+      setPaginaUnidadesCatalogo(totalPaginasUnidadesCatalogo);
+    }
+  }, [paginaUnidadesCatalogo, totalPaginasUnidadesCatalogo]);
+
+  useEffect(() => {
+    if (paginaSetoresCatalogo > totalPaginasSetoresCatalogo) {
+      setPaginaSetoresCatalogo(totalPaginasSetoresCatalogo);
+    }
+  }, [paginaSetoresCatalogo, totalPaginasSetoresCatalogo]);
+
+  useEffect(() => {
+    if (paginaFuncoesCatalogo > totalPaginasFuncoesCatalogo) {
+      setPaginaFuncoesCatalogo(totalPaginasFuncoesCatalogo);
+    }
+  }, [paginaFuncoesCatalogo, totalPaginasFuncoesCatalogo]);
 
   const setoresFuncionarioResultado = useMemo(() => {
     if (!resultado || resultado.tipo !== "funcionario") {
@@ -598,6 +670,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
       });
       setCriandoNovoTipoKit(false);
       setNovoTipoKit("");
+      setTipoKitEditando(null);
       setCriandoNovoTamanhoKit(false);
       setNovoTamanhoKit("");
     }
@@ -885,6 +958,9 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
         error(err instanceof Error ? err.message : "Erro ao carregar catalogos");
         return;
       }
+      setPaginaUnidadesCatalogo(1);
+      setPaginaSetoresCatalogo(1);
+      setPaginaFuncoesCatalogo(1);
     }
     if (resultado.tipo === "kit") {
       try {
@@ -893,6 +969,9 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
         error(err instanceof Error ? err.message : "Erro ao carregar tamanhos");
         return;
       }
+      setCriandoNovoTipoKit(false);
+      setNovoTipoKit("");
+      setTipoKitEditando(null);
       setCriandoNovoTamanhoKit(false);
       setNovoTamanhoKit("");
     }
@@ -979,6 +1058,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
         const tipoFinal = criandoNovoTipoKit
           ? normalizarTipo(novoTipoKit)
           : normalizarTipo(draftKit.tipo);
+        const tipoEditandoNormalizado = tipoKitEditando ? normalizarTipo(tipoKitEditando) : null;
         const tamanhoFinal = criandoNovoTamanhoKit
           ? normalizarTamanho(novoTamanhoKit)
           : normalizarTamanho(draftKit.tamanho);
@@ -996,6 +1076,18 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
           status: draftKit.status,
           status_ativo: draftKit.status_ativo,
         });
+        setOpcoesTipoKit((prev) => {
+          const semTipoEditando = tipoEditandoNormalizado
+            ? prev.filter(
+              (tipo) =>
+                normalizarTipo(tipo).toLowerCase() !== tipoEditandoNormalizado.toLowerCase(),
+            )
+            : prev;
+          return montarOpcoesTipo([...semTipoEditando, tipoFinal]);
+        });
+        setCriandoNovoTipoKit(false);
+        setNovoTipoKit("");
+        setTipoKitEditando(null);
         setDraftKit((prev) => ({ ...prev, codigo: codigoFinal, tipo: tipoFinal, tamanho: tamanhoFinal }));
         entidadeAtualizada = "kit";
         success("Item atualizado");
@@ -1029,6 +1121,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
     draftKit,
     criandoNovoTipoKit,
     novoTipoKit,
+    tipoKitEditando,
     criandoNovoTamanhoKit,
     novoTamanhoKit,
     error,
@@ -1212,6 +1305,44 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
     if (kitSetorAssociado) return "Ultimo setor";
     return "Ultimo vinculo";
   }, [kitEmprestado, kitSetorAssociado, kitUltimoUsuarioHistorico, kitUsuarioAssociado]);
+  const tipoKitSelecionadoEhCustom = useMemo(() => {
+    if (!resultado || resultado.tipo !== "kit" || criandoNovoTipoKit) {
+      return false;
+    }
+    const tipoAtual = normalizarTipo(draftKit.tipo);
+    if (!tipoAtual) {
+      return false;
+    }
+    return !TIPOS_PADRAO.some(
+      (tipoPadrao) => normalizarTipo(tipoPadrao).toLowerCase() === tipoAtual.toLowerCase(),
+    );
+  }, [criandoNovoTipoKit, draftKit.tipo, resultado]);
+  const iniciarEdicaoTipoCustom = useCallback(() => {
+    if (!tipoKitSelecionadoEhCustom) return;
+    const tipoAtual = normalizarTipo(draftKit.tipo);
+    if (!tipoAtual) return;
+    setTipoKitEditando(tipoAtual);
+    setCriandoNovoTipoKit(true);
+    setNovoTipoKit(tipoAtual);
+  }, [draftKit.tipo, tipoKitSelecionadoEhCustom]);
+  const removerTipoCustom = useCallback(() => {
+    if (!tipoKitSelecionadoEhCustom) return;
+    const tipoAtual = normalizarTipo(draftKit.tipo);
+    if (!tipoAtual) return;
+
+    const confirmou = window.confirm(`Remover "${tipoAtual}" da lista de tipos?`);
+    if (!confirmou) return;
+
+    setOpcoesTipoKit((prev) =>
+      prev.filter(
+        (tipo) => normalizarTipo(tipo).toLowerCase() !== tipoAtual.toLowerCase(),
+      ),
+    );
+    setDraftKit((prev) => ({ ...prev, tipo: TIPOS_PADRAO[0] }));
+    setCriandoNovoTipoKit(false);
+    setNovoTipoKit("");
+    setTipoKitEditando(null);
+  }, [draftKit.tipo, tipoKitSelecionadoEhCustom]);
 
   // --- Footer content for action buttons ---
   let footerContent: ReactNode = null;
@@ -1846,34 +1977,66 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="detalhe-kit-tipo-select">Tipo</Label>
-                  <Select
-                    value={criandoNovoTipoKit ? NOVO_TIPO_OPTION : draftKit.tipo}
-                    onValueChange={(value) => {
-                      if (value === NOVO_TIPO_OPTION) {
-                        setCriandoNovoTipoKit(true);
-                        setNovoTipoKit("");
-                        return;
-                      }
-                      setCriandoNovoTipoKit(false);
-                      setDraftKit((prev) => ({ ...prev, tipo: value }));
-                    }}
-                  >
-                    <SelectTrigger id="detalhe-kit-tipo-select">
-                      <SelectValue placeholder="Selecione o tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {opcoesTipoKit.map((tipo) => (
-                        <SelectItem key={tipo} value={tipo}>
-                          {tipo}
-                        </SelectItem>
-                      ))}
-                      <SelectItem value={NOVO_TIPO_OPTION}>Criar novo tipo...</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center gap-1">
+                    <div className="min-w-0 flex-1">
+                      <Select
+                        value={criandoNovoTipoKit ? NOVO_TIPO_OPTION : draftKit.tipo}
+                        onValueChange={(value) => {
+                          if (value === NOVO_TIPO_OPTION) {
+                            setCriandoNovoTipoKit(true);
+                            setNovoTipoKit("");
+                            setTipoKitEditando(null);
+                            return;
+                          }
+                          setCriandoNovoTipoKit(false);
+                          setTipoKitEditando(null);
+                          setDraftKit((prev) => ({ ...prev, tipo: value }));
+                        }}
+                      >
+                        <SelectTrigger id="detalhe-kit-tipo-select">
+                          <SelectValue placeholder="Selecione o tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {opcoesTipoKit.map((tipo) => (
+                            <SelectItem key={tipo} value={tipo}>
+                              {tipo}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value={NOVO_TIPO_OPTION}>Criar novo tipo...</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground/70 hover:text-foreground disabled:pointer-events-none disabled:opacity-35"
+                      onClick={() => iniciarEdicaoTipoCustom()}
+                      title={tipoKitSelecionadoEhCustom ? "Editar tipo" : "Selecione um tipo custom para editar"}
+                      aria-label="Editar tipo"
+                      disabled={!tipoKitSelecionadoEhCustom}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground/70 hover:text-destructive disabled:pointer-events-none disabled:opacity-35"
+                      onClick={() => removerTipoCustom()}
+                      title={tipoKitSelecionadoEhCustom ? "Remover tipo da lista" : "Selecione um tipo custom para remover"}
+                      aria-label="Remover tipo da lista"
+                      disabled={!tipoKitSelecionadoEhCustom}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
                 {criandoNovoTipoKit && (
                   <div className="space-y-1">
-                    <Label htmlFor="detalhe-kit-tipo-novo">Novo tipo</Label>
+                    <Label htmlFor="detalhe-kit-tipo-novo">
+                      {tipoKitEditando ? "Editar tipo" : "Novo tipo"}
+                    </Label>
                     <Input
                       id="detalhe-kit-tipo-novo"
                       value={novoTipoKit}
@@ -2028,19 +2191,75 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="space-y-1">
-                    <Label>Unidades</Label>
-                    <div className="max-h-44 space-y-2 overflow-y-auto rounded-lg border border-border/70 bg-background p-3">
-                      {unidades.map((unidade) => (
-                        <label key={unidade.id} className="flex items-center gap-2 text-sm">
-                          <Checkbox
-                            checked={draftFuncionario.unidades.includes(unidade.nome)}
-                            onCheckedChange={(checked) =>
-                              alternarUnidadeDraft(unidade.nome, Boolean(checked))
-                            }
-                          />
-                          <span>{unidade.nome}</span>
-                        </label>
-                      ))}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <p className="text-sm font-medium text-foreground">Unidades</p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded-md text-muted-foreground/70 hover:text-foreground"
+                          onClick={() =>
+                            setOrdemUnidadesCatalogo((prev) => (prev === "asc" ? "desc" : "asc"))
+                          }
+                          title="Ordenar unidades"
+                          aria-label="Ordenar unidades"
+                        >
+                          {ordemUnidadesCatalogo === "asc" ? (
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          ) : (
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-0.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded-md text-muted-foreground/70 hover:text-foreground"
+                          onClick={() => setPaginaUnidadesCatalogo((prev) => Math.max(1, prev - 1))}
+                          disabled={paginaUnidadesCatalogo === 1}
+                          aria-label="Pagina anterior de unidades"
+                        >
+                          <ChevronLeft className="h-3.5 w-3.5" />
+                        </Button>
+                        <span className="px-1 text-[10px] tabular-nums text-muted-foreground">
+                          {paginaUnidadesCatalogo}/{totalPaginasUnidadesCatalogo}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded-md text-muted-foreground/70 hover:text-foreground"
+                          onClick={() =>
+                            setPaginaUnidadesCatalogo((prev) =>
+                              Math.min(totalPaginasUnidadesCatalogo, prev + 1),
+                            )
+                          }
+                          disabled={paginaUnidadesCatalogo >= totalPaginasUnidadesCatalogo}
+                          aria-label="Proxima pagina de unidades"
+                        >
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="min-h-[10.75rem] space-y-2 rounded-lg border border-border/70 bg-background p-3">
+                      {unidadesCatalogoPaginadas.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Nenhuma unidade ativa.</p>
+                      ) : (
+                        unidadesCatalogoPaginadas.map((unidade) => (
+                          <label key={unidade.id} className="flex items-center gap-2 text-sm">
+                            <Checkbox
+                              checked={draftFuncionario.unidades.includes(unidade.nome)}
+                              onCheckedChange={(checked) =>
+                                alternarUnidadeDraft(unidade.nome, Boolean(checked))
+                              }
+                            />
+                            <span>{unidade.nome}</span>
+                          </label>
+                        ))
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Selecionadas: {draftFuncionario.unidades.length}
@@ -2065,32 +2284,88 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label>Setores</Label>
-                    <div className="max-h-44 space-y-2 overflow-y-auto rounded-lg border border-border/70 bg-background p-3">
-                      {setores.map((setor) => (
-                        <label
-                          key={setor.id}
-                          className={cn(
-                            "flex items-center gap-2 text-sm",
-                            draftFuncionario.unidades.length > 0 &&
-                              !setorCompativelComUnidadesCatalogo(setor, draftFuncionario.unidades)
-                              ? "cursor-not-allowed opacity-55"
-                              : "",
-                          )}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <p className="text-sm font-medium text-foreground">Setores</p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded-md text-muted-foreground/70 hover:text-foreground"
+                          onClick={() =>
+                            setOrdemSetoresCatalogo((prev) => (prev === "asc" ? "desc" : "asc"))
+                          }
+                          title="Ordenar setores"
+                          aria-label="Ordenar setores"
                         >
-                          <Checkbox
-                            checked={draftFuncionario.setores.includes(setor.nome)}
-                            disabled={
+                          {ordemSetoresCatalogo === "asc" ? (
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          ) : (
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-0.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded-md text-muted-foreground/70 hover:text-foreground"
+                          onClick={() => setPaginaSetoresCatalogo((prev) => Math.max(1, prev - 1))}
+                          disabled={paginaSetoresCatalogo === 1}
+                          aria-label="Pagina anterior de setores"
+                        >
+                          <ChevronLeft className="h-3.5 w-3.5" />
+                        </Button>
+                        <span className="px-1 text-[10px] tabular-nums text-muted-foreground">
+                          {paginaSetoresCatalogo}/{totalPaginasSetoresCatalogo}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded-md text-muted-foreground/70 hover:text-foreground"
+                          onClick={() =>
+                            setPaginaSetoresCatalogo((prev) =>
+                              Math.min(totalPaginasSetoresCatalogo, prev + 1),
+                            )
+                          }
+                          disabled={paginaSetoresCatalogo >= totalPaginasSetoresCatalogo}
+                          aria-label="Proxima pagina de setores"
+                        >
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="min-h-[10.75rem] space-y-2 rounded-lg border border-border/70 bg-background p-3">
+                      {setoresCatalogoPaginados.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Nenhum setor ativo.</p>
+                      ) : (
+                        setoresCatalogoPaginados.map((setor) => (
+                          <label
+                            key={setor.id}
+                            className={cn(
+                              "flex items-center gap-2 text-sm",
                               draftFuncionario.unidades.length > 0 &&
-                              !setorCompativelComUnidadesCatalogo(setor, draftFuncionario.unidades)
-                            }
-                            onCheckedChange={(checked) =>
-                              alternarSetorDraft(setor.nome, Boolean(checked))
-                            }
-                          />
-                          <span>{setor.nome}</span>
-                        </label>
-                      ))}
+                                !setorCompativelComUnidadesCatalogo(setor, draftFuncionario.unidades)
+                                ? "cursor-not-allowed opacity-55"
+                                : "",
+                            )}
+                          >
+                            <Checkbox
+                              checked={draftFuncionario.setores.includes(setor.nome)}
+                              disabled={
+                                draftFuncionario.unidades.length > 0 &&
+                                !setorCompativelComUnidadesCatalogo(setor, draftFuncionario.unidades)
+                              }
+                              onCheckedChange={(checked) =>
+                                alternarSetorDraft(setor.nome, Boolean(checked))
+                              }
+                            />
+                            <span>{setor.nome}</span>
+                          </label>
+                        ))
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Selecionados: {draftFuncionario.setores.length}
@@ -2118,19 +2393,75 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label>Funcoes</Label>
-                    <div className="max-h-44 space-y-2 overflow-y-auto rounded-lg border border-border/70 bg-background p-3">
-                      {funcoes.map((funcao) => (
-                        <label key={funcao.id} className="flex items-center gap-2 text-sm">
-                          <Checkbox
-                            checked={draftFuncionario.funcoes.includes(funcao.nome)}
-                            onCheckedChange={(checked) =>
-                              alternarFuncaoDraft(funcao.nome, Boolean(checked))
-                            }
-                          />
-                          <span>{funcao.nome}</span>
-                        </label>
-                      ))}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <p className="text-sm font-medium text-foreground">Funcoes</p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded-md text-muted-foreground/70 hover:text-foreground"
+                          onClick={() =>
+                            setOrdemFuncoesCatalogo((prev) => (prev === "asc" ? "desc" : "asc"))
+                          }
+                          title="Ordenar funcoes"
+                          aria-label="Ordenar funcoes"
+                        >
+                          {ordemFuncoesCatalogo === "asc" ? (
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          ) : (
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-0.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded-md text-muted-foreground/70 hover:text-foreground"
+                          onClick={() => setPaginaFuncoesCatalogo((prev) => Math.max(1, prev - 1))}
+                          disabled={paginaFuncoesCatalogo === 1}
+                          aria-label="Pagina anterior de funcoes"
+                        >
+                          <ChevronLeft className="h-3.5 w-3.5" />
+                        </Button>
+                        <span className="px-1 text-[10px] tabular-nums text-muted-foreground">
+                          {paginaFuncoesCatalogo}/{totalPaginasFuncoesCatalogo}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 rounded-md text-muted-foreground/70 hover:text-foreground"
+                          onClick={() =>
+                            setPaginaFuncoesCatalogo((prev) =>
+                              Math.min(totalPaginasFuncoesCatalogo, prev + 1),
+                            )
+                          }
+                          disabled={paginaFuncoesCatalogo >= totalPaginasFuncoesCatalogo}
+                          aria-label="Proxima pagina de funcoes"
+                        >
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="min-h-[10.75rem] space-y-2 rounded-lg border border-border/70 bg-background p-3">
+                      {funcoesCatalogoPaginadas.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Nenhuma funcao ativa.</p>
+                      ) : (
+                        funcoesCatalogoPaginadas.map((funcao) => (
+                          <label key={funcao.id} className="flex items-center gap-2 text-sm">
+                            <Checkbox
+                              checked={draftFuncionario.funcoes.includes(funcao.nome)}
+                              onCheckedChange={(checked) =>
+                                alternarFuncaoDraft(funcao.nome, Boolean(checked))
+                              }
+                            />
+                            <span>{funcao.nome}</span>
+                          </label>
+                        ))
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Selecionadas: {draftFuncionario.funcoes.length}
@@ -2339,7 +2670,7 @@ function HistoricoCiclosSection({ ciclos }: { ciclos: HistoricoCiclo[] }) {
 
               <div className="mt-3 flex items-center gap-1.5 rounded-lg bg-background/70 px-3 py-2 text-xs text-muted-foreground">
                 <Clock className="h-3.5 w-3.5 text-primary/60" />
-                Intervalo com kit:{" "}
+                Intervalo com item:{" "}
                 <span className="font-medium text-foreground">{formatDuracaoHoras(ciclo.duracao_horas)}</span>
               </div>
             </div>

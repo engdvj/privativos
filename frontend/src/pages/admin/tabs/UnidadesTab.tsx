@@ -163,21 +163,6 @@ export function UnidadesTab() {
     setTotalFuncionariosUnidade(0);
   }
 
-  function unidadesLabel(row: FuncionarioRow) {
-    const unidades = row.unidades?.length ? row.unidades : row.unidade ? [row.unidade] : [];
-    return unidades.join(", ") || "-";
-  }
-
-  function setoresLabel(row: FuncionarioRow) {
-    const setores = row.setores?.length ? row.setores : row.setor ? [row.setor] : [];
-    return setores.join(", ") || "-";
-  }
-
-  function funcoesLabel(row: FuncionarioRow) {
-    const funcoes = row.funcoes?.length ? row.funcoes : row.funcao ? [row.funcao] : [];
-    return funcoes.join(", ") || "-";
-  }
-
   async function criar() {
     if (!nomeNovo.trim()) {
       error("Informe o nome da unidade");
@@ -452,7 +437,8 @@ export function UnidadesTab() {
         description="Lista de funcionarios atualmente associados a esta unidade."
         maxWidthClassName="max-w-5xl"
       >
-        <div className="space-y-2.5">
+        <div className="space-y-4">
+          <h4 className="text-sm font-semibold text-foreground">Funcionarios vinculados</h4>
           <div className="text-[11px] text-muted-foreground">
             {inicioFuncionariosUnidade}-{fimFuncionariosUnidade} de {totalFuncionariosUnidade} | Pagina{" "}
             {paginaFuncionariosUnidade} de {totalPaginasFuncionariosUnidade}
@@ -476,40 +462,24 @@ export function UnidadesTab() {
             ) : (
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 {funcionariosUnidade.map((row) => (
-                  <article
+                  <button
+                    type="button"
                     key={row.matricula}
-                    className="rounded-xl border border-border/70 bg-surface-2/85 p-3 shadow-[var(--shadow-soft)]"
+                    className="rounded-xl border border-border/70 bg-surface-2/85 p-3 text-left shadow-[var(--shadow-soft)] transition-colors hover:bg-accent/20"
+                    onClick={() => {
+                      void openFuncionario(row.matricula);
+                    }}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <button
-                        type="button"
-                        className="font-mono text-sm font-semibold text-primary underline-offset-2 hover:underline"
-                        onClick={() => {
-                          void openFuncionario(row.matricula);
-                        }}
-                      >
+                      <span className="font-mono text-sm font-semibold text-primary">
                         {row.matricula}
-                      </button>
+                      </span>
                       <StatusPill tone={row.statusAtivo ? "success" : "danger"} className="text-[10px]">
                         {row.statusAtivo ? "ativo" : "inativo"}
                       </StatusPill>
                     </div>
                     <p className="mt-1 text-sm font-medium text-foreground">{row.nome}</p>
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                      <div className="rounded-lg border border-border/70 bg-background/70 px-2 py-1.5">
-                        <p className="text-[10px] uppercase tracking-wide">Unidades</p>
-                        <p className="truncate text-foreground" title={unidadesLabel(row)}>{unidadesLabel(row)}</p>
-                      </div>
-                      <div className="rounded-lg border border-border/70 bg-background/70 px-2 py-1.5">
-                        <p className="text-[10px] uppercase tracking-wide">Funcoes</p>
-                        <p className="truncate text-foreground" title={funcoesLabel(row)}>{funcoesLabel(row)}</p>
-                      </div>
-                      <div className="col-span-2 rounded-lg border border-border/70 bg-background/70 px-2 py-1.5">
-                        <p className="text-[10px] uppercase tracking-wide">Setores</p>
-                        <p className="truncate text-foreground" title={setoresLabel(row)}>{setoresLabel(row)}</p>
-                      </div>
-                    </div>
-                  </article>
+                  </button>
                 ))}
               </div>
             )}
