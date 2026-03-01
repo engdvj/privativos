@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import { prisma } from "../lib/prisma.js";
 import { redis } from "../lib/redis.js";
 
-const DASHBOARD_DATA_CACHE_VERSION = "v5";
+const DASHBOARD_DATA_CACHE_VERSION = "v7";
+const DASHBOARD_DATA_CACHE_TTL_SECONDS = 300;
+const DASHBOARD_FILTERS_CACHE_KEY = "dashboard:filters:v2";
 type OrigemDashboard = "colaborador" | "setor";
 
 export interface DashboardFiltros {
@@ -278,7 +280,7 @@ export class DashboardService {
       };
     });
 
-    if (normalized.origem !== "colaborador") {
+    if (normalized.origem !== "colaborador" && !normalized.matricula) {
       const solicitacoesSetorExistentes = new Set(
         solicitacoesRows
           .filter((row) => row.origem === "setor")
@@ -377,12 +379,12 @@ export class DashboardService {
       gerado_em: new Date().toISOString(),
     };
 
-    await redis.set(cacheKey, JSON.stringify(data));
+    await redis.set(cacheKey, JSON.stringify(data), "EX", DASHBOARD_DATA_CACHE_TTL_SECONDS);
     return data;
   }
 
   async getFilterOptions() {
-    const cacheKey = "dashboard:filters";
+    const cacheKey = DASHBOARD_FILTERS_CACHE_KEY;
     const cached = await redis.get(cacheKey);
 
     if (cached) {
@@ -410,7 +412,6 @@ export class DashboardService {
         orderBy: { nome: "asc" },
       }),
       prisma.funcionario.findMany({
-        where: { statusAtivo: true },
         select: { matricula: true, nome: true },
         orderBy: { nome: "asc" },
       }),
@@ -442,7 +443,7 @@ export class DashboardService {
   }
 
   async invalidateFilterCache() {
-    await redis.del("dashboard:filters");
+    await redis.del("dashboard:filters", DASHBOARD_FILTERS_CACHE_KEY);
   }
 
   private extractSetores(setorPrincipal: string, setoresRelacionados: string[]) {
