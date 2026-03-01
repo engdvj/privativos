@@ -6,6 +6,7 @@ import { OperacaoMonitorPage } from "@/pages/OperacaoMonitorPage";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ToastProvider } from "@/components/ui/toast";
 import { GlobalDetailProvider } from "@/components/global-detail/GlobalDetailProvider";
+import { CursorGlowOverlay } from "@/components/ui/cursor-glow-overlay";
 
 function AppRoutes() {
   const location = useLocation();
@@ -40,6 +41,7 @@ export default function App() {
   return (
     <ToastProvider>
       <GlobalDetailProvider>
+        <CursorGlowOverlay />
         <BrowserRouter>
           <AppRoutes />
         </BrowserRouter>

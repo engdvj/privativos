@@ -356,7 +356,7 @@ export function Header() {
                       <Button
                         type="submit"
                         size="icon"
-                        className="h-5 w-5 shrink-0 rounded-md"
+                        className="h-5 w-5 shrink-0 rounded-md border-0 bg-primary text-primary-foreground shadow-none transition-all duration-200 hover:bg-sky-500 hover:animate-pulse"
                         disabled={!busca.trim()}
                         aria-label="Executar busca global"
                         title="Buscar"
@@ -379,7 +379,7 @@ export function Header() {
               aria-expanded={buscaAberta}
               title={buscaAberta ? "Fechar busca global" : "Abrir busca global"}
               className={cn(
-                "relative h-10 w-10 rounded-xl border border-border/75 bg-card/95 text-primary shadow-[var(--shadow-soft)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-accent/35 hover:text-primary dark:border-border/90 dark:bg-popover/90",
+                "relative h-10 w-10 rounded-xl border-0 bg-primary/10 text-primary shadow-[var(--shadow-soft)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-sky-500 hover:text-primary-foreground hover:animate-pulse dark:bg-primary/20",
                 buscaAberta ? "scale-95" : "scale-100",
               )}
             >

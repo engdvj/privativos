@@ -201,8 +201,8 @@ export function AdminPage() {
           style={layoutStyle}
         >
           <div className="relative h-full min-h-0">
-            <aside className="flex h-full min-h-0 flex-col border-r border-border/70 bg-gradient-to-b from-card/94 via-surface-2/88 to-card/92 backdrop-blur-xl transition-colors duration-200 dark:border-border/85 dark:from-card/88 dark:via-background/90 dark:to-card/86">
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3 pt-4">
+            <aside className="relative flex h-full min-h-0 flex-col overflow-hidden border-r border-border/70 bg-gradient-to-b from-card/94 via-surface-2/88 to-card/92 backdrop-blur-xl transition-colors duration-200 dark:border-border/85 dark:from-card/88 dark:via-background/90 dark:to-card/86">
+              <div className="relative z-[1] min-h-0 flex-1 space-y-4 overflow-y-auto p-3 pt-4">
                 {menuSections.map((section, sectionIndex) => (
                   <div
                     key={section.title}
@@ -211,7 +211,7 @@ export function AdminPage() {
                   >
                     <p
                       className={cn(
-                        "mb-1.5 overflow-hidden px-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground transition-all duration-200",
+                        "mb-1.5 overflow-hidden px-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground transition-all duration-200 dark:text-white/70",
                         isIconOnly ? "max-h-0 opacity-0" : "max-h-5 opacity-100",
                       )}
                     >
@@ -226,8 +226,8 @@ export function AdminPage() {
                           className={cn(
                             "group relative h-9 w-full overflow-hidden rounded-xl border transition-all duration-200",
                             currentTab === item.id
-                              ? "border-primary/45 bg-gradient-to-r from-primary to-primary/85 text-primary-foreground shadow-[var(--shadow-soft)]"
-                              : "border-transparent text-foreground/90 hover:-translate-y-0.5 hover:border-border/80 hover:bg-background/70 dark:hover:bg-background/55",
+                              ? "border-primary/35 bg-primary/14 !text-foreground shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.08)] dark:border-primary/40 dark:bg-primary/22 dark:!text-white"
+                              : "border-transparent bg-transparent text-foreground/88 hover:-translate-y-0.5 hover:border-primary/28 hover:!animate-none hover:!bg-primary/10 hover:!text-foreground dark:text-white/90 dark:hover:border-primary/35 dark:hover:!bg-primary/18 dark:hover:!text-white",
                             isIconOnly ? "justify-center px-2" : "justify-start px-2.5",
                           )}
                           onClick={() => setActiveTab(item.id)}
@@ -238,12 +238,17 @@ export function AdminPage() {
                           <item.icon
                             className={cn(
                               "h-4 w-4 transition-all duration-200 group-hover:scale-105",
-                              currentTab === item.id ? "text-primary-foreground" : item.iconClass,
+                              currentTab === item.id
+                                ? "text-foreground dark:text-white"
+                                : `${item.iconClass} group-hover:text-foreground dark:text-white/85 dark:group-hover:text-white`,
                             )}
                           />
                           <span
                             className={cn(
                               "origin-left overflow-hidden whitespace-nowrap text-[13px] font-semibold transition-all duration-200",
+                              currentTab === item.id
+                                ? "text-foreground dark:text-white"
+                                : "group-hover:text-foreground dark:group-hover:text-white",
                               isIconOnly ? "max-w-0 -translate-x-1 opacity-0" : "max-w-[12rem] translate-x-0 opacity-100",
                             )}
                           >
