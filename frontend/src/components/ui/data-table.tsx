@@ -1,4 +1,4 @@
-import { Children, Fragment, cloneElement, isValidElement, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Children, Fragment, cloneElement, isValidElement, useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -174,22 +174,26 @@ export function DataTable<T>({
       : null,
   );
 
-  useEffect(() => {
-    if (!sortState) return;
-    if (columns.some((column) => column.key === sortState.key)) return;
-    setSortState(null);
+  const effectiveSortState = useMemo<DataTableSortState>(() => {
+    if (!sortState) {
+      return null;
+    }
+    if (columns.some((column) => column.key === sortState.key)) {
+      return sortState;
+    }
+    return null;
   }, [columns, sortState]);
 
   const hasWidthConfig = columns.some((column) => Boolean(column.width));
   const shouldUseEqualColumns = equalColumns && !hasWidthConfig;
   const equalColWidth = columns.length > 0 ? `${(100 / columns.length).toFixed(4)}%` : undefined;
   const sortedRows = useMemo(() => {
-    if (!sortState) return rows;
+    if (!effectiveSortState) return rows;
 
-    const column = columns.find((item) => item.key === sortState.key);
+    const column = columns.find((item) => item.key === effectiveSortState.key);
     if (!column) return rows;
 
-    const directionFactor = sortState.direction === "asc" ? 1 : -1;
+    const directionFactor = effectiveSortState.direction === "asc" ? 1 : -1;
     const wrapped = rows.map((row, index) => ({ row, index }));
 
     wrapped.sort((a, b) => {
@@ -208,7 +212,7 @@ export function DataTable<T>({
     });
 
     return wrapped.map((item) => item.row);
-  }, [columns, rows, sortState]);
+  }, [columns, rows, effectiveSortState]);
 
   function shouldIgnoreRowClick(target: EventTarget | null) {
     if (!(target instanceof Element)) return false;
@@ -259,7 +263,7 @@ export function DataTable<T>({
                         className={cn(
                           "h-5 w-5 rounded-sm leading-none transition-colors",
                           sortDirectionClassName(
-                            sortState?.key === column.key && sortState?.direction === "asc",
+                            effectiveSortState?.key === column.key && effectiveSortState?.direction === "asc",
                           ),
                         )}
                         onClick={() =>
@@ -277,7 +281,7 @@ export function DataTable<T>({
                         className={cn(
                           "h-5 w-5 rounded-sm leading-none transition-colors",
                           sortDirectionClassName(
-                            sortState?.key === column.key && sortState?.direction === "desc",
+                            effectiveSortState?.key === column.key && effectiveSortState?.direction === "desc",
                           ),
                         )}
                         onClick={() =>

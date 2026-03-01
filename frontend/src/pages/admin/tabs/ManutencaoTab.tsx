@@ -24,7 +24,7 @@ type ResetTarget =
 const RESET_TARGET_OPTIONS: Array<{ value: ResetTarget; label: string; helper: string }> = [
   { value: "credenciais", label: "Usuarios", helper: "Limpa contas de acesso (com opcao de preservar voce)." },
   { value: "configuracoes", label: "Configuracoes", helper: "Reinicia parametros para os valores padrao." },
-  { value: "unidades", label: "Unidades", helper: "Apaga o catalogo de unidades." },
+  { value: "unidades", label: "Unidades", helper: "Apaga unidades e exige reset de setores vinculados." },
   { value: "setores", label: "Setores", helper: "Apaga o catalogo de setores." },
   { value: "funcoes", label: "Funcoes", helper: "Apaga o catalogo de funcoes." },
   { value: "funcionarios", label: "Funcionarios", helper: "Apaga solicitantes cadastrados." },
@@ -251,6 +251,21 @@ export function ManutencaoTab() {
     });
   }
 
+  function atualizarTarget(target: ResetTarget, checked: boolean) {
+    setTargets((prev) => {
+      const next = {
+        ...prev,
+        [target]: checked,
+      };
+
+      if (target === "unidades" && checked) {
+        next.setores = true;
+      }
+
+      return next;
+    });
+  }
+
   return (
     <div className="space-y-3">
       <SectionCard
@@ -373,12 +388,8 @@ export function ManutencaoTab() {
               >
                 <Checkbox
                   checked={targets[item.value]}
-                  onCheckedChange={(checked) =>
-                    setTargets((prev) => ({
-                      ...prev,
-                      [item.value]: Boolean(checked),
-                    }))
-                  }
+                  disabled={item.value === "setores" && targets.unidades}
+                  onCheckedChange={(checked) => atualizarTarget(item.value, Boolean(checked))}
                 />
                 <span>
                   <span className="block font-medium text-foreground">{item.label}</span>
@@ -387,6 +398,11 @@ export function ManutencaoTab() {
               </label>
             ))}
           </div>
+          {targets.unidades ? (
+            <p className="text-[11px] text-muted-foreground">
+              O alvo Setores fica obrigatorio quando Unidades estiver selecionado.
+            </p>
+          ) : null}
         </div>
       </SectionCard>
 

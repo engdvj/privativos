@@ -7,8 +7,10 @@ export interface MonitorResumoData {
   funcionarioSetor: string;
   matricula: string;
   quantidade: number;
+  tipo_item?: string | null;
   tamanho?: string | null;
-  itens: Array<{ codigo: string; descricao?: string; tamanho?: string }>;
+  selecoes?: Array<{ tipo: string; tamanho: string; quantidade: number }>;
+  itens: Array<{ codigo: string; descricao?: string | null; tipo?: string; tamanho?: string }>;
 }
 
 export interface MonitorResultadoData {

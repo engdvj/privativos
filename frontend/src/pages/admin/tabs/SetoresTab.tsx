@@ -40,15 +40,18 @@ const SECTION_CONTENT_CLASS = "space-y-2.5 px-3 pb-3 pt-0 sm:px-4 sm:pb-4";
 
 export function SetoresTab() {
   const [rows, setRows] = useState<CatalogoRow[]>([]);
+  const [unidades, setUnidades] = useState<CatalogoRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [openCreateModal, setOpenCreateModal] = useState(false);
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [busca, setBusca] = useState("");
+  const [filtroUnidade, setFiltroUnidade] = useState("todos");
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "inativo">("todos");
   const [nomeNovo, setNomeNovo] = useState("");
-  const [edicao, setEdicao] = useState({ nome: "", status_ativo: true });
+  const [unidadesNovo, setUnidadesNovo] = useState<string[]>([]);
+  const [edicao, setEdicao] = useState({ nome: "", status_ativo: true, unidades: [] as string[] });
   const [setorParaExcluir, setSetorParaExcluir] = useState<CatalogoRow | null>(null);
   const [setorSelecionado, setSetorSelecionado] = useState<CatalogoRow | null>(null);
   const [funcionariosSetor, setFuncionariosSetor] = useState<FuncionarioRow[]>([]);
@@ -61,8 +64,12 @@ export function SetoresTab() {
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.get<CatalogoRow[]>("/admin/setores?include_inactive=true");
-      setRows(data);
+      const [setoresData, unidadesData] = await Promise.all([
+        api.get<CatalogoRow[]>("/admin/setores?include_inactive=true"),
+        api.get<CatalogoRow[]>("/admin/unidades?include_inactive=true"),
+      ]);
+      setRows(setoresData);
+      setUnidades(unidadesData);
     } catch (err) {
       error(err instanceof Error ? err.message : "Erro ao carregar setores");
     } finally {
@@ -74,14 +81,31 @@ export function SetoresTab() {
     void carregar();
   }, [carregar]);
 
+  const unidadesAtivas = useMemo(() => unidades.filter((row) => row.statusAtivo), [unidades]);
+
+  function unidadesSetor(row: CatalogoRow) {
+    return row.unidades?.filter(Boolean) ?? [];
+  }
+
+  function unidadesSetorLabel(row: CatalogoRow) {
+    const valores = unidadesSetor(row);
+    return valores.join(", ") || "-";
+  }
+
   const rowsFiltradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return rows.filter((row) => {
-      const matchTexto = !termo || row.nome.toLowerCase().includes(termo);
+      const matchTexto =
+        !termo ||
+        [row.nome, unidadesSetor(row).join(" "), row.statusAtivo ? "ativo" : "inativo"]
+          .join(" ")
+          .toLowerCase()
+          .includes(termo);
+      const matchUnidade = filtroUnidade === "todos" || unidadesSetor(row).includes(filtroUnidade);
       const matchStatus = filtroStatus === "todos" || (filtroStatus === "ativo" ? row.statusAtivo : !row.statusAtivo);
-      return matchTexto && matchStatus;
+      return matchTexto && matchUnidade && matchStatus;
     });
-  }, [rows, busca, filtroStatus]);
+  }, [rows, busca, filtroUnidade, filtroStatus]);
 
   const ativosFiltrados = useMemo(
     () => rowsFiltradas.filter((row) => row.statusAtivo).length,
@@ -137,6 +161,15 @@ export function SetoresTab() {
     }
   }, [paginaFuncionariosSetor, totalPaginasFuncionariosSetor]);
 
+  useEffect(() => {
+    if (filtroUnidade === "todos") {
+      return;
+    }
+    if (!unidades.some((row) => row.nome === filtroUnidade)) {
+      setFiltroUnidade("todos");
+    }
+  }, [filtroUnidade, unidades]);
+
   function abrirFuncionariosSetor(row: CatalogoRow) {
     setSetorSelecionado(row);
     setPaginaFuncionariosSetor(1);
@@ -164,11 +197,19 @@ export function SetoresTab() {
       error("Informe o nome do setor");
       return;
     }
+    if (unidadesNovo.length === 0) {
+      error("Selecione ao menos uma unidade para o setor");
+      return;
+    }
 
     setCreating(true);
     try {
-      await api.post("/admin/setores", { nome: nomeNovo.trim() });
+      await api.post("/admin/setores", {
+        nome: nomeNovo.trim(),
+        unidades: unidadesNovo,
+      });
       setNomeNovo("");
+      setUnidadesNovo([]);
       setOpenCreateModal(false);
       success("Setor criado com sucesso");
       await carregar();
@@ -180,13 +221,21 @@ export function SetoresTab() {
   }
 
   function abrirEdicao(row: CatalogoRow) {
+    const unidadesAtivasSetor = unidadesSetor(row).filter((nomeUnidade) =>
+      unidadesAtivas.some((unidade) => unidade.nome === nomeUnidade),
+    );
+
     setEditandoId(row.id);
-    setEdicao({ nome: row.nome, status_ativo: row.statusAtivo });
+    setEdicao({
+      nome: row.nome,
+      status_ativo: row.statusAtivo,
+      unidades: unidadesAtivasSetor,
+    });
   }
 
   function fecharEdicao() {
     setEditandoId(null);
-    setEdicao({ nome: "", status_ativo: true });
+    setEdicao({ nome: "", status_ativo: true, unidades: [] });
   }
 
   async function salvarEdicao() {
@@ -195,11 +244,16 @@ export function SetoresTab() {
       error("Informe o nome do setor");
       return;
     }
+    if (edicao.unidades.length === 0) {
+      error("Selecione ao menos uma unidade para o setor");
+      return;
+    }
 
     setSavingId(editandoId);
     try {
       await api.put(`/admin/setores/${editandoId}`, {
         nome: edicao.nome.trim(),
+        unidades: edicao.unidades,
         status_ativo: edicao.status_ativo,
       });
       success("Setor atualizado");
@@ -222,6 +276,36 @@ export function SetoresTab() {
     }
   }
 
+  function toggleUnidadeNovo(nomeUnidade: string, checked: boolean) {
+    setUnidadesNovo((prev) => {
+      if (checked) {
+        if (prev.includes(nomeUnidade)) {
+          return prev;
+        }
+        return [...prev, nomeUnidade];
+      }
+      return prev.filter((unidade) => unidade !== nomeUnidade);
+    });
+  }
+
+  function toggleUnidadeEdicao(nomeUnidade: string, checked: boolean) {
+    setEdicao((prev) => {
+      if (checked) {
+        if (prev.unidades.includes(nomeUnidade)) {
+          return prev;
+        }
+        return {
+          ...prev,
+          unidades: [...prev.unidades, nomeUnidade],
+        };
+      }
+      return {
+        ...prev,
+        unidades: prev.unidades.filter((unidade) => unidade !== nomeUnidade),
+      };
+    });
+  }
+
   return (
     <div className="space-y-3">
       <SectionCard
@@ -242,9 +326,23 @@ export function SetoresTab() {
             <Input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar setor"
+              placeholder="Buscar setor ou unidade"
               className={`${FILTRO_INPUT_CLASS} w-full sm:w-56`}
             />
+            <Select value={filtroUnidade} onValueChange={setFiltroUnidade}>
+              <SelectTrigger className={`${FILTRO_SELECT_CLASS} w-full sm:w-44`}>
+                <SelectValue placeholder="Unidade" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas unidades</SelectItem>
+                {unidades.map((unidade) => (
+                  <SelectItem key={unidade.id} value={unidade.nome}>
+                    {unidade.nome}
+                    {unidade.statusAtivo ? "" : " (inativa)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={filtroStatus} onValueChange={(value) => setFiltroStatus(value as "todos" | "ativo" | "inativo")}>
               <SelectTrigger className={`${FILTRO_SELECT_CLASS} w-full sm:w-36`}>
                 <SelectValue placeholder="Status" />
@@ -270,27 +368,29 @@ export function SetoresTab() {
         <div className="hidden md:block">
           <DataTable
             columns={[
-              { key: "nome", title: "Nome", width: "45%", sortValue: (row) => row.nome },
+              { key: "nome", title: "Nome", width: "28%", sortValue: (row) => row.nome },
+              { key: "unidades", title: "Unidades", width: "28%", sortValue: (row) => unidadesSetorLabel(row) },
               {
                 key: "total",
                 title: "Total funcionarios",
                 align: "center",
-                width: "17%",
+                width: "16%",
                 sortValue: (row) => row.totalFuncionarios ?? 0,
               },
-              { key: "status", title: "Status", align: "center", width: "18%", sortValue: (row) => row.statusAtivo },
-              { key: "acoes", title: "Acoes", align: "center", width: "20%" },
+              { key: "status", title: "Status", align: "center", width: "14%", sortValue: (row) => row.statusAtivo },
+              { key: "acoes", title: "Acoes", align: "center", width: "14%" },
             ]}
             rows={rowsFiltradas}
             getRowKey={(row) => row.id}
             onRowClick={(row) => abrirFuncionariosSetor(row)}
             loading={loading}
             emptyMessage="Nenhum setor encontrado."
-            minWidthClassName="min-w-[700px]"
+            minWidthClassName="min-w-[860px]"
             containerClassName={TABELA_DENSE_CLASS}
             renderRow={(row) => (
               <>
                 <td className="max-w-0 truncate" title={row.nome}>{row.nome}</td>
+                <td className="max-w-0 truncate" title={unidadesSetorLabel(row)}>{unidadesSetorLabel(row)}</td>
                 <td>
                   <div className="text-center font-semibold">{row.totalFuncionarios ?? 0}</div>
                 </td>
@@ -363,6 +463,9 @@ export function SetoresTab() {
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Funcionarios vinculados: <span className="font-semibold text-foreground">{row.totalFuncionarios ?? 0}</span>
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Unidades: <span className="font-semibold text-foreground">{unidadesSetorLabel(row)}</span>
                 </p>
                 <div className="mt-2 flex justify-end gap-1.5">
                   <Button
@@ -539,7 +642,11 @@ export function SetoresTab() {
 
       <Modal
         open={openCreateModal}
-        onClose={() => setOpenCreateModal(false)}
+        onClose={() => {
+          setOpenCreateModal(false);
+          setNomeNovo("");
+          setUnidadesNovo([]);
+        }}
         title="Novo Setor"
         description="Crie um setor para classificar funcionarios e operacoes."
         maxWidthClassName="max-w-xl"
@@ -554,8 +661,41 @@ export function SetoresTab() {
               className="h-9 text-xs"
             />
           </FormField>
+          <FormField label="Unidades vinculadas">
+            <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-xl border border-border/70 bg-surface-2/80 p-2.5">
+              {unidadesAtivas.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nenhuma unidade ativa encontrada.</p>
+              ) : (
+                unidadesAtivas.map((unidade) => (
+                  <label
+                    key={unidade.id}
+                    className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-xs hover:bg-accent/40"
+                  >
+                    <Checkbox
+                      checked={unidadesNovo.includes(unidade.nome)}
+                      onCheckedChange={(checked) =>
+                        toggleUnidadeNovo(unidade.nome, Boolean(checked))
+                      }
+                    />
+                    <span>{unidade.nome}</span>
+                  </label>
+                ))
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Selecionadas: {unidadesNovo.length}
+            </p>
+          </FormField>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <Button variant="outline" className="h-9 text-xs" onClick={() => setOpenCreateModal(false)}>
+            <Button
+              variant="outline"
+              className="h-9 text-xs"
+              onClick={() => {
+                setOpenCreateModal(false);
+                setNomeNovo("");
+                setUnidadesNovo([]);
+              }}
+            >
               Cancelar
             </Button>
             <Button className="h-9 text-xs" onClick={criar} loading={creating}>
@@ -570,7 +710,7 @@ export function SetoresTab() {
         open={Boolean(editandoId)}
         onClose={fecharEdicao}
         title="Editar Setor"
-        description="Atualize o nome e o status do setor."
+        description="Atualize nome, unidades vinculadas e status do setor."
         maxWidthClassName="max-w-xl"
       >
         <div className="space-y-3">
@@ -581,6 +721,31 @@ export function SetoresTab() {
               onChange={(e) => setEdicao((p) => ({ ...p, nome: e.target.value }))}
               className="h-9 text-xs"
             />
+          </FormField>
+          <FormField label="Unidades vinculadas">
+            <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-xl border border-border/70 bg-surface-2/80 p-2.5">
+              {unidadesAtivas.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Nenhuma unidade ativa encontrada.</p>
+              ) : (
+                unidadesAtivas.map((unidade) => (
+                  <label
+                    key={unidade.id}
+                    className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-xs hover:bg-accent/40"
+                  >
+                    <Checkbox
+                      checked={edicao.unidades.includes(unidade.nome)}
+                      onCheckedChange={(checked) =>
+                        toggleUnidadeEdicao(unidade.nome, Boolean(checked))
+                      }
+                    />
+                    <span>{unidade.nome}</span>
+                  </label>
+                ))
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Selecionadas: {edicao.unidades.length}
+            </p>
           </FormField>
           <label className="flex items-center gap-2 rounded-lg border border-border/70 bg-surface-2/70 px-2.5 py-2 text-xs text-muted-foreground">
             <Checkbox

@@ -111,7 +111,44 @@ function ResumoState({ data }: { data: MonitorResumoData }) {
               <StatusPill tone="warning">{data.quantidade}</StatusPill>
             </dd>
           </div>
-          {data.tipo === "emprestimo" && data.tamanho ? (
+          {data.tipo === "emprestimo" && data.selecoes && data.selecoes.length > 0 ? (
+            <>
+              <Separator />
+              <div className="space-y-1">
+                <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Pedido
+                </dt>
+                <dd className="space-y-1">
+                  {data.selecoes.map((row) => (
+                    <div
+                      key={`${row.tipo}-${row.tamanho}`}
+                      className="flex items-center justify-between rounded-lg border border-border/60 bg-background/80 px-2 py-1.5"
+                    >
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <StatusPill tone="neutral">{row.tipo}</StatusPill>
+                        <StatusPill tone="neutral">{row.tamanho}</StatusPill>
+                      </div>
+                      <StatusPill tone="info">{row.quantidade}</StatusPill>
+                    </div>
+                  ))}
+                </dd>
+              </div>
+            </>
+          ) : null}
+          {data.tipo === "emprestimo" && !data.selecoes?.length && data.tipo_item ? (
+            <>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <dt className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Tipo
+                </dt>
+                <dd>
+                  <StatusPill tone="neutral">{data.tipo_item}</StatusPill>
+                </dd>
+              </div>
+            </>
+          ) : null}
+          {data.tipo === "emprestimo" && !data.selecoes?.length && data.tamanho ? (
             <>
               <Separator />
               <div className="flex items-center justify-between">

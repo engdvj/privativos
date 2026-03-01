@@ -18,7 +18,9 @@ import { useGlobalDetail } from "@/components/global-detail/GlobalDetailProvider
 import type { ItemRow, ItemStatus } from "../types";
 
 const NOVO_TAMANHO_OPTION = "__novo_tamanho__";
+const NOVO_TIPO_OPTION = "__novo_tipo__";
 const TAMANHOS_PADRAO = ["UNICO", "PP", "P", "M", "G", "GG", "XG"];
+const TIPOS_PADRAO = ["Kit roupa", "Lencol", "Sem tipo"];
 const FILTRO_INPUT_CLASS =
   "h-8 rounded-xl border-border/80 bg-background/85 text-xs dark:border-border/90 dark:bg-background/70";
 const FILTRO_SELECT_CLASS =
@@ -34,6 +36,15 @@ function normalizarTamanho(valor: string) {
   return valor.trim().toUpperCase();
 }
 
+function normalizarTipo(valor: string) {
+  return valor.trim().replace(/\s+/g, " ");
+}
+
+function descricaoItemLabel(descricao: string | null | undefined) {
+  const normalized = (descricao ?? "").trim();
+  return normalized;
+}
+
 function montarOpcoesTamanho(tamanhosExistentes: string[]) {
   const extras = [...new Set(
     tamanhosExistentes
@@ -46,6 +57,18 @@ function montarOpcoesTamanho(tamanhosExistentes: string[]) {
   return [...TAMANHOS_PADRAO, ...extras];
 }
 
+function montarOpcoesTipo(tiposExistentes: string[]) {
+  const extras = [...new Set(
+    tiposExistentes
+      .map(normalizarTipo)
+      .filter(Boolean),
+  )]
+    .filter((tipo) => !TIPOS_PADRAO.includes(tipo))
+    .sort((a, b) => a.localeCompare(b));
+
+  return [...TIPOS_PADRAO, ...extras];
+}
+
 export function ItensTab() {
   const [rows, setRows] = useState<ItemRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -53,6 +76,7 @@ export function ItensTab() {
   const [openCreateModal, setOpenCreateModal] = useState(false);
   const [busca, setBusca] = useState("");
   const [filtroStatusItem, setFiltroStatusItem] = useState<"todos" | ItemStatus>("todos");
+  const [filtroTipo, setFiltroTipo] = useState("todos");
   const [filtroAtivo, setFiltroAtivo] = useState<"todos" | "ativo" | "inativo">("todos");
   const [itemParaExcluir, setItemParaExcluir] = useState<ItemRow | null>(null);
   const { success, error } = useToast();
@@ -63,6 +87,8 @@ export function ItensTab() {
     descricao: "",
     status: "disponivel" as ItemStatus,
   });
+  const [tipoSelecionado, setTipoSelecionado] = useState(TIPOS_PADRAO[0]);
+  const [novoTipo, setNovoTipo] = useState("");
   const [tamanhoSelecionado, setTamanhoSelecionado] = useState("UNICO");
   const [novoTamanho, setNovoTamanho] = useState("");
 
@@ -95,6 +121,7 @@ export function ItensTab() {
   }, [carregar]);
 
   const opcoesTamanho = useMemo(() => montarOpcoesTamanho(rows.map((row) => row.tamanho)), [rows]);
+  const opcoesTipo = useMemo(() => montarOpcoesTipo(rows.map((row) => row.tipo)), [rows]);
 
   function abrirModalCriacao() {
     setNovo({
@@ -102,18 +129,23 @@ export function ItensTab() {
       descricao: "",
       status: "disponivel",
     });
+    setTipoSelecionado(TIPOS_PADRAO[0]);
+    setNovoTipo("");
     setTamanhoSelecionado("UNICO");
     setNovoTamanho("");
     setOpenCreateModal(true);
   }
 
   async function criar() {
+    const tipoFinal = tipoSelecionado === NOVO_TIPO_OPTION
+      ? normalizarTipo(novoTipo)
+      : normalizarTipo(tipoSelecionado);
     const tamanhoFinal = tamanhoSelecionado === NOVO_TAMANHO_OPTION
       ? normalizarTamanho(novoTamanho)
       : normalizarTamanho(tamanhoSelecionado);
 
-    if (!novo.codigo || !novo.descricao || !tamanhoFinal) {
-      error("Preencha codigo, descricao e tamanho para criar item");
+    if (!novo.codigo.trim() || !tipoFinal || !tamanhoFinal) {
+      error("Preencha codigo, tipo e tamanho para criar item");
       return;
     }
 
@@ -121,11 +153,14 @@ export function ItensTab() {
     try {
       await api.post("/admin/itens", {
         codigo: novo.codigo.trim(),
-        descricao: novo.descricao.trim(),
+        descricao: novo.descricao.trim() || null,
+        tipo: tipoFinal,
         tamanho: tamanhoFinal,
         status: novo.status,
       });
       setNovo({ codigo: "", descricao: "", status: "disponivel" });
+      setTipoSelecionado(TIPOS_PADRAO[0]);
+      setNovoTipo("");
       setTamanhoSelecionado("UNICO");
       setNovoTamanho("");
       setOpenCreateModal(false);
@@ -151,13 +186,15 @@ export function ItensTab() {
   const rowsFiltradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return rows.filter((row) => {
+      const descricao = descricaoItemLabel(row.descricao);
       const matchTexto =
-        !termo || [row.codigo, row.descricao, row.tamanho, row.status, row.statusAtivo ? "ativo" : "inativo"].join(" ").toLowerCase().includes(termo);
+        !termo || [row.codigo, row.tipo, descricao, row.tamanho, row.status, row.statusAtivo ? "ativo" : "inativo"].join(" ").toLowerCase().includes(termo);
       const matchStatus = filtroStatusItem === "todos" || row.status === filtroStatusItem;
+      const matchTipo = filtroTipo === "todos" || row.tipo === filtroTipo;
       const matchAtivo = filtroAtivo === "todos" || (filtroAtivo === "ativo" ? row.statusAtivo : !row.statusAtivo);
-      return matchTexto && matchStatus && matchAtivo;
+      return matchTexto && matchStatus && matchTipo && matchAtivo;
     });
-  }, [rows, busca, filtroStatusItem, filtroAtivo]);
+  }, [rows, busca, filtroStatusItem, filtroTipo, filtroAtivo]);
 
   const resumoStatus = useMemo(() => {
     return rowsFiltradas.reduce(
@@ -192,7 +229,7 @@ export function ItensTab() {
             <Input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar codigo, descricao ou tamanho"
+              placeholder="Buscar codigo, tipo, descricao ou tamanho"
               className={`${FILTRO_INPUT_CLASS} w-full sm:w-64`}
             />
             <Select value={filtroStatusItem} onValueChange={(value) => setFiltroStatusItem(value as "todos" | ItemStatus)}>
@@ -204,6 +241,19 @@ export function ItensTab() {
                 <SelectItem value="disponivel">disponivel</SelectItem>
                 <SelectItem value="emprestado">emprestado</SelectItem>
                 <SelectItem value="inativo">inativo</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filtroTipo} onValueChange={setFiltroTipo}>
+              <SelectTrigger className={`${FILTRO_SELECT_CLASS} w-full sm:w-44`}>
+                <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos tipos</SelectItem>
+                {opcoesTipo.map((tipo) => (
+                  <SelectItem key={tipo} value={tipo}>
+                    {tipo}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={filtroAtivo} onValueChange={(value) => setFiltroAtivo(value as "todos" | "ativo" | "inativo")}>
@@ -234,15 +284,16 @@ export function ItensTab() {
               {
                 key: "codigo",
                 title: "Codigo",
-                width: "16%",
+                width: "14%",
                 className: "font-mono font-semibold",
                 sortValue: (row) => row.codigo,
               },
-              { key: "descricao", title: "Descricao", width: "32%", sortValue: (row) => row.descricao },
-              { key: "tamanho", title: "Tamanho", align: "center", width: "13%", sortValue: (row) => row.tamanho },
-              { key: "status", title: "Status", align: "center", width: "13%", sortValue: (row) => row.status },
-              { key: "ativo", title: "Ativo", align: "center", width: "12%", sortValue: (row) => row.statusAtivo },
-              { key: "acoes", title: "Acoes", align: "center", width: "14%" },
+              { key: "tipo", title: "Tipo", width: "16%", sortValue: (row) => row.tipo },
+              { key: "descricao", title: "Descricao", width: "26%", sortValue: (row) => descricaoItemLabel(row.descricao) },
+              { key: "tamanho", title: "Tamanho", align: "center", width: "12%", sortValue: (row) => row.tamanho },
+              { key: "status", title: "Status", align: "center", width: "12%", sortValue: (row) => row.status },
+              { key: "ativo", title: "Ativo", align: "center", width: "10%", sortValue: (row) => row.statusAtivo },
+              { key: "acoes", title: "Acoes", align: "center", width: "10%" },
             ]}
             rows={rowsFiltradas}
             getRowKey={(row) => row.codigo}
@@ -251,12 +302,13 @@ export function ItensTab() {
             }}
             loading={loading}
             emptyMessage="Nenhum item encontrado."
-            minWidthClassName="min-w-[860px]"
+            minWidthClassName="min-w-[980px]"
             containerClassName={TABELA_DENSE_CLASS}
             renderRow={(row) => (
               <>
                 <td>{row.codigo}</td>
-                <td className="max-w-0 truncate" title={row.descricao}>{row.descricao}</td>
+                <td>{row.tipo}</td>
+                <td className="max-w-0 truncate" title={descricaoItemLabel(row.descricao)}>{descricaoItemLabel(row.descricao)}</td>
                 <td>
                   <div className="flex justify-center">
                     <StatusPill tone="neutral" className="text-[10px]">{row.tamanho}</StatusPill>
@@ -338,8 +390,9 @@ export function ItensTab() {
                     {row.statusAtivo ? "ativo" : "inativo"}
                   </StatusPill>
                 </div>
-                <p className="mt-1 text-sm font-medium text-foreground">{row.descricao}</p>
+                <p className="mt-1 text-sm font-medium text-foreground">{descricaoItemLabel(row.descricao)}</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
+                  <StatusPill tone="neutral" className="text-[10px]">{row.tipo}</StatusPill>
                   <StatusPill tone="neutral" className="text-[10px]">{row.tamanho}</StatusPill>
                   <StatusPill tone="info" className="text-[10px]">{row.status}</StatusPill>
                 </div>
@@ -375,11 +428,11 @@ export function ItensTab() {
         open={openCreateModal}
         onClose={() => setOpenCreateModal(false)}
         title="Novo Item"
-        description="Cadastre codigo, descricao, tamanho e status inicial."
+        description="Cadastre codigo, tipo, descricao opcional, tamanho e status inicial."
         maxWidthClassName="max-w-3xl"
       >
         <div className="space-y-3">
-          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-5">
             <FormField label="Codigo" htmlFor="novo-item-codigo">
               <Input
                 id="novo-item-codigo"
@@ -389,7 +442,22 @@ export function ItensTab() {
                 className="h-9 text-xs"
               />
             </FormField>
-            <FormField label="Descricao" htmlFor="novo-item-descricao" className="sm:col-span-2 xl:col-span-1">
+            <FormField label="Tipo" htmlFor="novo-item-tipo-select">
+              <Select value={tipoSelecionado} onValueChange={setTipoSelecionado}>
+                <SelectTrigger id="novo-item-tipo-select" className="h-9 text-xs">
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {opcoesTipo.map((tipo) => (
+                    <SelectItem key={tipo} value={tipo}>
+                      {tipo}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={NOVO_TIPO_OPTION}>Criar novo tipo...</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="Descricao (opcional)" htmlFor="novo-item-descricao" className="sm:col-span-2 xl:col-span-1">
               <Input
                 id="novo-item-descricao"
                 value={novo.descricao}
@@ -428,6 +496,18 @@ export function ItensTab() {
                 </SelectContent>
               </Select>
             </FormField>
+            {tipoSelecionado === NOVO_TIPO_OPTION && (
+              <FormField label="Novo tipo" htmlFor="novo-item-tipo-custom" className="sm:col-span-2">
+                <Input
+                  id="novo-item-tipo-custom"
+                  value={novoTipo}
+                  onChange={(e) => setNovoTipo(e.target.value)}
+                  placeholder="Ex.: Kit roupa cirurgico"
+                  maxLength={100}
+                  className="h-9 text-xs"
+                />
+              </FormField>
+            )}
             {tamanhoSelecionado === NOVO_TAMANHO_OPTION && (
               <FormField label="Novo tamanho" htmlFor="novo-item-tamanho-custom" className="sm:col-span-2">
                 <Input

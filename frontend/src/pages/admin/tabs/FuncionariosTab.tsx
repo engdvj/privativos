@@ -16,6 +16,7 @@ import { TableActions } from "@/components/ui/table-actions";
 import { useToast } from "@/components/ui/use-toast";
 import { Pencil, Plus, Trash2, Users } from "lucide-react";
 import { useGlobalDetail } from "@/components/global-detail/GlobalDetailProvider";
+import { cn } from "@/lib/utils";
 import type { CatalogoRow, FuncionarioRow } from "../types";
 
 const FILTRO_INPUT_CLASS =
@@ -57,6 +58,14 @@ export function FuncionariosTab() {
     funcaoPrincipal: "",
   });
 
+  const unidadesAtivas = useMemo(() => unidades.filter((row) => row.statusAtivo), [unidades]);
+  const setoresAtivos = useMemo(() => setores.filter((row) => row.statusAtivo), [setores]);
+  const funcoesAtivas = useMemo(() => funcoes.filter((row) => row.statusAtivo), [funcoes]);
+  const setorByNome = useMemo(
+    () => new Map(setores.map((setor) => [setor.nome, setor] as const)),
+    [setores],
+  );
+
   function unidadesDoFuncionario(row: FuncionarioRow) {
     const fromApi = row.unidades?.filter(Boolean) ?? [];
     if (fromApi.length > 0) {
@@ -96,10 +105,32 @@ export function FuncionariosTab() {
     return funcoes.join(", ") || "-";
   }
 
+  function setorCompativelComUnidades(setor: CatalogoRow, unidadesSelecionadas: string[]) {
+    if (unidadesSelecionadas.length === 0) {
+      return true;
+    }
+    const unidadesSetor = setor.unidades?.filter(Boolean) ?? [];
+    if (unidadesSetor.length === 0) {
+      return true;
+    }
+    return unidadesSelecionadas.some((unidade) => unidadesSetor.includes(unidade));
+  }
+
+  function setorCompativelPorNome(nomeSetor: string, unidadesSelecionadas: string[]) {
+    const setor = setorByNome.get(nomeSetor);
+    if (!setor) {
+      return false;
+    }
+    return setorCompativelComUnidades(setor, unidadesSelecionadas);
+  }
+
   function toggleSetorNovo(nomeSetor: string, checked: boolean) {
     setNovo((prev) => {
       if (checked) {
         if (prev.setores.includes(nomeSetor)) {
+          return prev;
+        }
+        if (!setorCompativelPorNome(nomeSetor, prev.unidades)) {
           return prev;
         }
         const setores = [...prev.setores, nomeSetor];
@@ -169,9 +200,9 @@ export function FuncionariosTab() {
     try {
       const [data, unidadesData, setoresData, funcoesData] = await Promise.all([
         api.get<FuncionarioRow[]>("/admin/funcionarios?include_inactive=true"),
-        api.get<CatalogoRow[]>("/admin/unidades"),
-        api.get<CatalogoRow[]>("/admin/setores"),
-        api.get<CatalogoRow[]>("/admin/funcoes"),
+        api.get<CatalogoRow[]>("/admin/unidades?include_inactive=true"),
+        api.get<CatalogoRow[]>("/admin/setores?include_inactive=true"),
+        api.get<CatalogoRow[]>("/admin/funcoes?include_inactive=true"),
       ]);
       setRows(data);
       setUnidades(unidadesData);
@@ -199,6 +230,67 @@ export function FuncionariosTab() {
     window.addEventListener("global-detail-updated", onUpdated);
     return () => window.removeEventListener("global-detail-updated", onUpdated);
   }, [carregar]);
+
+  const setoresFiltroDisponiveis = useMemo(() => {
+    if (filtroUnidade === "todos") {
+      return setores;
+    }
+    return setores.filter((setor) => setorCompativelComUnidades(setor, [filtroUnidade]));
+  }, [setores, filtroUnidade]);
+
+  const unidadesFiltroDisponiveis = useMemo(() => {
+    if (filtroSetor === "todos") {
+      return unidades;
+    }
+    const setorSelecionado = setorByNome.get(filtroSetor);
+    if (!setorSelecionado) {
+      return unidades;
+    }
+    const unidadesSetor = setorSelecionado.unidades?.filter(Boolean) ?? [];
+    if (unidadesSetor.length === 0) {
+      return unidades;
+    }
+    return unidades.filter((unidade) => unidadesSetor.includes(unidade.nome));
+  }, [unidades, filtroSetor, setorByNome]);
+
+  const setoresDisponiveisNovo = useMemo(() => {
+    if (novo.unidades.length === 0) {
+      return setoresAtivos;
+    }
+    return setoresAtivos.filter((setor) => setorCompativelComUnidades(setor, novo.unidades));
+  }, [setoresAtivos, novo.unidades]);
+
+  useEffect(() => {
+    if (filtroUnidade !== "todos" && !unidadesFiltroDisponiveis.some((row) => row.nome === filtroUnidade)) {
+      setFiltroUnidade("todos");
+    }
+    if (filtroSetor !== "todos" && !setoresFiltroDisponiveis.some((row) => row.nome === filtroSetor)) {
+      setFiltroSetor("todos");
+    }
+  }, [filtroUnidade, filtroSetor, unidadesFiltroDisponiveis, setoresFiltroDisponiveis]);
+
+  useEffect(() => {
+    const setoresDisponiveis = new Set(setoresDisponiveisNovo.map((setor) => setor.nome));
+    setNovo((prev) => {
+      const setoresCompativeis = prev.setores.filter((setorNome) => setoresDisponiveis.has(setorNome));
+      const setorPrincipalCompativel = setoresCompativeis.includes(prev.setorPrincipal)
+        ? prev.setorPrincipal
+        : (setoresCompativeis[0] ?? "");
+
+      if (
+        setoresCompativeis.length === prev.setores.length &&
+        setorPrincipalCompativel === prev.setorPrincipal
+      ) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        setores: setoresCompativeis,
+        setorPrincipal: setorPrincipalCompativel,
+      };
+    });
+  }, [setoresDisponiveisNovo]);
 
   const rowsFiltradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -256,6 +348,19 @@ export function FuncionariosTab() {
 
     if (!novo.funcoes.includes(novo.funcaoPrincipal)) {
       error("Funcao principal precisa estar na lista de funcoes selecionadas");
+      return;
+    }
+
+    const setoresIncompativeis = novo.setores.filter(
+      (setor) => !setorCompativelPorNome(setor, novo.unidades),
+    );
+    if (setoresIncompativeis.length > 0) {
+      error(`Setores sem vinculo com as unidades selecionadas: ${setoresIncompativeis.join(", ")}`);
+      return;
+    }
+
+    if (!setorCompativelPorNome(novo.setorPrincipal, [novo.unidadePrincipal])) {
+      error("Setor principal precisa estar vinculado a unidade principal");
       return;
     }
 
@@ -359,7 +464,7 @@ export function FuncionariosTab() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todas unidades</SelectItem>
-                {unidades.map((unidade) => (
+                {unidadesFiltroDisponiveis.map((unidade) => (
                   <SelectItem key={unidade.id} value={unidade.nome}>
                     {unidade.nome}
                   </SelectItem>
@@ -372,7 +477,7 @@ export function FuncionariosTab() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos setores</SelectItem>
-                {setores.map((setor) => (
+                {setoresFiltroDisponiveis.map((setor) => (
                   <SelectItem key={setor.id} value={setor.nome}>
                     {setor.nome}
                   </SelectItem>
@@ -597,13 +702,13 @@ export function FuncionariosTab() {
             </FormField>
           </div>
 
-          <div className="grid gap-2.5 lg:grid-cols-3">
-            <FormField label="Unidades">
-              <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-xl border border-border/70 bg-surface-2/80 p-2.5">
-                {unidades.length === 0 ? (
+          <div className="grid items-start gap-2.5 lg:grid-cols-3">
+            <FormField label="Unidades" className="space-y-1.5">
+              <div className="h-44 space-y-1.5 overflow-y-auto rounded-xl border border-border/70 bg-surface-2/80 p-2.5">
+                {unidadesAtivas.length === 0 ? (
                   <p className="text-xs text-muted-foreground">Nenhuma unidade ativa encontrada.</p>
                 ) : (
-                  unidades.map((unidade) => {
+                  unidadesAtivas.map((unidade) => {
                     const checked = novo.unidades.includes(unidade.nome);
                     return (
                       <label key={unidade.id} className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-xs hover:bg-accent/40">
@@ -617,8 +722,11 @@ export function FuncionariosTab() {
                   })
                 )}
               </div>
-              <p className="text-[11px] text-muted-foreground">Selecionadas: {novo.unidades.length}</p>
-              <div className="mt-2">
+              <div className="min-h-8 space-y-0.5">
+                <p className="text-[11px] text-muted-foreground">Selecionadas: {novo.unidades.length}</p>
+                <p className="text-[11px] text-muted-foreground">Disponiveis: {unidadesAtivas.length}</p>
+              </div>
+              <div>
                 <Select
                   value={novo.unidadePrincipal}
                   onValueChange={(value) => setNovo((prev) => ({ ...prev, unidadePrincipal: value }))}
@@ -638,17 +746,25 @@ export function FuncionariosTab() {
               </div>
             </FormField>
 
-            <FormField label="Setores">
-              <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-xl border border-border/70 bg-surface-2/80 p-2.5">
-                {setores.length === 0 ? (
+            <FormField label="Setores" className="space-y-1.5">
+              <div className="h-44 space-y-1.5 overflow-y-auto rounded-xl border border-border/70 bg-surface-2/80 p-2.5">
+                {setoresAtivos.length === 0 ? (
                   <p className="text-xs text-muted-foreground">Nenhum setor ativo encontrado.</p>
                 ) : (
-                  setores.map((setor) => {
+                  setoresAtivos.map((setor) => {
                     const checked = novo.setores.includes(setor.nome);
+                    const compativel = novo.unidades.length === 0 || setorCompativelComUnidades(setor, novo.unidades);
                     return (
-                      <label key={setor.id} className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-xs hover:bg-accent/40">
+                      <label
+                        key={setor.id}
+                        className={cn(
+                          "flex items-center gap-2 rounded-lg px-1.5 py-1 text-xs",
+                          compativel ? "hover:bg-accent/40" : "cursor-not-allowed opacity-55",
+                        )}
+                      >
                         <Checkbox
                           checked={checked}
+                          disabled={!compativel}
                           onCheckedChange={(value) => toggleSetorNovo(setor.nome, Boolean(value))}
                         />
                         <span>{setor.nome}</span>
@@ -657,8 +773,13 @@ export function FuncionariosTab() {
                   })
                 )}
               </div>
-              <p className="text-[11px] text-muted-foreground">Selecionados: {novo.setores.length}</p>
-              <div className="mt-2">
+              <div className="min-h-8 space-y-0.5">
+                <p className="text-[11px] text-muted-foreground">Selecionados: {novo.setores.length}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Disponiveis: {setoresDisponiveisNovo.length}
+                </p>
+              </div>
+              <div>
                 <Select
                   value={novo.setorPrincipal}
                   onValueChange={(value) => setNovo((prev) => ({ ...prev, setorPrincipal: value }))}
@@ -678,12 +799,12 @@ export function FuncionariosTab() {
               </div>
             </FormField>
 
-            <FormField label="Funcoes">
-              <div className="max-h-44 space-y-1.5 overflow-y-auto rounded-xl border border-border/70 bg-surface-2/80 p-2.5">
-                {funcoes.length === 0 ? (
+            <FormField label="Funcoes" className="space-y-1.5">
+              <div className="h-44 space-y-1.5 overflow-y-auto rounded-xl border border-border/70 bg-surface-2/80 p-2.5">
+                {funcoesAtivas.length === 0 ? (
                   <p className="text-xs text-muted-foreground">Nenhuma funcao ativa encontrada.</p>
                 ) : (
-                  funcoes.map((funcao) => {
+                  funcoesAtivas.map((funcao) => {
                     const checked = novo.funcoes.includes(funcao.nome);
                     return (
                       <label key={funcao.id} className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-xs hover:bg-accent/40">
@@ -697,8 +818,11 @@ export function FuncionariosTab() {
                   })
                 )}
               </div>
-              <p className="text-[11px] text-muted-foreground">Selecionadas: {novo.funcoes.length}</p>
-              <div className="mt-2">
+              <div className="min-h-8 space-y-0.5">
+                <p className="text-[11px] text-muted-foreground">Selecionadas: {novo.funcoes.length}</p>
+                <p className="text-[11px] text-muted-foreground">Disponiveis: {funcoesAtivas.length}</p>
+              </div>
+              <div>
                 <Select
                   value={novo.funcaoPrincipal}
                   onValueChange={(value) => setNovo((prev) => ({ ...prev, funcaoPrincipal: value }))}

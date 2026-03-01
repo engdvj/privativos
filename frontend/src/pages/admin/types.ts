@@ -14,7 +14,8 @@ export interface FuncionarioRow {
 
 export interface ItemRow {
   codigo: string;
-  descricao: string;
+  descricao: string | null;
+  tipo: string;
   tamanho: string;
   status: ItemStatus;
   statusAtivo: boolean;
@@ -36,10 +37,12 @@ export interface CatalogoRow {
   nome: string;
   statusAtivo: boolean;
   totalFuncionarios?: number;
+  unidades?: string[];
 }
 
 export interface ItemDraft {
-  descricao: string;
+  descricao?: string | null;
+  tipo: string;
   tamanho: string;
   status: ItemStatus;
   status_ativo: boolean;
@@ -88,6 +91,8 @@ export interface DashboardDataResponse {
       operador_nome: string;
       unidade: string | null;
       setor: string | null;
+      origem: "colaborador" | "setor";
+      setor_solicitante: string | null;
     }>;
     devolucoes: Array<{
       id: number;
@@ -98,6 +103,8 @@ export interface DashboardDataResponse {
       operador_nome: string;
       unidade: string | null;
       setor: string | null;
+      origem: "colaborador" | "setor";
+      setor_solicitante: string | null;
     }>;
   };
   total: number;

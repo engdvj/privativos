@@ -16,7 +16,7 @@ import {
 import { EditarPerfilModal } from "@/components/EditarPerfilModal";
 
 interface BuscaSugestao {
-  tipo: "funcionario" | "kit";
+  tipo: "funcionario" | "kit" | "setor" | "unidade" | "funcao";
   chave: string;
   titulo: string;
   subtitulo: string;
@@ -26,7 +26,7 @@ export function Header() {
   const navigate = useNavigate();
   const [nome, setNome] = useState(() => api.getNome() ?? "");
   const perfilAtual = api.getPerfil();
-  const { openByQuery, openFuncionario, openKit } = useGlobalDetail();
+  const { openByQuery, openFuncionario, openKit, openSetor, openUnidade, openFuncao } = useGlobalDetail();
   const [busca, setBusca] = useState("");
   const [buscaAberta, setBuscaAberta] = useState(false);
   const [loadingBusca, setLoadingBusca] = useState(false);
@@ -116,7 +116,7 @@ export function Header() {
       setLoadingBusca(true);
       try {
         const data = await api.get<{ sugestoes: BuscaSugestao[] }>(
-          `/ops/busca-sugestoes?q=${encodeURIComponent(query)}`,
+          `/ops/busca-sugestoes?q=${encodeURIComponent(query)}&escopo=global`,
         );
         if (currentRequestId !== requestIdRef.current) return;
         setSugestoes(data.sugestoes);
@@ -140,10 +140,18 @@ export function Header() {
     try {
       if (sugestao.tipo === "funcionario") {
         await openFuncionario(sugestao.chave);
-      } else {
+      } else if (sugestao.tipo === "kit") {
         await openKit(sugestao.chave);
+      } else if (sugestao.tipo === "setor") {
+        await openSetor(sugestao.chave);
+      } else if (sugestao.tipo === "unidade") {
+        await openUnidade(sugestao.chave);
+      } else if (sugestao.tipo === "funcao") {
+        await openFuncao(sugestao.chave);
+      } else {
+        await openByQuery(sugestao.chave);
       }
-      setBusca(sugestao.chave);
+      setBusca(sugestao.titulo);
       setMostrarSugestoes(false);
       setBuscaAberta(false);
     } finally {
@@ -323,7 +331,7 @@ export function Header() {
                       onFocus={() => {
                         if (sugestoes.length > 0) setMostrarSugestoes(true);
                       }}
-                      placeholder="Buscar kit, usuario ou matricula"
+                      placeholder="Buscar funcionario, kit, setor, unidade ou funcao"
                       className="h-full min-w-0 flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/80 outline-none"
                       aria-label="Busca global"
                     />

@@ -7,7 +7,10 @@ import {
   Package,
   Clock,
   ArrowRightLeft,
+  ArrowUpRight,
+  ArrowDownLeft,
   CalendarDays,
+  Building2,
   UserCog,
   ChevronRight,
   Pencil,
@@ -25,7 +28,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { ItemStatus } from "@/pages/admin/types";
 
 const NOVO_TAMANHO_OPTION = "__novo_tamanho__";
+const NOVO_TIPO_OPTION = "__novo_tipo__";
 const TAMANHOS_PADRAO = ["UNICO", "PP", "P", "M", "G", "GG", "XG"];
+const TIPOS_PADRAO = ["Kit roupa", "Lencol", "Sem tipo"];
 
 interface HistoricoEvento {
   timestamp: string;
@@ -40,11 +45,13 @@ interface BuscaKitResponse {
   consulta: string;
   kit: {
     codigo: string;
-    descricao: string;
+    descricao: string | null;
+    tipo: string;
     tamanho: string;
     status: ItemStatus;
     status_ativo: boolean;
     solicitante_matricula: string | null;
+    setor_solicitante: string | null;
     data_emprestimo: string | null;
   };
   historico: {
@@ -69,7 +76,8 @@ interface BuscaFuncionarioResponse {
   };
   itens_emprestados: Array<{
     codigo: string;
-    descricao: string;
+    descricao: string | null;
+    tipo: string;
     tamanho: string;
     data_emprestimo: string | null;
   }>;
@@ -99,16 +107,100 @@ interface BuscaNaoEncontradoResponse {
   consulta: string;
 }
 
+interface ResultadoGlobalFuncionario {
+  matricula: string;
+  nome: string;
+  unidade: string;
+  unidades?: string[];
+  setor: string;
+  setores?: string[];
+  funcao: string;
+  funcoes?: string[];
+  status_ativo: boolean;
+}
+
+interface ResultadoGlobalKit {
+  codigo: string;
+  descricao: string | null;
+  tipo: string;
+  tamanho: string;
+  status: ItemStatus;
+  status_ativo: boolean;
+  solicitante_matricula: string | null;
+  setor_solicitante: string | null;
+}
+
+interface ResultadoGlobalSetor {
+  id: number;
+  nome: string;
+  status_ativo: boolean;
+  total_unidades: number;
+  total_funcionarios: number;
+}
+
+interface ResultadoGlobalUnidade {
+  id: number;
+  nome: string;
+  status_ativo: boolean;
+  total_setores: number;
+  total_funcionarios: number;
+}
+
+interface ResultadoGlobalFuncao {
+  id: number;
+  nome: string;
+  status_ativo: boolean;
+  total_funcionarios: number;
+}
+
+interface BuscaResultadosGlobaisResponse {
+  tipo: "resultados_globais";
+  consulta: string;
+  resultados: {
+    funcionarios: ResultadoGlobalFuncionario[];
+    kits: ResultadoGlobalKit[];
+    setores: ResultadoGlobalSetor[];
+    unidades: ResultadoGlobalUnidade[];
+    funcoes: ResultadoGlobalFuncao[];
+  };
+}
+
+interface BuscaSetorResponse {
+  tipo: "setor";
+  consulta: string;
+  setor: ResultadoGlobalSetor;
+  funcionarios_relacionados: ResultadoGlobalFuncionario[];
+}
+
+interface BuscaUnidadeResponse {
+  tipo: "unidade";
+  consulta: string;
+  unidade: ResultadoGlobalUnidade;
+  funcionarios_relacionados: ResultadoGlobalFuncionario[];
+}
+
+interface BuscaFuncaoResponse {
+  tipo: "funcao";
+  consulta: string;
+  funcao: ResultadoGlobalFuncao;
+  funcionarios_relacionados: ResultadoGlobalFuncionario[];
+}
+
 type BuscaGlobalResponse =
   | BuscaKitResponse
   | BuscaFuncionarioResponse
   | BuscaSugestoesResponse
+  | BuscaResultadosGlobaisResponse
+  | BuscaSetorResponse
+  | BuscaUnidadeResponse
+  | BuscaFuncaoResponse
   | BuscaNaoEncontradoResponse;
 
 interface CatalogoRow {
   id: number;
   nome: string;
   statusAtivo: boolean;
+  unidades?: string[];
 }
 
 interface FuncionarioEditDraft {
@@ -123,7 +215,9 @@ interface FuncionarioEditDraft {
 }
 
 interface KitEditDraft {
+  codigo: string;
   descricao: string;
+  tipo: string;
   tamanho: string;
   status: ItemStatus;
   status_ativo: boolean;
@@ -152,6 +246,9 @@ interface GlobalDetailContextValue {
   openByQuery: (query: string) => Promise<void>;
   openFuncionario: (matricula: string) => Promise<void>;
   openKit: (codigo: string) => Promise<void>;
+  openSetor: (nome: string) => Promise<void>;
+  openUnidade: (nome: string) => Promise<void>;
+  openFuncao: (nome: string) => Promise<void>;
 }
 
 const GlobalDetailContext = createContext<GlobalDetailContextValue | null>(null);
@@ -175,12 +272,26 @@ function statusKitTone(status: ItemStatus): "success" | "info" | "danger" {
   return "danger";
 }
 
+function descricaoItemLabel(descricao: string | null | undefined) {
+  const normalized = (descricao ?? "").trim();
+  return normalized;
+}
+
 function formatDuracaoHoras(horas: number | null) {
   if (horas === null || Number.isNaN(horas)) return "-";
   const totalMinutos = Math.max(0, Math.round(horas * 60));
-  const horasInteiras = Math.floor(totalMinutos / 60);
+  const minutosPorDia = 24 * 60;
+  const dias = Math.floor(totalMinutos / minutosPorDia);
+  const horasInteiras = Math.floor((totalMinutos % minutosPorDia) / 60);
   const minutos = totalMinutos % 60;
-  return `${horasInteiras}h ${minutos}m`;
+
+  if (dias > 0) return `${dias}d ${horasInteiras}h ${minutos}m`;
+  if (horasInteiras > 0) return `${horasInteiras}h ${minutos}m`;
+  return `${minutos}m`;
+}
+
+function normalizarTipo(valor: string) {
+  return valor.trim().replace(/\s+/g, " ");
 }
 
 function obterUsuarioAssociadoKit(
@@ -202,6 +313,16 @@ function obterUsuarioAssociadoKit(
 
   const nome = solicitacoes[0]?.nome_funcionario?.trim();
   return nome ? `${nome} (${matricula})` : matricula;
+}
+
+function formatarUsuarioHistorico(evento: HistoricoEvento | null | undefined) {
+  if (!evento) return null;
+  const matricula = evento.matricula.trim();
+  const nome = evento.nome_funcionario.trim();
+  if (nome && matricula) return `${nome} (${matricula})`;
+  if (nome) return nome;
+  if (matricula) return matricula;
+  return null;
 }
 
 function normalizarSetoresFuncionario(setores?: string[] | null, setorPrincipal?: string | null) {
@@ -248,6 +369,17 @@ function formatarUnidadesFuncionario(unidades: string[]) {
   return unidades.join(", ") || "-";
 }
 
+function setorCompativelComUnidadesCatalogo(setor: CatalogoRow, unidadesSelecionadas: string[]) {
+  if (unidadesSelecionadas.length === 0) {
+    return true;
+  }
+  const unidadesSetor = setor.unidades?.filter(Boolean) ?? [];
+  if (unidadesSetor.length === 0) {
+    return true;
+  }
+  return unidadesSelecionadas.some((unidade) => unidadesSetor.includes(unidade));
+}
+
 function normalizarFuncoesFuncionario(funcoes?: string[] | null, funcaoPrincipal?: string | null) {
   const candidatos = [funcaoPrincipal ?? "", ...(funcoes ?? [])];
   const vistos = new Set<string>();
@@ -269,6 +401,47 @@ function formatarFuncoesFuncionario(funcoes: string[]) {
   return funcoes.join(", ") || "-";
 }
 
+function normalizarChaveBusca(valor: string) {
+  return valor
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function filtrarFuncionariosRelacionadosPorSetor(
+  funcionarios: ResultadoGlobalFuncionario[],
+  setorNome: string,
+) {
+  const alvo = normalizarChaveBusca(setorNome);
+  return funcionarios.filter((funcionario) => {
+    const setoresFuncionario = normalizarSetoresFuncionario(funcionario.setores, funcionario.setor);
+    return setoresFuncionario.some((setor) => normalizarChaveBusca(setor) === alvo);
+  });
+}
+
+function filtrarFuncionariosRelacionadosPorUnidade(
+  funcionarios: ResultadoGlobalFuncionario[],
+  unidadeNome: string,
+) {
+  const alvo = normalizarChaveBusca(unidadeNome);
+  return funcionarios.filter((funcionario) => {
+    const unidadesFuncionario = normalizarUnidadesFuncionario(funcionario.unidades, funcionario.unidade);
+    return unidadesFuncionario.some((unidade) => normalizarChaveBusca(unidade) === alvo);
+  });
+}
+
+function filtrarFuncionariosRelacionadosPorFuncao(
+  funcionarios: ResultadoGlobalFuncionario[],
+  funcaoNome: string,
+) {
+  const alvo = normalizarChaveBusca(funcaoNome);
+  return funcionarios.filter((funcionario) => {
+    const funcoesFuncionario = normalizarFuncoesFuncionario(funcionario.funcoes, funcionario.funcao);
+    return funcoesFuncionario.some((funcao) => normalizarChaveBusca(funcao) === alvo);
+  });
+}
+
 function canEditInModal() {
   const perfil = api.getPerfil();
   return perfil === "admin" || perfil === "superadmin";
@@ -288,6 +461,18 @@ function montarOpcoesTamanho(tamanhosExistentes: string[]) {
     .sort((a, b) => a.localeCompare(b));
 
   return [...TAMANHOS_PADRAO, ...extras];
+}
+
+function montarOpcoesTipo(tiposExistentes: string[]) {
+  const extras = [...new Set(
+    tiposExistentes
+      .map(normalizarTipo)
+      .filter(Boolean),
+  )]
+    .filter((tipo) => !TIPOS_PADRAO.includes(tipo))
+    .sort((a, b) => a.localeCompare(b));
+
+  return [...TIPOS_PADRAO, ...extras];
 }
 
 export function GlobalDetailProvider({ children }: { children: ReactNode }) {
@@ -313,12 +498,17 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
     status_ativo: true,
   });
   const [draftKit, setDraftKit] = useState<KitEditDraft>({
+    codigo: "",
     descricao: "",
+    tipo: TIPOS_PADRAO[0],
     tamanho: "UNICO",
     status: "disponivel",
     status_ativo: true,
   });
+  const [opcoesTipoKit, setOpcoesTipoKit] = useState<string[]>(TIPOS_PADRAO);
   const [opcoesTamanhoKit, setOpcoesTamanhoKit] = useState<string[]>(TAMANHOS_PADRAO);
+  const [criandoNovoTipoKit, setCriandoNovoTipoKit] = useState(false);
+  const [novoTipoKit, setNovoTipoKit] = useState("");
   const [criandoNovoTamanhoKit, setCriandoNovoTamanhoKit] = useState(false);
   const [novoTamanhoKit, setNovoTamanhoKit] = useState("");
   const [historicoModalOpen, setHistoricoModalOpen] = useState(false);
@@ -327,6 +517,26 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
   const [historicoTotal, setHistoricoTotal] = useState(0);
   const [historicoCiclos, setHistoricoCiclos] = useState<HistoricoCiclo[]>([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
+  const setorByNome = useMemo(
+    () => new Map(setores.map((setor) => [setor.nome, setor] as const)),
+    [setores],
+  );
+  const setoresDisponiveisDraft = useMemo(() => {
+    if (draftFuncionario.unidades.length === 0) {
+      return setores;
+    }
+    return setores.filter((setor) =>
+      setorCompativelComUnidadesCatalogo(setor, draftFuncionario.unidades),
+    );
+  }, [setores, draftFuncionario.unidades]);
+
+  const setorCompativelPorNomeDraft = useCallback((nomeSetor: string, unidadesSelecionadas: string[]) => {
+    const setor = setorByNome.get(nomeSetor);
+    if (!setor) {
+      return false;
+    }
+    return setorCompativelComUnidadesCatalogo(setor, unidadesSelecionadas);
+  }, [setorByNome]);
 
   const setoresFuncionarioResultado = useMemo(() => {
     if (!resultado || resultado.tipo !== "funcionario") {
@@ -379,11 +589,15 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
     }
     if (data.tipo === "kit") {
       setDraftKit({
-        descricao: data.kit.descricao,
+        codigo: data.kit.codigo,
+        descricao: data.kit.descricao ?? "",
+        tipo: data.kit.tipo || TIPOS_PADRAO[0],
         tamanho: data.kit.tamanho || "UNICO",
         status: data.kit.status,
         status_ativo: data.kit.status_ativo,
       });
+      setCriandoNovoTipoKit(false);
+      setNovoTipoKit("");
       setCriandoNovoTamanhoKit(false);
       setNovoTamanhoKit("");
     }
@@ -430,6 +644,9 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
         if (prev.setores.includes(nomeSetor)) {
           return prev;
         }
+        if (!setorCompativelPorNomeDraft(nomeSetor, prev.unidades)) {
+          return prev;
+        }
         const setores = [...prev.setores, nomeSetor];
         return {
           ...prev,
@@ -445,7 +662,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
         setorPrincipal: prev.setorPrincipal === nomeSetor ? (setores[0] ?? "") : prev.setorPrincipal,
       };
     });
-  }, []);
+  }, [setorCompativelPorNomeDraft]);
 
   const alternarFuncaoDraft = useCallback((nomeFuncao: string, checked: boolean) => {
     setDraftFuncionario((prev) => {
@@ -470,13 +687,119 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  useEffect(() => {
+    if (!editMode || setores.length === 0) {
+      return;
+    }
+
+    const setoresDisponiveis = new Set(setoresDisponiveisDraft.map((setor) => setor.nome));
+    setDraftFuncionario((prev) => {
+      const setoresCompativeis = prev.setores.filter((setorNome) => setoresDisponiveis.has(setorNome));
+      const setorPrincipalCompativel = setoresCompativeis.includes(prev.setorPrincipal)
+        ? prev.setorPrincipal
+        : (setoresCompativeis[0] ?? "");
+
+      if (
+        setoresCompativeis.length === prev.setores.length &&
+        setorPrincipalCompativel === prev.setorPrincipal
+      ) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        setores: setoresCompativeis,
+        setorPrincipal: setorPrincipalCompativel,
+      };
+    });
+  }, [editMode, setores.length, setoresDisponiveisDraft]);
+
   const ensureTamanhosKit = useCallback(async () => {
-    const itens = await api.get<Array<{ tamanho: string }>>("/admin/itens?include_inactive=true");
+    const itens = await api.get<Array<{ tipo: string; tamanho: string }>>("/admin/itens?include_inactive=true");
+    setOpcoesTipoKit(montarOpcoesTipo(itens.map((item) => item.tipo)));
     setOpcoesTamanhoKit(montarOpcoesTamanho(itens.map((item) => item.tamanho)));
   }, []);
 
+  const resolverResultadoFocado = useCallback(
+    (
+      data: BuscaGlobalResponse,
+      foco: "setor" | "unidade" | "funcao",
+      termoBusca: string,
+    ): BuscaGlobalResponse => {
+      if (data.tipo !== "resultados_globais") {
+        return data;
+      }
+
+      const termoNormalizado = normalizarChaveBusca(termoBusca);
+
+      if (foco === "setor") {
+        const setor =
+          data.resultados.setores.find((item) => normalizarChaveBusca(item.nome) === termoNormalizado) ??
+          data.resultados.setores[0];
+
+        if (!setor) {
+          return data;
+        }
+
+        return {
+          tipo: "setor",
+          consulta: setor.nome,
+          setor,
+          funcionarios_relacionados: filtrarFuncionariosRelacionadosPorSetor(
+            data.resultados.funcionarios,
+            setor.nome,
+          ),
+        };
+      }
+
+      if (foco === "unidade") {
+        const unidade =
+          data.resultados.unidades.find((item) => normalizarChaveBusca(item.nome) === termoNormalizado) ??
+          data.resultados.unidades[0];
+
+        if (!unidade) {
+          return data;
+        }
+
+        return {
+          tipo: "unidade",
+          consulta: unidade.nome,
+          unidade,
+          funcionarios_relacionados: filtrarFuncionariosRelacionadosPorUnidade(
+            data.resultados.funcionarios,
+            unidade.nome,
+          ),
+        };
+      }
+
+      const funcao =
+        data.resultados.funcoes.find((item) => normalizarChaveBusca(item.nome) === termoNormalizado) ??
+        data.resultados.funcoes[0];
+
+      if (!funcao) {
+        return data;
+      }
+
+      return {
+        tipo: "funcao",
+        consulta: funcao.nome,
+        funcao,
+        funcionarios_relacionados: filtrarFuncionariosRelacionadosPorFuncao(
+          data.resultados.funcionarios,
+          funcao.nome,
+        ),
+      };
+    },
+    [],
+  );
+
   const fetchByQuery = useCallback(
-    async (query: string) => {
+    async (
+      query: string,
+      options?: {
+        foco?: "setor" | "unidade" | "funcao";
+      },
+    ) => {
       const normalized = query.trim();
       if (!normalized) return;
 
@@ -488,18 +811,21 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
 
       try {
         const data = await api.get<BuscaGlobalResponse>(
-          `/ops/busca-global?q=${encodeURIComponent(normalized)}`,
+          `/ops/busca-global?q=${encodeURIComponent(normalized)}&modo=global`,
         );
+        const dataFinal = options?.foco
+          ? resolverResultadoFocado(data, options.foco, normalized)
+          : data;
         setLastQuery(normalized);
-        setResultado(data);
-        hydrateDraftFromResult(data);
+        setResultado(dataFinal);
+        hydrateDraftFromResult(dataFinal);
       } catch (err) {
         setErroBusca(err instanceof Error ? err.message : "Falha ao realizar a busca");
       } finally {
         setLoading(false);
       }
     },
-    [hydrateDraftFromResult],
+    [hydrateDraftFromResult, resolverResultadoFocado],
   );
 
   const openByQuery = useCallback(
@@ -519,6 +845,27 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
   const openKit = useCallback(
     async (codigo: string) => {
       await fetchByQuery(codigo);
+    },
+    [fetchByQuery],
+  );
+
+  const openSetor = useCallback(
+    async (nome: string) => {
+      await fetchByQuery(nome, { foco: "setor" });
+    },
+    [fetchByQuery],
+  );
+
+  const openUnidade = useCallback(
+    async (nome: string) => {
+      await fetchByQuery(nome, { foco: "unidade" });
+    },
+    [fetchByQuery],
+  );
+
+  const openFuncao = useCallback(
+    async (nome: string) => {
+      await fetchByQuery(nome, { foco: "funcao" });
     },
     [fetchByQuery],
   );
@@ -588,6 +935,17 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
           error("Funcao principal precisa estar na lista de funcoes");
           return;
         }
+        const setoresIncompativeis = draftFuncionario.setores.filter(
+          (setor) => !setorCompativelPorNomeDraft(setor, draftFuncionario.unidades),
+        );
+        if (setoresIncompativeis.length > 0) {
+          error(`Setores sem vinculo com as unidades selecionadas: ${setoresIncompativeis.join(", ")}`);
+          return;
+        }
+        if (!setorCompativelPorNomeDraft(draftFuncionario.setorPrincipal, [draftFuncionario.unidadePrincipal])) {
+          error("Setor principal precisa estar vinculado a unidade principal");
+          return;
+        }
         const setoresOrdenados = [
           draftFuncionario.setorPrincipal,
           ...draftFuncionario.setores.filter((setor) => setor !== draftFuncionario.setorPrincipal),
@@ -617,27 +975,43 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
       }
 
       if (resultado.tipo === "kit") {
+        const codigoFinal = draftKit.codigo.trim();
+        const tipoFinal = criandoNovoTipoKit
+          ? normalizarTipo(novoTipoKit)
+          : normalizarTipo(draftKit.tipo);
         const tamanhoFinal = criandoNovoTamanhoKit
           ? normalizarTamanho(novoTamanhoKit)
           : normalizarTamanho(draftKit.tamanho);
+        const descricaoFinal = draftKit.descricao.trim() || null;
 
-        if (!draftKit.descricao.trim() || !tamanhoFinal) {
-          error("Informe descricao e tamanho do item");
+        if (!codigoFinal || !tipoFinal || !tamanhoFinal) {
+          error("Informe codigo, tipo e tamanho do item");
           return;
         }
-        await api.put(`/admin/itens/${resultado.kit.codigo}`, {
-          descricao: draftKit.descricao.trim(),
+        await api.put(`/admin/itens/${encodeURIComponent(resultado.kit.codigo)}`, {
+          codigo: codigoFinal,
+          descricao: descricaoFinal,
+          tipo: tipoFinal,
           tamanho: tamanhoFinal,
           status: draftKit.status,
           status_ativo: draftKit.status_ativo,
         });
-        setDraftKit((prev) => ({ ...prev, tamanho: tamanhoFinal }));
+        setDraftKit((prev) => ({ ...prev, codigo: codigoFinal, tipo: tipoFinal, tamanho: tamanhoFinal }));
         entidadeAtualizada = "kit";
         success("Item atualizado");
       }
 
       setEditMode(false);
-      await refreshCurrent();
+      if (resultado.tipo === "kit") {
+        const codigoFinal = draftKit.codigo.trim();
+        if (codigoFinal && codigoFinal !== resultado.kit.codigo) {
+          await fetchByQuery(codigoFinal);
+        } else {
+          await refreshCurrent();
+        }
+      } else {
+        await refreshCurrent();
+      }
       if (entidadeAtualizada) {
         window.dispatchEvent(
           new CustomEvent("global-detail-updated", { detail: { entidade: entidadeAtualizada } }),
@@ -653,11 +1027,15 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
     editMode,
     draftFuncionario,
     draftKit,
+    criandoNovoTipoKit,
+    novoTipoKit,
     criandoNovoTamanhoKit,
     novoTamanhoKit,
     error,
     success,
     refreshCurrent,
+    fetchByQuery,
+    setorCompativelPorNomeDraft,
   ]);
 
   const historicoTarget = useMemo(() => {
@@ -712,29 +1090,79 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
       openByQuery,
       openFuncionario,
       openKit,
+      openSetor,
+      openUnidade,
+      openFuncao,
     }),
-    [openByQuery, openFuncionario, openKit],
+    [openByQuery, openFuncionario, openKit, openSetor, openUnidade, openFuncao],
   );
+
+  const totalResultadosGlobais = useMemo(() => {
+    if (!resultado || resultado.tipo !== "resultados_globais") {
+      return 0;
+    }
+
+    return (
+      resultado.resultados.funcionarios.length +
+      resultado.resultados.kits.length +
+      resultado.resultados.setores.length +
+      resultado.resultados.unidades.length +
+      resultado.resultados.funcoes.length
+    );
+  }, [resultado]);
 
   // --- Modal title, description, icon based on result type ---
   const modalTitle = resultado?.tipo === "funcionario"
     ? resultado.funcionario.nome
     : resultado?.tipo === "kit"
       ? `Kit ${resultado.kit.codigo}`
+      : resultado?.tipo === "setor"
+        ? `Setor ${resultado.setor.nome}`
+        : resultado?.tipo === "unidade"
+          ? `Unidade ${resultado.unidade.nome}`
+          : resultado?.tipo === "funcao"
+            ? `Funcao ${resultado.funcao.nome}`
+      : resultado?.tipo === "resultados_globais"
+        ? "Resultados globais"
       : "Detalhes";
 
   const modalDescription = resultado?.tipo === "funcionario"
     ? `Matricula ${resultado.funcionario.matricula}`
     : resultado?.tipo === "kit"
-      ? `${resultado.kit.descricao} | Tam: ${resultado.kit.tamanho}`
+      ? [
+        resultado.kit.tipo,
+        descricaoItemLabel(resultado.kit.descricao),
+        `Tam: ${resultado.kit.tamanho}`,
+      ].filter(Boolean).join(" | ")
+      : resultado?.tipo === "setor"
+        ? `${resultado.setor.total_unidades} unidades | ${resultado.setor.total_funcionarios} funcionarios`
+        : resultado?.tipo === "unidade"
+          ? `${resultado.unidade.total_setores} setores | ${resultado.unidade.total_funcionarios} funcionarios`
+          : resultado?.tipo === "funcao"
+            ? `${resultado.funcao.total_funcionarios} funcionarios`
+      : resultado?.tipo === "resultados_globais"
+        ? `${totalResultadosGlobais} resultados para "${resultado.consulta}"`
       : undefined;
 
   const modalIcon = resultado?.tipo === "funcionario"
     ? User
     : resultado?.tipo === "kit"
       ? Package
+      : resultado?.tipo === "setor" || resultado?.tipo === "unidade"
+        ? Building2
+        : resultado?.tipo === "funcao"
+          ? UserCog
+      : resultado?.tipo === "resultados_globais"
+        ? Building2
       : undefined;
-  const detailModalMaxWidth = resultado?.tipo === "funcionario" ? "max-w-3xl" : "max-w-2xl";
+  const detailModalMaxWidth = resultado?.tipo === "resultados_globais"
+    ? "max-w-4xl"
+    : resultado?.tipo === "funcionario" ||
+        resultado?.tipo === "setor" ||
+        resultado?.tipo === "unidade" ||
+        resultado?.tipo === "funcao"
+      ? "max-w-3xl"
+      : "max-w-2xl";
   const kitUsuarioAssociado = useMemo(() => {
     if (!resultado || resultado.tipo !== "kit") {
       return null;
@@ -742,7 +1170,48 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
 
     return obterUsuarioAssociadoKit(resultado.kit, resultado.historico);
   }, [resultado]);
+  const kitSetorAssociado = useMemo(() => {
+    if (!resultado || resultado.tipo !== "kit") {
+      return null;
+    }
+    const setor = (resultado.kit.setor_solicitante ?? "").trim();
+    return setor || null;
+  }, [resultado]);
   const kitEmprestado = resultado?.tipo === "kit" && resultado.kit.status === "emprestado";
+  const kitTemHistorico = useMemo(() => {
+    if (!resultado || resultado.tipo !== "kit") {
+      return false;
+    }
+    return resultado.historico.solicitacoes.length > 0 || resultado.historico.devolucoes.length > 0;
+  }, [resultado]);
+  const kitUltimoEmprestimoEvento = useMemo(() => {
+    if (!resultado || resultado.tipo !== "kit") {
+      return null;
+    }
+    return resultado.historico.solicitacoes[0] ?? null;
+  }, [resultado]);
+  const kitUltimaDevolucaoEvento = useMemo(() => {
+    if (!resultado || resultado.tipo !== "kit") {
+      return null;
+    }
+    return resultado.historico.devolucoes[0] ?? null;
+  }, [resultado]);
+  const kitUltimoUsuarioHistorico = useMemo(() => {
+    return (
+      formatarUsuarioHistorico(kitUltimaDevolucaoEvento) ??
+      formatarUsuarioHistorico(kitUltimoEmprestimoEvento)
+    );
+  }, [kitUltimaDevolucaoEvento, kitUltimoEmprestimoEvento]);
+  const kitTituloVinculo = useMemo(() => {
+    if (kitEmprestado) {
+      if (kitUsuarioAssociado) return "Usuario atual";
+      if (kitSetorAssociado) return "Setor atual";
+      return "Vinculo atual";
+    }
+    if (kitUltimoUsuarioHistorico) return "Ultimo usuario";
+    if (kitSetorAssociado) return "Ultimo setor";
+    return "Ultimo vinculo";
+  }, [kitEmprestado, kitSetorAssociado, kitUltimoUsuarioHistorico, kitUsuarioAssociado]);
 
   // --- Footer content for action buttons ---
   let footerContent: ReactNode = null;
@@ -798,7 +1267,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
 
         {!loading && !erroBusca && resultado?.tipo === "nao_encontrado" && (
           <div className="rounded-lg bg-muted/30 py-3 text-center text-sm text-muted-foreground">
-            Nenhum kit, usuario ou matricula encontrado para: <strong>{resultado.consulta}</strong>.
+            Nenhum resultado encontrado para: <strong>{resultado.consulta}</strong>.
           </div>
         )}
 
@@ -820,10 +1289,10 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                   <div className="flex-1">
                     <div className="font-medium text-foreground">{sugestao.nome}</div>
                     <div className="text-sm text-muted-foreground">
-                      Matricula {sugestao.matricula} | {formatarSetoresFuncionario(
-                        normalizarSetoresFuncionario(sugestao.setores, sugestao.setor),
-                      )} | {formatarUnidadesFuncionario(
+                      Matricula {sugestao.matricula} | {formatarUnidadesFuncionario(
                         normalizarUnidadesFuncionario(sugestao.unidades, sugestao.unidade),
+                      )} | {formatarSetoresFuncionario(
+                        normalizarSetoresFuncionario(sugestao.setores, sugestao.setor),
                       )} | {formatarFuncoesFuncionario(
                         normalizarFuncoesFuncionario(sugestao.funcoes, sugestao.funcao),
                       )}
@@ -832,6 +1301,375 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
                 </button>
               ))}
+            </div>
+          </div>
+        )}
+
+        {!loading && !erroBusca && resultado?.tipo === "resultados_globais" && (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Busca global para <strong>{resultado.consulta}</strong>. Refine o termo para reduzir a lista.
+            </p>
+
+            <div className="grid gap-3 lg:grid-cols-2">
+              {resultado.resultados.funcionarios.length > 0 && (
+                <div className="space-y-1.5 rounded-xl border border-border/60 bg-surface-1/80 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Funcionarios ({resultado.resultados.funcionarios.length})
+                  </p>
+                  <div className="space-y-1.5">
+                    {resultado.resultados.funcionarios.map((funcionario) => (
+                      <button
+                        key={`func-${funcionario.matricula}`}
+                        type="button"
+                        className="flex w-full items-start justify-between gap-2 rounded-lg border border-border/50 bg-background/70 px-2.5 py-2 text-left transition-all hover:border-primary/30 hover:bg-accent/35"
+                        onClick={() => {
+                          void openFuncionario(funcionario.matricula);
+                        }}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-foreground">{funcionario.nome}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            Matricula {funcionario.matricula} | {funcionario.unidade} | {funcionario.setor} | {funcionario.funcao}
+                          </p>
+                        </div>
+                        <StatusPill tone={funcionario.status_ativo ? "success" : "danger"}>
+                          {funcionario.status_ativo ? "Ativo" : "Inativo"}
+                        </StatusPill>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {resultado.resultados.kits.length > 0 && (
+                <div className="space-y-1.5 rounded-xl border border-border/60 bg-surface-1/80 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Kits ({resultado.resultados.kits.length})
+                  </p>
+                  <div className="space-y-1.5">
+                    {resultado.resultados.kits.map((kit) => (
+                      <button
+                        key={`kit-${kit.codigo}`}
+                        type="button"
+                        className="flex w-full items-start justify-between gap-2 rounded-lg border border-border/50 bg-background/70 px-2.5 py-2 text-left transition-all hover:border-primary/30 hover:bg-accent/35"
+                        onClick={() => {
+                          void openKit(kit.codigo);
+                        }}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate font-mono text-sm font-semibold text-primary">{kit.codigo}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {kit.tipo} | {descricaoItemLabel(kit.descricao)} | Tam: {kit.tamanho}
+                          </p>
+                          {(kit.solicitante_matricula || kit.setor_solicitante) && (
+                            <p className="truncate text-xs text-muted-foreground">
+                              {kit.solicitante_matricula ? `Matricula: ${kit.solicitante_matricula}` : ""}
+                              {kit.solicitante_matricula && kit.setor_solicitante ? " | " : ""}
+                              {kit.setor_solicitante ? `Setor: ${kit.setor_solicitante}` : ""}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <StatusPill tone={statusKitTone(kit.status)}>{statusKitLabel(kit.status)}</StatusPill>
+                          {!kit.status_ativo && <StatusPill tone="danger">Inativo</StatusPill>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {resultado.resultados.setores.length > 0 && (
+                <div className="space-y-1.5 rounded-xl border border-border/60 bg-surface-1/80 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Setores ({resultado.resultados.setores.length})
+                  </p>
+                  <div className="space-y-1.5">
+                    {resultado.resultados.setores.map((setor) => (
+                      <button
+                        key={`setor-${setor.id}`}
+                        type="button"
+                        className="flex w-full items-center justify-between gap-2 rounded-lg border border-border/50 bg-background/70 px-2.5 py-2 text-left transition-all hover:border-primary/30 hover:bg-accent/35"
+                        onClick={() => {
+                          void openSetor(setor.nome);
+                        }}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-foreground">{setor.nome}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {setor.total_unidades} unidades | {setor.total_funcionarios} funcionarios
+                          </p>
+                        </div>
+                        <StatusPill tone={setor.status_ativo ? "success" : "danger"}>
+                          {setor.status_ativo ? "Ativo" : "Inativo"}
+                        </StatusPill>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {resultado.resultados.unidades.length > 0 && (
+                <div className="space-y-1.5 rounded-xl border border-border/60 bg-surface-1/80 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Unidades ({resultado.resultados.unidades.length})
+                  </p>
+                  <div className="space-y-1.5">
+                    {resultado.resultados.unidades.map((unidade) => (
+                      <button
+                        key={`unidade-${unidade.id}`}
+                        type="button"
+                        className="flex w-full items-center justify-between gap-2 rounded-lg border border-border/50 bg-background/70 px-2.5 py-2 text-left transition-all hover:border-primary/30 hover:bg-accent/35"
+                        onClick={() => {
+                          void openUnidade(unidade.nome);
+                        }}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-foreground">{unidade.nome}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {unidade.total_setores} setores | {unidade.total_funcionarios} funcionarios
+                          </p>
+                        </div>
+                        <StatusPill tone={unidade.status_ativo ? "success" : "danger"}>
+                          {unidade.status_ativo ? "Ativa" : "Inativa"}
+                        </StatusPill>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {resultado.resultados.funcoes.length > 0 && (
+                <div className="space-y-1.5 rounded-xl border border-border/60 bg-surface-1/80 p-3 lg:col-span-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Funcoes ({resultado.resultados.funcoes.length})
+                  </p>
+                  <div className="grid gap-1.5 sm:grid-cols-2">
+                    {resultado.resultados.funcoes.map((funcao) => (
+                      <button
+                        key={`funcao-${funcao.id}`}
+                        type="button"
+                        className="flex w-full items-center justify-between gap-2 rounded-lg border border-border/50 bg-background/70 px-2.5 py-2 text-left transition-all hover:border-primary/30 hover:bg-accent/35"
+                        onClick={() => {
+                          void openFuncao(funcao.nome);
+                        }}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-foreground">{funcao.nome}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {funcao.total_funcionarios} funcionarios
+                          </p>
+                        </div>
+                        <StatusPill tone={funcao.status_ativo ? "success" : "danger"}>
+                          {funcao.status_ativo ? "Ativa" : "Inativa"}
+                        </StatusPill>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {!loading && !erroBusca && resultado?.tipo === "setor" && (
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-border/65 bg-surface-1/85 p-4 sm:p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill tone={resultado.setor.status_ativo ? "success" : "danger"}>
+                  {resultado.setor.status_ativo ? "Ativo" : "Inativo"}
+                </StatusPill>
+              </div>
+              <div className="mt-4 grid gap-2.5 text-sm sm:grid-cols-2">
+                <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Nome
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">{resultado.setor.nome}</p>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Unidades vinculadas
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">{resultado.setor.total_unidades}</p>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-background/70 p-3 sm:col-span-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Funcionarios vinculados
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">{resultado.setor.total_funcionarios}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2.5 rounded-2xl border border-border/65 bg-surface-1/85 p-4 sm:p-5">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <User className="h-4 w-4 text-primary" />
+                Funcionarios relacionados
+                <span className="ml-auto text-xs font-normal text-muted-foreground">
+                  {resultado.funcionarios_relacionados.length}{" "}
+                  {resultado.funcionarios_relacionados.length === 1 ? "item" : "itens"}
+                </span>
+              </div>
+              {resultado.funcionarios_relacionados.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-border/60 bg-background/55 py-3 text-center text-sm text-muted-foreground">
+                  Nenhum funcionario relacionado encontrado neste recorte.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {resultado.funcionarios_relacionados.map((funcionario) => (
+                    <button
+                      key={`setor-func-${funcionario.matricula}`}
+                      type="button"
+                      className="group flex w-full items-center gap-3 rounded-xl border border-border/55 bg-background/70 px-3 py-2.5 text-left text-sm transition-all hover:border-primary/30 hover:bg-accent/40"
+                      onClick={() => {
+                        void openFuncionario(funcionario.matricula);
+                      }}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-semibold text-foreground">{funcionario.nome}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          Matricula {funcionario.matricula} | {funcionario.unidade} | {funcionario.funcao}
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {!loading && !erroBusca && resultado?.tipo === "unidade" && (
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-border/65 bg-surface-1/85 p-4 sm:p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill tone={resultado.unidade.status_ativo ? "success" : "danger"}>
+                  {resultado.unidade.status_ativo ? "Ativa" : "Inativa"}
+                </StatusPill>
+              </div>
+              <div className="mt-4 grid gap-2.5 text-sm sm:grid-cols-2">
+                <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Nome
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">{resultado.unidade.nome}</p>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Setores vinculados
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">{resultado.unidade.total_setores}</p>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-background/70 p-3 sm:col-span-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Funcionarios vinculados
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">{resultado.unidade.total_funcionarios}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2.5 rounded-2xl border border-border/65 bg-surface-1/85 p-4 sm:p-5">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <User className="h-4 w-4 text-primary" />
+                Funcionarios relacionados
+                <span className="ml-auto text-xs font-normal text-muted-foreground">
+                  {resultado.funcionarios_relacionados.length}{" "}
+                  {resultado.funcionarios_relacionados.length === 1 ? "item" : "itens"}
+                </span>
+              </div>
+              {resultado.funcionarios_relacionados.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-border/60 bg-background/55 py-3 text-center text-sm text-muted-foreground">
+                  Nenhum funcionario relacionado encontrado neste recorte.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {resultado.funcionarios_relacionados.map((funcionario) => (
+                    <button
+                      key={`unidade-func-${funcionario.matricula}`}
+                      type="button"
+                      className="group flex w-full items-center gap-3 rounded-xl border border-border/55 bg-background/70 px-3 py-2.5 text-left text-sm transition-all hover:border-primary/30 hover:bg-accent/40"
+                      onClick={() => {
+                        void openFuncionario(funcionario.matricula);
+                      }}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-semibold text-foreground">{funcionario.nome}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          Matricula {funcionario.matricula} | {funcionario.setor} | {funcionario.funcao}
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {!loading && !erroBusca && resultado?.tipo === "funcao" && (
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-border/65 bg-surface-1/85 p-4 sm:p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusPill tone={resultado.funcao.status_ativo ? "success" : "danger"}>
+                  {resultado.funcao.status_ativo ? "Ativa" : "Inativa"}
+                </StatusPill>
+              </div>
+              <div className="mt-4 grid gap-2.5 text-sm sm:grid-cols-2">
+                <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Nome
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">{resultado.funcao.nome}</p>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Funcionarios vinculados
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">{resultado.funcao.total_funcionarios}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2.5 rounded-2xl border border-border/65 bg-surface-1/85 p-4 sm:p-5">
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <User className="h-4 w-4 text-primary" />
+                Funcionarios relacionados
+                <span className="ml-auto text-xs font-normal text-muted-foreground">
+                  {resultado.funcionarios_relacionados.length}{" "}
+                  {resultado.funcionarios_relacionados.length === 1 ? "item" : "itens"}
+                </span>
+              </div>
+              {resultado.funcionarios_relacionados.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-border/60 bg-background/55 py-3 text-center text-sm text-muted-foreground">
+                  Nenhum funcionario relacionado encontrado neste recorte.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {resultado.funcionarios_relacionados.map((funcionario) => (
+                    <button
+                      key={`funcao-func-${funcionario.matricula}`}
+                      type="button"
+                      className="group flex w-full items-center gap-3 rounded-xl border border-border/55 bg-background/70 px-3 py-2.5 text-left text-sm transition-all hover:border-primary/30 hover:bg-accent/40"
+                      onClick={() => {
+                        void openFuncionario(funcionario.matricula);
+                      }}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate font-semibold text-foreground">{funcionario.nome}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          Matricula {funcionario.matricula} | {funcionario.unidade} | {funcionario.setor}
+                        </div>
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -856,54 +1694,148 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                     </div>
                     <p className="mt-1 text-sm font-semibold text-foreground">{resultado.kit.tamanho}</p>
                   </div>
-                  {kitEmprestado ? (
-                    <div className="rounded-xl border border-border/60 bg-background/70 p-3">
-                      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      <Package className="h-3.5 w-3.5 text-primary/70" />
+                      Tipo
+                    </div>
+                    <p className="mt-1 text-sm font-semibold text-foreground">{resultado.kit.tipo}</p>
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-background/70 p-3 sm:col-span-2">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      <Package className="h-3.5 w-3.5 text-primary/70" />
+                      Descricao
+                    </div>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {descricaoItemLabel(resultado.kit.descricao)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      {((kitEmprestado && !kitUsuarioAssociado && kitSetorAssociado) || (!kitEmprestado && !kitUltimoUsuarioHistorico && kitSetorAssociado)) ? (
+                        <Building2 className="h-3.5 w-3.5 text-primary/70" />
+                      ) : (
                         <User className="h-3.5 w-3.5 text-primary/70" />
-                        Usuario associado
-                      </div>
-                      <p className="mt-1 truncate text-sm font-semibold text-foreground">{kitUsuarioAssociado ?? "-"}</p>
+                      )}
+                      {kitTituloVinculo}
                     </div>
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-border/60 bg-background/55 p-3">
-                      <p className="text-sm font-medium text-foreground">Item livre</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Sem usuario associado no momento.</p>
+                    {kitEmprestado ? (
+                      kitUsuarioAssociado ? (
+                        <>
+                          <p className="mt-1 truncate text-sm font-semibold text-foreground">
+                            {kitUsuarioAssociado}
+                          </p>
+                          {kitSetorAssociado ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Setor: {kitSetorAssociado}
+                            </p>
+                          ) : null}
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Item em emprestimo ativo.
+                          </p>
+                        </>
+                      ) : kitSetorAssociado ? (
+                        <>
+                          <p className="mt-1 truncate text-sm font-semibold text-foreground">
+                            {kitSetorAssociado}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Item em emprestimo ativo para este setor.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="mt-1 text-sm font-semibold text-foreground">Sem vinculo identificado</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Este item esta emprestado, mas sem usuario/setor informado.
+                          </p>
+                        </>
+                      )
+                    ) : (
+                      kitUltimoUsuarioHistorico ? (
+                        <>
+                          <p className="mt-1 truncate text-sm font-semibold text-foreground">
+                            {kitUltimoUsuarioHistorico}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Usuario do ultimo ciclo registrado deste item.
+                          </p>
+                        </>
+                      ) : kitSetorAssociado ? (
+                        <>
+                          <p className="mt-1 truncate text-sm font-semibold text-foreground">
+                            {kitSetorAssociado}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Ultimo setor associado ao item.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="mt-1 text-sm font-semibold text-foreground">Sem vinculo no historico</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Este item ainda nao teve usuario ou setor vinculado.
+                          </p>
+                        </>
+                      )
+                    )}
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-background/70 p-3">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                      <CalendarDays className="h-3.5 w-3.5 text-primary/70" />
+                      {kitEmprestado ? "Ultimo emprestimo" : "Ultima devolucao"}
                     </div>
-                  )}
-                  {kitEmprestado && (
-                    <div className="rounded-xl border border-border/60 bg-background/70 p-3 sm:col-span-2">
-                      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                        <CalendarDays className="h-3.5 w-3.5 text-primary/70" />
-                        Emprestimo
-                      </div>
-                      <p className="mt-1 text-sm font-semibold text-foreground">
-                        {formatDateTime(resultado.kit.data_emprestimo)}
-                      </p>
-                    </div>
-                  )}
-                  {!kitEmprestado && resultado.kit.data_emprestimo && (
-                    <div className="rounded-xl border border-border/60 bg-background/70 p-3 sm:col-span-2">
-                      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                        <CalendarDays className="h-3.5 w-3.5 text-primary/70" />
-                        Ultimo emprestimo registrado
-                      </div>
-                      <p className="mt-1 text-sm font-semibold text-foreground">
-                        {formatDateTime(resultado.kit.data_emprestimo)}
-                      </p>
-                    </div>
-                  )}
-                  {!kitEmprestado && !resultado.kit.data_emprestimo && (
-                    <div className="rounded-xl border border-dashed border-border/60 bg-background/55 p-3 sm:col-span-2">
-                      <p className="text-sm font-medium text-foreground">Disponivel para emprestimo</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Ainda sem registro de emprestimo em aberto.</p>
-                    </div>
-                  )}
+                    {kitEmprestado ? (
+                      <>
+                        <p className="mt-1 text-sm font-semibold text-foreground">
+                          {formatDateTime(resultado.kit.data_emprestimo ?? kitUltimoEmprestimoEvento?.timestamp ?? null)}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Inicio do emprestimo atual.
+                        </p>
+                      </>
+                    ) : kitUltimaDevolucaoEvento ? (
+                      <>
+                        <p className="mt-1 text-sm font-semibold text-foreground">
+                          {formatDateTime(kitUltimaDevolucaoEvento.timestamp)}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Data da ultima devolucao registrada.
+                        </p>
+                      </>
+                    ) : kitTemHistorico ? (
+                      <>
+                        <p className="mt-1 text-sm font-semibold text-foreground">Sem devolucao registrada</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Existe historico de emprestimo, mas sem devolucao registrada.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="mt-1 text-sm font-semibold text-foreground">Sem historico de devolucao</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Este item ainda nao teve devolucao registrada.
+                        </p>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             ) : (
               <div className="space-y-3 rounded-2xl border border-border/65 bg-surface-1/85 p-4 sm:p-5">
                 <div className="space-y-1">
-                  <Label htmlFor="detalhe-kit-descricao">Descricao</Label>
+                  <Label htmlFor="detalhe-kit-codigo">Codigo</Label>
+                  <Input
+                    id="detalhe-kit-codigo"
+                    value={draftKit.codigo}
+                    onChange={(event) =>
+                      setDraftKit((prev) => ({ ...prev, codigo: event.target.value }))
+                    }
+                    maxLength={50}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="detalhe-kit-descricao">Descricao (opcional)</Label>
                   <Input
                     id="detalhe-kit-descricao"
                     value={draftKit.descricao}
@@ -912,6 +1844,45 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                     }
                   />
                 </div>
+                <div className="space-y-1">
+                  <Label htmlFor="detalhe-kit-tipo-select">Tipo</Label>
+                  <Select
+                    value={criandoNovoTipoKit ? NOVO_TIPO_OPTION : draftKit.tipo}
+                    onValueChange={(value) => {
+                      if (value === NOVO_TIPO_OPTION) {
+                        setCriandoNovoTipoKit(true);
+                        setNovoTipoKit("");
+                        return;
+                      }
+                      setCriandoNovoTipoKit(false);
+                      setDraftKit((prev) => ({ ...prev, tipo: value }));
+                    }}
+                  >
+                    <SelectTrigger id="detalhe-kit-tipo-select">
+                      <SelectValue placeholder="Selecione o tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {opcoesTipoKit.map((tipo) => (
+                        <SelectItem key={tipo} value={tipo}>
+                          {tipo}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value={NOVO_TIPO_OPTION}>Criar novo tipo...</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {criandoNovoTipoKit && (
+                  <div className="space-y-1">
+                    <Label htmlFor="detalhe-kit-tipo-novo">Novo tipo</Label>
+                    <Input
+                      id="detalhe-kit-tipo-novo"
+                      value={novoTipoKit}
+                      onChange={(event) => setNovoTipoKit(event.target.value)}
+                      maxLength={100}
+                      placeholder="Ex.: Kit roupa cirurgico"
+                    />
+                  </div>
+                )}
                 <div className="space-y-1">
                   <Label htmlFor="detalhe-kit-tamanho-select">Tamanho</Label>
                   <Select
@@ -1032,7 +2003,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                       {formatarFuncoesFuncionario(funcoesFuncionarioResultado)}
                     </p>
                   </div>
-                  <div className="rounded-xl border border-border/60 bg-background/70 p-3 sm:col-span-2">
+                  <div className="rounded-xl border border-border/60 bg-background/70 p-3">
                     <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                       <ArrowRightLeft className="h-3.5 w-3.5 text-primary/70" />
                       Setores
@@ -1097,9 +2068,22 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                     <Label>Setores</Label>
                     <div className="max-h-44 space-y-2 overflow-y-auto rounded-lg border border-border/70 bg-background p-3">
                       {setores.map((setor) => (
-                        <label key={setor.id} className="flex items-center gap-2 text-sm">
+                        <label
+                          key={setor.id}
+                          className={cn(
+                            "flex items-center gap-2 text-sm",
+                            draftFuncionario.unidades.length > 0 &&
+                              !setorCompativelComUnidadesCatalogo(setor, draftFuncionario.unidades)
+                              ? "cursor-not-allowed opacity-55"
+                              : "",
+                          )}
+                        >
                           <Checkbox
                             checked={draftFuncionario.setores.includes(setor.nome)}
+                            disabled={
+                              draftFuncionario.unidades.length > 0 &&
+                              !setorCompativelComUnidadesCatalogo(setor, draftFuncionario.unidades)
+                            }
                             onCheckedChange={(checked) =>
                               alternarSetorDraft(setor.nome, Boolean(checked))
                             }
@@ -1110,6 +2094,9 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Selecionados: {draftFuncionario.setores.length}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Disponiveis para as unidades selecionadas: {setoresDisponiveisDraft.length}
                     </p>
                     <Select
                       value={draftFuncionario.setorPrincipal}
@@ -1208,7 +2195,8 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                     >
                       <div className="min-w-0 flex-1">
                         <div className="font-mono font-semibold text-primary">{item.codigo}</div>
-                        <div className="truncate text-foreground">{item.descricao}</div>
+                        <div className="truncate text-foreground">{descricaoItemLabel(item.descricao)}</div>
+                        <div className="text-xs text-muted-foreground">Tipo: {item.tipo}</div>
                         <div className="text-xs text-muted-foreground">Tamanho: {item.tamanho}</div>
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <CalendarDays className="h-3 w-3" />
@@ -1241,7 +2229,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
       <Modal
         open={historicoModalOpen}
         title="Historico completo"
-        description="Todos os ciclos de saida e entrada"
+        description="Todos os ciclos de emprestimo e devolucao"
         icon={Clock}
         onClose={() => setHistoricoModalOpen(false)}
         footer={
@@ -1295,48 +2283,64 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
 
 function HistoricoCiclosSection({ ciclos }: { ciclos: HistoricoCiclo[] }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {ciclos.length === 0 ? (
         <p className="rounded-lg bg-muted/30 py-3 text-center text-sm text-muted-foreground">
           Nenhum registro.
         </p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {ciclos.map((ciclo, index) => (
             <div
               key={`ciclo-${ciclo.item_codigo}-${ciclo.matricula}-${ciclo.saida_em ?? "sem-saida"}-${index}`}
               className={cn(
-                "rounded-lg border-l-[3px] bg-surface-1 px-3 py-2.5 text-sm",
-                ciclo.em_aberto
-                  ? "border-l-warning"
-                  : "border-l-success",
+                "rounded-xl border bg-surface-1 px-3.5 py-3 text-sm shadow-sm",
+                ciclo.em_aberto ? "border-warning/45" : "border-success/40",
               )}
             >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0 space-y-0.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate text-foreground">{ciclo.nome_funcionario}</span>
+                    <span className="text-muted-foreground">({ciclo.matricula})</span>
+                  </div>
                   <span className="font-mono font-semibold text-primary">{ciclo.item_codigo}</span>
-                  <span className="text-foreground">{ciclo.nome_funcionario}</span>
-                  <span className="text-muted-foreground">({ciclo.matricula})</span>
                 </div>
                 <StatusPill tone={ciclo.em_aberto ? "warning" : "success"}>
                   {ciclo.em_aberto ? "Em aberto" : "Concluido"}
                 </StatusPill>
               </div>
-              <div className="mt-2 grid gap-x-4 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2">
-                <div className="flex items-center gap-1.5">
-                  <ArrowRightLeft className="h-3 w-3 text-primary/60" />
-                  Saida: {formatDateTime(ciclo.saida_em)}
-                  <span className="text-muted-foreground/70">({ciclo.saida_operador ?? "-"})</span>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-lg border border-border/60 bg-background/65 px-3 py-2">
+                  <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <ArrowUpRight className="h-3.5 w-3.5 text-primary/70" />
+                    Emprestimo
+                  </div>
+                  <div className="text-sm font-medium text-foreground">{formatDateTime(ciclo.saida_em)}</div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Operador: {ciclo.saida_operador ?? "-"}
+                  </p>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <ArrowRightLeft className="h-3 w-3 rotate-180 text-primary/60" />
-                  Entrada: {formatDateTime(ciclo.entrada_em)}
-                  <span className="text-muted-foreground/70">({ciclo.entrada_operador ?? "-"})</span>
+
+                <div className="rounded-lg border border-border/60 bg-background/65 px-3 py-2">
+                  <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <ArrowDownLeft className="h-3.5 w-3.5 text-primary/70" />
+                    Devolucao
+                  </div>
+                  <div className="text-sm font-medium text-foreground">
+                    {ciclo.em_aberto ? "Aguardando devolucao" : formatDateTime(ciclo.entrada_em)}
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Operador: {ciclo.entrada_operador ?? "-"}
+                  </p>
                 </div>
-                <div className="flex items-center gap-1.5 sm:col-span-2">
-                  <Clock className="h-3 w-3 text-primary/60" />
-                  Tempo com kit: <span className="font-medium text-foreground">{formatDuracaoHoras(ciclo.duracao_horas)}</span>
-                </div>
+              </div>
+
+              <div className="mt-3 flex items-center gap-1.5 rounded-lg bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+                <Clock className="h-3.5 w-3.5 text-primary/60" />
+                Intervalo com kit:{" "}
+                <span className="font-medium text-foreground">{formatDuracaoHoras(ciclo.duracao_horas)}</span>
               </div>
             </div>
           ))}

@@ -24,7 +24,7 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import type { DashboardDataResponse, DashboardFiltersResponse } from "../types";
+import type { CatalogoRow, DashboardDataResponse, DashboardFiltersResponse } from "../types";
 
 const ITENS_POR_PAGINA = 5;
 const LIMITE_LISTA_DISTRIBUICAO_POPOVER = 4;
@@ -34,18 +34,37 @@ const FILTROS_INICIAIS = {
   data_fim: "",
   unidade: "",
   setor: "",
+  origem: "",
   matricula: "",
 };
 
 type MovimentacaoRow = DashboardDataResponse["rows"]["solicitacoes"][number];
+type OrigemMovimentacao = MovimentacaoRow["origem"];
+type EventoTipo = "solicitacao" | "devolucao";
+type EventoDashboardRow = MovimentacaoRow & {
+  evento_tipo: EventoTipo;
+  evento_chave: string;
+};
 
-const COLUNAS_MOVIMENTACAO: DataTableColumn<MovimentacaoRow>[] = [
+const COLUNAS_EVENTOS: DataTableColumn<EventoDashboardRow>[] = [
   {
     key: "timestamp",
     title: "Data/Hora",
     align: "center",
     className: "font-mono tabular-nums",
     sortValue: (row) => new Date(row.timestamp).getTime(),
+  },
+  {
+    key: "evento_tipo",
+    title: "Evento",
+    align: "center",
+    sortValue: (row) => row.evento_tipo,
+  },
+  {
+    key: "origem",
+    title: "Origem",
+    align: "center",
+    sortValue: (row) => row.origem,
   },
   {
     key: "matricula",
@@ -55,8 +74,8 @@ const COLUNAS_MOVIMENTACAO: DataTableColumn<MovimentacaoRow>[] = [
     sortValue: (row) => row.matricula,
   },
   {
-    key: "nome",
-    title: "Nome",
+    key: "solicitante",
+    title: "Solicitante",
     align: "center",
     sortValue: (row) => row.nome_funcionario,
   },
@@ -85,9 +104,12 @@ type KpiChave = "emprestimos" | "devolucoes" | "disponiveis" | "emprestados";
 
 type ItemDashboardResumo = {
   codigo: string;
+  descricao: string | null;
+  tipo: string;
   tamanho: string;
   status: "disponivel" | "emprestado" | "inativo";
   solicitanteMatricula: string | null;
+  setorSolicitante: string | null;
   dataEmprestimo: string | null;
   statusAtivo: boolean;
 };
@@ -210,6 +232,44 @@ function formatarTimestamp(valor: string) {
   };
 }
 
+function descricaoItemResumo(descricao: string | null | undefined) {
+  return (descricao ?? "").trim();
+}
+
+function statusItemLabel(status: ItemDashboardResumo["status"]) {
+  if (status === "disponivel") return "Disponivel";
+  if (status === "emprestado") return "Emprestado";
+  return "Inativo";
+}
+
+function statusItemTone(status: ItemDashboardResumo["status"]): "success" | "info" | "danger" {
+  if (status === "disponivel") return "success";
+  if (status === "emprestado") return "info";
+  return "danger";
+}
+
+function origemMovimentacaoLabel(origem: OrigemMovimentacao) {
+  return origem === "setor" ? "Setor" : "Colaborador";
+}
+
+function origemMovimentacaoTone(origem: OrigemMovimentacao): "info" | "neutral" {
+  return origem === "setor" ? "info" : "neutral";
+}
+
+function eventoTipoLabel(tipo: EventoTipo) {
+  return tipo === "solicitacao" ? "Solicitacao" : "Devolucao";
+}
+
+function eventoTipoTone(tipo: EventoTipo): "info" | "success" {
+  return tipo === "solicitacao" ? "info" : "success";
+}
+
+function filtroOrigemLabel(origem: string) {
+  if (origem === "setor") return "Setor";
+  if (origem === "colaborador") return "Colaborador";
+  return "Todos";
+}
+
 function normalizarBuscaTexto(valor: string) {
   return valor
     .normalize("NFD")
@@ -227,16 +287,18 @@ export function DashboardTab() {
     setores: [],
     funcionarios: [],
   });
+  const [setoresCatalogo, setSetoresCatalogo] = useState<CatalogoRow[]>([]);
   const [data, setData] = useState<DashboardDataResponse | null>(null);
   const [itensResumo, setItensResumo] = useState<ItemDashboardResumo[]>([]);
   const [funcionariosResumo, setFuncionariosResumo] = useState<FuncionarioDashboardResumo[]>([]);
   const [kpiSelecionado, setKpiSelecionado] = useState<KpiChave | null>(null);
-  const [openEmprestimosModal, setOpenEmprestimosModal] = useState(false);
-  const [openDevolucoesModal, setOpenDevolucoesModal] = useState(false);
+  const [openResumoSolicitacaoModal, setOpenResumoSolicitacaoModal] = useState(false);
+  const [openResumoDevolucaoModal, setOpenResumoDevolucaoModal] = useState(false);
+  const [solicitacaoSelecionada, setSolicitacaoSelecionada] = useState<MovimentacaoRow | null>(null);
+  const [devolucaoSelecionada, setDevolucaoSelecionada] = useState<MovimentacaoRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [paginaSolicitacoes, setPaginaSolicitacoes] = useState(1);
-  const [paginaDevolucoes, setPaginaDevolucoes] = useState(1);
+  const [paginaEventos, setPaginaEventos] = useState(1);
   const [buscaFuncionario, setBuscaFuncionario] = useState("");
   const [buscaFuncionarioDebounced, setBuscaFuncionarioDebounced] = useState("");
   const [mostrarSugestoesFuncionario, setMostrarSugestoesFuncionario] = useState(false);
@@ -279,8 +341,12 @@ export function DashboardTab() {
 
   const carregarOpcoes = useCallback(async () => {
     try {
-      const payload = await api.get<DashboardFiltersResponse>("/admin/dashboard/filtros");
+      const [payload, setoresData] = await Promise.all([
+        api.get<DashboardFiltersResponse>("/admin/dashboard/filtros"),
+        api.get<CatalogoRow[]>("/admin/setores"),
+      ]);
       setOpcoes(payload);
+      setSetoresCatalogo(setoresData.filter((row) => row.statusAtivo));
     } catch (err) {
       error(err instanceof Error ? err.message : "Erro ao carregar filtros");
     }
@@ -309,6 +375,7 @@ export function DashboardTab() {
           data_fim: filtrosAtuais.data_fim || undefined,
           unidade: filtrosAtuais.unidade || undefined,
           setor: filtrosAtuais.setor || undefined,
+          origem: filtrosAtuais.origem || undefined,
           matricula: filtrosAtuais.matricula || undefined,
         });
         setData(payload);
@@ -329,6 +396,7 @@ export function DashboardTab() {
         data_fim: filtros.data_fim || undefined,
         unidade: filtros.unidade || undefined,
         setor: filtros.setor || undefined,
+        origem: filtros.origem || undefined,
         matricula: filtros.matricula || undefined,
       });
 
@@ -471,46 +539,157 @@ export function DashboardTab() {
     unidadesFuncionarioPorMatricula,
   ]);
 
+  useEffect(() => {
+    if (filtros.origem !== "setor") {
+      return;
+    }
+    if (!filtros.matricula && !buscaFuncionario) {
+      return;
+    }
+
+    setFiltros((prev) => ({ ...prev, matricula: "" }));
+    setBuscaFuncionario("");
+    setBuscaFuncionarioDebounced("");
+    setMostrarSugestoesFuncionario(false);
+    setLoadingBuscaFuncionario(false);
+  }, [filtros.matricula, filtros.origem, buscaFuncionario]);
+
+  const setorByNome = useMemo(
+    () => new Map(setoresCatalogo.map((setor) => [setor.nome, setor] as const)),
+    [setoresCatalogo],
+  );
+
+  const setoresDisponiveisFiltro = useMemo(() => {
+    if (!filtros.unidade) {
+      return opcoes.setores;
+    }
+
+    return opcoes.setores.filter((setorNome) => {
+      const setor = setorByNome.get(setorNome);
+      if (!setor) {
+        return true;
+      }
+      const unidadesSetor = setor.unidades?.filter(Boolean) ?? [];
+      if (unidadesSetor.length === 0) {
+        return true;
+      }
+      return unidadesSetor.includes(filtros.unidade);
+    });
+  }, [opcoes.setores, filtros.unidade, setorByNome]);
+
+  const unidadesDisponiveisFiltro = useMemo(() => {
+    if (!filtros.setor) {
+      return opcoes.unidades;
+    }
+
+    const setor = setorByNome.get(filtros.setor);
+    if (!setor) {
+      return opcoes.unidades;
+    }
+
+    const unidadesSetor = setor.unidades?.filter(Boolean) ?? [];
+    if (unidadesSetor.length === 0) {
+      return opcoes.unidades;
+    }
+
+    return opcoes.unidades.filter((unidadeNome) => unidadesSetor.includes(unidadeNome));
+  }, [opcoes.unidades, filtros.setor, setorByNome]);
+
+  useEffect(() => {
+    const setorInvalido = Boolean(filtros.setor) && !setoresDisponiveisFiltro.includes(filtros.setor);
+    const unidadeInvalida = Boolean(filtros.unidade) && !unidadesDisponiveisFiltro.includes(filtros.unidade);
+
+    if (!setorInvalido && !unidadeInvalida) {
+      return;
+    }
+
+    setFiltros((prev) => ({
+      ...prev,
+      setor: setorInvalido ? "" : prev.setor,
+      unidade: unidadeInvalida ? "" : prev.unidade,
+    }));
+  }, [filtros.setor, filtros.unidade, setoresDisponiveisFiltro, unidadesDisponiveisFiltro]);
+
   const solicitacoesFiltradas = useMemo(() => data?.rows.solicitacoes ?? [], [data]);
   const devolucoesFiltradas = useMemo(() => data?.rows.devolucoes ?? [], [data]);
+  const eventosFiltrados = useMemo(() => {
+    const eventosSolicitacao = solicitacoesFiltradas.map((row) => ({
+      ...row,
+      evento_tipo: "solicitacao" as const,
+      evento_chave: `solicitacao-${row.id}`,
+    }));
+    const eventosDevolucao = devolucoesFiltradas.map((row) => ({
+      ...row,
+      evento_tipo: "devolucao" as const,
+      evento_chave: `devolucao-${row.id}`,
+    }));
+
+    return [...eventosSolicitacao, ...eventosDevolucao].sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime() ||
+        a.evento_chave.localeCompare(b.evento_chave),
+    );
+  }, [devolucoesFiltradas, solicitacoesFiltradas]);
+  const eventosTabelaFiltrados = useMemo(() => {
+    if (!kpiSelecionado) {
+      return eventosFiltrados;
+    }
+
+    if (kpiSelecionado === "emprestimos") {
+      return eventosFiltrados.filter((evento) => evento.evento_tipo === "solicitacao");
+    }
+
+    if (kpiSelecionado === "devolucoes") {
+      return eventosFiltrados.filter((evento) => evento.evento_tipo === "devolucao");
+    }
+
+    const statusAtualPorCodigo = new Map(itensResumo.map((item) => [item.codigo, item.status] as const));
+    if (kpiSelecionado === "disponiveis") {
+      return eventosFiltrados.filter((evento) => statusAtualPorCodigo.get(evento.item_codigo) === "disponivel");
+    }
+
+    if (kpiSelecionado === "emprestados") {
+      return eventosFiltrados.filter((evento) => statusAtualPorCodigo.get(evento.item_codigo) === "emprestado");
+    }
+
+    return eventosFiltrados;
+  }, [eventosFiltrados, itensResumo, kpiSelecionado]);
+  const resumoMovimentacoesPorOrigem = useMemo(() => {
+    const solicitacoesSetor = solicitacoesFiltradas.filter((row) => row.origem === "setor").length;
+    const devolucoesSetor = devolucoesFiltradas.filter((row) => row.origem === "setor").length;
+    return {
+      solicitacoesSetor,
+      solicitacoesColaborador: solicitacoesFiltradas.length - solicitacoesSetor,
+      devolucoesSetor,
+      devolucoesColaborador: devolucoesFiltradas.length - devolucoesSetor,
+    };
+  }, [devolucoesFiltradas, solicitacoesFiltradas]);
 
   useEffect(() => {
-    setPaginaSolicitacoes(1);
-    setPaginaDevolucoes(1);
-  }, [filtros.data_inicio, filtros.data_fim, filtros.unidade, filtros.setor, filtros.matricula, data]);
+    setPaginaEventos(1);
+  }, [filtros.data_inicio, filtros.data_fim, filtros.unidade, filtros.setor, filtros.origem, filtros.matricula, data, kpiSelecionado]);
 
-  const totalPaginasSolicitacoes = Math.max(1, Math.ceil(solicitacoesFiltradas.length / ITENS_POR_PAGINA));
-  const totalPaginasDevolucoes = Math.max(1, Math.ceil(devolucoesFiltradas.length / ITENS_POR_PAGINA));
+  const totalPaginasEventos = Math.max(1, Math.ceil(eventosTabelaFiltrados.length / ITENS_POR_PAGINA));
 
-  const solicitacoesPaginadas = useMemo(() => {
-    const inicio = (paginaSolicitacoes - 1) * ITENS_POR_PAGINA;
-    return solicitacoesFiltradas.slice(inicio, inicio + ITENS_POR_PAGINA);
-  }, [solicitacoesFiltradas, paginaSolicitacoes]);
-
-  const devolucoesPaginadas = useMemo(() => {
-    const inicio = (paginaDevolucoes - 1) * ITENS_POR_PAGINA;
-    return devolucoesFiltradas.slice(inicio, inicio + ITENS_POR_PAGINA);
-  }, [devolucoesFiltradas, paginaDevolucoes]);
+  const eventosPaginados = useMemo(() => {
+    const inicio = (paginaEventos - 1) * ITENS_POR_PAGINA;
+    return eventosTabelaFiltrados.slice(inicio, inicio + ITENS_POR_PAGINA);
+  }, [eventosTabelaFiltrados, paginaEventos]);
 
   useEffect(() => {
-    if (paginaSolicitacoes > totalPaginasSolicitacoes) setPaginaSolicitacoes(totalPaginasSolicitacoes);
-  }, [paginaSolicitacoes, totalPaginasSolicitacoes]);
+    if (paginaEventos > totalPaginasEventos) setPaginaEventos(totalPaginasEventos);
+  }, [paginaEventos, totalPaginasEventos]);
 
-  useEffect(() => {
-    if (paginaDevolucoes > totalPaginasDevolucoes) setPaginaDevolucoes(totalPaginasDevolucoes);
-  }, [paginaDevolucoes, totalPaginasDevolucoes]);
-
-  const inicioSolicitacoes = solicitacoesFiltradas.length === 0 ? 0 : (paginaSolicitacoes - 1) * ITENS_POR_PAGINA + 1;
-  const fimSolicitacoes = Math.min(paginaSolicitacoes * ITENS_POR_PAGINA, solicitacoesFiltradas.length);
-  const inicioDevolucoes = devolucoesFiltradas.length === 0 ? 0 : (paginaDevolucoes - 1) * ITENS_POR_PAGINA + 1;
-  const fimDevolucoes = Math.min(paginaDevolucoes * ITENS_POR_PAGINA, devolucoesFiltradas.length);
+  const inicioEventos = eventosTabelaFiltrados.length === 0 ? 0 : (paginaEventos - 1) * ITENS_POR_PAGINA + 1;
+  const fimEventos = Math.min(paginaEventos * ITENS_POR_PAGINA, eventosTabelaFiltrados.length);
 
   const periodoAtivo = filtros.data_inicio || filtros.data_fim
     ? `${formatarDataFiltro(filtros.data_inicio)} - ${formatarDataFiltro(filtros.data_fim)}`
     : "Periodo completo";
+  const filtroSomenteSetor = filtros.origem === "setor";
   const sugestoesFuncionario = useMemo(() => {
     const termo = normalizarBuscaTexto(buscaFuncionarioDebounced);
-    if (!mostrarSugestoesFuncionario || termo.length < 2) {
+    if (!mostrarSugestoesFuncionario || filtros.origem === "setor" || termo.length < 2) {
       return [] satisfies DashboardFiltersResponse["funcionarios"];
     }
 
@@ -538,6 +717,7 @@ export function DashboardTab() {
       .slice(0, 8);
   }, [
     buscaFuncionarioDebounced,
+    filtros.origem,
     filtros.setor,
     filtros.unidade,
     mostrarSugestoesFuncionario,
@@ -559,6 +739,14 @@ export function DashboardTab() {
     () => new Map(funcionariosResumo.map((funcionario) => [funcionario.matricula, funcionario])),
     [funcionariosResumo],
   );
+  const itemSolicitacaoSelecionada = useMemo(
+    () => (solicitacaoSelecionada ? itemByCodigo.get(solicitacaoSelecionada.item_codigo) ?? null : null),
+    [solicitacaoSelecionada, itemByCodigo],
+  );
+  const itemDevolucaoSelecionada = useMemo(
+    () => (devolucaoSelecionada ? itemByCodigo.get(devolucaoSelecionada.item_codigo) ?? null : null),
+    [devolucaoSelecionada, itemByCodigo],
+  );
 
   const itensAtivos = useMemo(() => itensResumo.filter((item) => item.statusAtivo), [itensResumo]);
   const itensDisponiveisAtivos = useMemo(
@@ -569,6 +757,13 @@ export function DashboardTab() {
     () => itensAtivos.filter((item) => item.status === "emprestado"),
     [itensAtivos],
   );
+  const resumoEmprestadosPorOrigem = useMemo(() => {
+    const setor = itensEmprestadosAtivos.filter((item) => Boolean(item.setorSolicitante)).length;
+    return {
+      setor,
+      colaborador: itensEmprestadosAtivos.length - setor,
+    };
+  }, [itensEmprestadosAtivos]);
   const emprestimosPorSetorTodos = useMemo(
     () =>
       montarDistribuicao(
@@ -669,6 +864,9 @@ export function DashboardTab() {
     );
     const emprestadosPorSetor = montarDistribuicao(
       itensEmprestadosAtivos.map((item) => {
+        if (item.setorSolicitante) {
+          return item.setorSolicitante;
+        }
         const matricula = item.solicitanteMatricula ?? "";
         return funcionarioByMatricula.get(matricula)?.setor ?? "Nao informado";
       }),
@@ -829,7 +1027,7 @@ export function DashboardTab() {
           chave: "emprestimos",
           label: "Emprestimos",
           valor: data.kpis.total_emprestimos,
-          helper: "Total de solicitacoes registradas.",
+          helper: `Colaborador: ${resumoMovimentacoesPorOrigem.solicitacoesColaborador} | Setor: ${resumoMovimentacoesPorOrigem.solicitacoesSetor}`,
           icon: Package,
           gradientClass: "from-primary/18 via-primary/8 to-transparent",
           iconClass: "text-primary",
@@ -838,7 +1036,7 @@ export function DashboardTab() {
           chave: "devolucoes",
           label: "Devolucoes",
           valor: data.kpis.total_devolucoes,
-          helper: "Total de devolucoes processadas.",
+          helper: `Colaborador: ${resumoMovimentacoesPorOrigem.devolucoesColaborador} | Setor: ${resumoMovimentacoesPorOrigem.devolucoesSetor}`,
           icon: Undo2,
           gradientClass:
             "from-[hsl(203_88%_52%_/_0.18)] via-[hsl(203_88%_52%_/_0.08)] to-transparent",
@@ -858,7 +1056,7 @@ export function DashboardTab() {
           chave: "emprestados",
           label: "Itens emprestados",
           valor: data.kpis.itens_emprestados,
-          helper: "Atualmente em uso pelos funcionarios.",
+          helper: `Colaborador: ${resumoEmprestadosPorOrigem.colaborador} | Setor: ${resumoEmprestadosPorOrigem.setor}`,
           icon: BarChart3,
           gradientClass:
             "from-[hsl(210_92%_56%_/_0.17)] via-[hsl(210_92%_56%_/_0.08)] to-transparent",
@@ -913,6 +1111,24 @@ export function DashboardTab() {
     }
   }, [kpiSelecionado]);
 
+  function abrirResumoSolicitacao(row: MovimentacaoRow) {
+    setSolicitacaoSelecionada(row);
+    setOpenResumoSolicitacaoModal(true);
+  }
+
+  function abrirResumoDevolucao(row: MovimentacaoRow) {
+    setDevolucaoSelecionada(row);
+    setOpenResumoDevolucaoModal(true);
+  }
+
+  function abrirResumoEvento(row: EventoDashboardRow) {
+    if (row.evento_tipo === "solicitacao") {
+      abrirResumoSolicitacao(row);
+      return;
+    }
+    abrirResumoDevolucao(row);
+  }
+
   return (
     <div className="space-y-3">
       <Card className="relative overflow-hidden border-border/70 bg-gradient-to-br from-background via-accent/18 to-muted/45 shadow-[var(--shadow-soft)] dark:border-border/85 dark:bg-gradient-to-br dark:from-background dark:via-muted/35 dark:to-accent/18">
@@ -939,6 +1155,9 @@ export function DashboardTab() {
             <div className="flex flex-wrap items-center gap-2">
               <StatusPill tone="info" className="text-[10px]">
                 Periodo: {periodoAtivo}
+              </StatusPill>
+              <StatusPill tone="neutral" className="text-[10px]">
+                Visao: {filtroOrigemLabel(filtros.origem)}
               </StatusPill>
               <StatusPill tone="neutral" className="text-[10px]">
                 Gerado em: {data ? formatarTimestamp(data.gerado_em).completo : "--"}
@@ -983,7 +1202,7 @@ export function DashboardTab() {
             </div>
           </div>
 
-          <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-6">
             <div className="space-y-1.5">
               <Label htmlFor="f-data-inicio" className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Data inicio
@@ -1021,7 +1240,7 @@ export function DashboardTab() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todas</SelectItem>
-                  {opcoes.unidades.map((unidade) => (
+                  {unidadesDisponiveisFiltro.map((unidade) => (
                     <SelectItem key={unidade} value={unidade}>
                       {unidade}
                     </SelectItem>
@@ -1042,11 +1261,29 @@ export function DashboardTab() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
-                  {opcoes.setores.map((setor) => (
+                  {setoresDisponiveisFiltro.map((setor) => (
                     <SelectItem key={setor} value={setor}>
                       {setor}
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="f-origem" className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Visao
+              </Label>
+              <Select
+                value={filtros.origem || "todos"}
+                onValueChange={(value) => setFiltros((prev) => ({ ...prev, origem: value === "todos" ? "" : value }))}
+              >
+                <SelectTrigger id="f-origem" className="h-9 rounded-xl border-border/80 bg-background/85 text-[11px] dark:border-border/90 dark:bg-background/70">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="colaborador">Colaborador</SelectItem>
+                  <SelectItem value="setor">Setor</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1060,10 +1297,14 @@ export function DashboardTab() {
                   <input
                     id="f-matricula"
                     value={buscaFuncionario}
-                    placeholder="Buscar por nome ou matricula"
+                    placeholder={filtroSomenteSetor ? "Disponivel apenas para visao colaborador/todos" : "Buscar por nome ou matricula"}
                     autoComplete="off"
+                    disabled={filtroSomenteSetor}
                     className="h-full min-w-0 flex-1 bg-transparent text-[11px] text-foreground placeholder:text-muted-foreground/80 outline-none"
                     onChange={(event) => {
+                      if (filtroSomenteSetor) {
+                        return;
+                      }
                       const value = event.target.value;
                       setBuscaFuncionario(value);
                       setMostrarSugestoesFuncionario(value.trim().length >= 2);
@@ -1072,6 +1313,9 @@ export function DashboardTab() {
                       }
                     }}
                     onFocus={() => {
+                      if (filtroSomenteSetor) {
+                        return;
+                      }
                       if (buscaFuncionario.trim().length >= 2) {
                         setMostrarSugestoesFuncionario(true);
                       }
@@ -1425,39 +1669,230 @@ export function DashboardTab() {
             </div>
           </Modal>
 
-          <div className="grid gap-4 2xl:grid-cols-2">
-            <SectionCard
-              title={<span className="text-sm font-semibold">Solicitacoes</span>}
-              icon={Package}
-              actions={<StatusPill tone="info" className="text-[10px]">{solicitacoesFiltradas.length} registros</StatusPill>}
-              className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)] dark:border-border/85 dark:bg-card/90"
-              headerClassName="pb-1.5"
-              contentClassName="pt-0"
-            >
-              <div className="h-[198px] overflow-y-auto">
-                <DataTable
-                  columns={COLUNAS_MOVIMENTACAO}
-                  rows={solicitacoesPaginadas}
-                  getRowKey={(row) => row.id}
-                  onRowClick={(row) => {
-                    void openKit(row.item_codigo);
-                  }}
-                  loading={loading}
-                  emptyMessage="Sem solicitacoes para os filtros atuais."
-                  minWidthClassName="min-w-0"
-                  containerClassName="overflow-x-hidden border-border/65 bg-background/70 dark:border-border/85 dark:bg-background/55"
-                  emptyCellClassName="py-3"
-                  renderRow={(row) => {
-                    const dataHora = formatarTimestamp(row.timestamp);
-                    return (
+          <Modal
+            open={openResumoSolicitacaoModal}
+            onClose={() => setOpenResumoSolicitacaoModal(false)}
+            title="Resumo da solicitacao"
+            description="Resumo da movimentacao selecionada na tabela de solicitacoes."
+            maxWidthClassName="max-w-2xl"
+          >
+            {solicitacaoSelecionada ? (
+              <div className="space-y-3">
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  <div className="rounded-xl border border-border/70 bg-background/72 p-3 dark:border-border/85 dark:bg-background/55">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Evento</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">{formatarTimestamp(solicitacaoSelecionada.timestamp).completo}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Operador: {solicitacaoSelecionada.operador_nome}</p>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-background/72 p-3 dark:border-border/85 dark:bg-background/55">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Solicitante</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {solicitacaoSelecionada.origem === "setor"
+                        ? (solicitacaoSelecionada.setor_solicitante ?? solicitacaoSelecionada.nome_funcionario)
+                        : solicitacaoSelecionada.nome_funcionario}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Origem: {origemMovimentacaoLabel(solicitacaoSelecionada.origem)}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Matricula: {solicitacaoSelecionada.origem === "setor" ? "--" : solicitacaoSelecionada.matricula}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {solicitacaoSelecionada.unidade ?? "-"} | {solicitacaoSelecionada.setor_solicitante ?? solicitacaoSelecionada.setor ?? "-"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border/70 bg-background/72 p-3 dark:border-border/85 dark:bg-background/55">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Item</p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <StatusPill tone="neutral" className="font-mono text-[10px]">{solicitacaoSelecionada.item_codigo}</StatusPill>
+                    {itemSolicitacaoSelecionada ? (
                       <>
-                        <td className="max-w-0" title={dataHora.completo}>
-                          <div className="flex flex-col items-center gap-0.5">
-                            <span className="text-xs leading-tight">{dataHora.data}</span>
-                            <span className="text-[10px] leading-tight text-muted-foreground">{dataHora.hora}</span>
-                          </div>
-                        </td>
-                        <td className="max-w-0 truncate" title={row.matricula}>
+                        <StatusPill tone="neutral" className="text-[10px]">{itemSolicitacaoSelecionada.tipo}</StatusPill>
+                        <StatusPill tone="neutral" className="text-[10px]">Tam: {itemSolicitacaoSelecionada.tamanho}</StatusPill>
+                        <StatusPill tone={statusItemTone(itemSolicitacaoSelecionada.status)} className="text-[10px]">
+                          {statusItemLabel(itemSolicitacaoSelecionada.status)}
+                        </StatusPill>
+                        <StatusPill tone={itemSolicitacaoSelecionada.statusAtivo ? "success" : "danger"} className="text-[10px]">
+                          {itemSolicitacaoSelecionada.statusAtivo ? "Ativo" : "Inativo"}
+                        </StatusPill>
+                      </>
+                    ) : null}
+                  </div>
+                  {itemSolicitacaoSelecionada && descricaoItemResumo(itemSolicitacaoSelecionada.descricao) ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Descricao: {descricaoItemResumo(itemSolicitacaoSelecionada.descricao)}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  {solicitacaoSelecionada.origem === "colaborador" ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        void openFuncionario(solicitacaoSelecionada.matricula);
+                      }}
+                    >
+                      Abrir funcionario
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      void openKit(solicitacaoSelecionada.item_codigo);
+                    }}
+                  >
+                    Abrir item
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="rounded-lg bg-muted/30 py-3 text-center text-sm text-muted-foreground">
+                Nenhuma solicitacao selecionada.
+              </p>
+            )}
+          </Modal>
+
+          <Modal
+            open={openResumoDevolucaoModal}
+            onClose={() => setOpenResumoDevolucaoModal(false)}
+            title="Resumo da devolucao"
+            description="Resumo da movimentacao selecionada na tabela de devolucoes."
+            maxWidthClassName="max-w-2xl"
+          >
+            {devolucaoSelecionada ? (
+              <div className="space-y-3">
+                <div className="grid gap-2.5 sm:grid-cols-2">
+                  <div className="rounded-xl border border-border/70 bg-background/72 p-3 dark:border-border/85 dark:bg-background/55">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Evento</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">{formatarTimestamp(devolucaoSelecionada.timestamp).completo}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Operador: {devolucaoSelecionada.operador_nome}</p>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-background/72 p-3 dark:border-border/85 dark:bg-background/55">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Solicitante</p>
+                    <p className="mt-1 text-sm font-semibold text-foreground">
+                      {devolucaoSelecionada.origem === "setor"
+                        ? (devolucaoSelecionada.setor_solicitante ?? devolucaoSelecionada.nome_funcionario)
+                        : devolucaoSelecionada.nome_funcionario}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Origem: {origemMovimentacaoLabel(devolucaoSelecionada.origem)}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Matricula: {devolucaoSelecionada.origem === "setor" ? "--" : devolucaoSelecionada.matricula}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {devolucaoSelecionada.unidade ?? "-"} | {devolucaoSelecionada.setor_solicitante ?? devolucaoSelecionada.setor ?? "-"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border/70 bg-background/72 p-3 dark:border-border/85 dark:bg-background/55">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">Item</p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <StatusPill tone="neutral" className="font-mono text-[10px]">{devolucaoSelecionada.item_codigo}</StatusPill>
+                    {itemDevolucaoSelecionada ? (
+                      <>
+                        <StatusPill tone="neutral" className="text-[10px]">{itemDevolucaoSelecionada.tipo}</StatusPill>
+                        <StatusPill tone="neutral" className="text-[10px]">Tam: {itemDevolucaoSelecionada.tamanho}</StatusPill>
+                        <StatusPill tone={statusItemTone(itemDevolucaoSelecionada.status)} className="text-[10px]">
+                          {statusItemLabel(itemDevolucaoSelecionada.status)}
+                        </StatusPill>
+                        <StatusPill tone={itemDevolucaoSelecionada.statusAtivo ? "success" : "danger"} className="text-[10px]">
+                          {itemDevolucaoSelecionada.statusAtivo ? "Ativo" : "Inativo"}
+                        </StatusPill>
+                      </>
+                    ) : null}
+                  </div>
+                  {itemDevolucaoSelecionada && descricaoItemResumo(itemDevolucaoSelecionada.descricao) ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Descricao: {descricaoItemResumo(itemDevolucaoSelecionada.descricao)}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  {devolucaoSelecionada.origem === "colaborador" ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        void openFuncionario(devolucaoSelecionada.matricula);
+                      }}
+                    >
+                      Abrir funcionario
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      void openKit(devolucaoSelecionada.item_codigo);
+                    }}
+                  >
+                    Abrir item
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="rounded-lg bg-muted/30 py-3 text-center text-sm text-muted-foreground">
+                Nenhuma devolucao selecionada.
+              </p>
+            )}
+          </Modal>
+
+          <SectionCard
+            title={<span className="text-sm font-semibold">Eventos</span>}
+            icon={BarChart3}
+            actions={<StatusPill tone="info" className="text-[10px]">{eventosFiltrados.length} registros</StatusPill>}
+            className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)] dark:border-border/85 dark:bg-card/90"
+            headerClassName="pb-1.5"
+            contentClassName="pt-0"
+          >
+            <div className="min-h-[198px]">
+              <DataTable
+                columns={COLUNAS_EVENTOS}
+                rows={eventosPaginados}
+                getRowKey={(row) => row.evento_chave}
+                onRowClick={abrirResumoEvento}
+                loading={loading}
+                emptyMessage="Sem eventos para os filtros atuais."
+                minWidthClassName="min-w-0"
+                containerClassName="overflow-x-hidden border-border/65 bg-background/70 dark:border-border/85 dark:bg-background/55"
+                emptyCellClassName="py-3"
+                renderRow={(row) => {
+                  const dataHora = formatarTimestamp(row.timestamp);
+                  const solicitante = row.origem === "setor"
+                    ? (row.setor_solicitante ?? row.nome_funcionario)
+                    : row.nome_funcionario;
+                  return (
+                    <>
+                      <td className="max-w-0" title={dataHora.completo}>
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="text-xs leading-tight">{dataHora.data}</span>
+                          <span className="text-[10px] leading-tight text-muted-foreground">{dataHora.hora}</span>
+                        </div>
+                      </td>
+                      <td className="max-w-0">
+                        <StatusPill tone={eventoTipoTone(row.evento_tipo)} className="text-[10px]">
+                          {eventoTipoLabel(row.evento_tipo)}
+                        </StatusPill>
+                      </td>
+                      <td className="max-w-0">
+                        <StatusPill tone={origemMovimentacaoTone(row.origem)} className="text-[10px]">
+                          {origemMovimentacaoLabel(row.origem)}
+                        </StatusPill>
+                      </td>
+                      <td className="max-w-0 truncate" title={row.origem === "colaborador" ? row.matricula : "--"}>
+                        {row.origem === "colaborador" ? (
                           <button
                             type="button"
                             data-row-ignore-click="true"
@@ -1468,150 +1903,50 @@ export function DashboardTab() {
                           >
                             {row.matricula}
                           </button>
-                        </td>
-                        <td className="max-w-0 truncate" title={row.nome_funcionario}>{row.nome_funcionario}</td>
-                        <td className="max-w-0 truncate" title={row.unidade ?? "-"}>{row.unidade ?? "-"}</td>
-                        <td className="max-w-0 truncate" title={row.setor ?? "-"}>{row.setor ?? "-"}</td>
-                        <td className="max-w-0 truncate" title={row.item_codigo}>
-                          <button
-                            type="button"
-                            data-row-ignore-click="true"
-                            className="font-mono text-primary underline-offset-2 hover:underline"
-                            onClick={() => {
-                              void openKit(row.item_codigo);
-                            }}
-                          >
-                            {row.item_codigo}
-                          </button>
-                        </td>
-                      </>
-                    );
-                  }}
-                />
-              </div>
+                        ) : (
+                          <span className="text-muted-foreground">--</span>
+                        )}
+                      </td>
+                      <td className="max-w-0 truncate" title={solicitante}>{solicitante}</td>
+                      <td className="max-w-0 truncate" title={row.unidade ?? "-"}>{row.unidade ?? "-"}</td>
+                      <td className="max-w-0 truncate" title={row.setor_solicitante ?? row.setor ?? "-"}>
+                        {row.setor_solicitante ?? row.setor ?? "-"}
+                      </td>
+                      <td className="max-w-0 truncate font-mono" title={row.item_codigo}>{row.item_codigo}</td>
+                    </>
+                  );
+                }}
+              />
+            </div>
 
-              <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-[10px] text-muted-foreground">
-                  {inicioSolicitacoes}-{fimSolicitacoes} de {solicitacoesFiltradas.length} | Pagina {paginaSolicitacoes} de {totalPaginasSolicitacoes}
-                </p>
-                <div className="flex min-w-[220px] justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
-                    onClick={() => setPaginaSolicitacoes((paginaAtual) => Math.max(1, paginaAtual - 1))}
-                    disabled={paginaSolicitacoes === 1}
-                  >
-                    Anterior
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
-                    onClick={() => setPaginaSolicitacoes((paginaAtual) => Math.min(totalPaginasSolicitacoes, paginaAtual + 1))}
-                    disabled={paginaSolicitacoes === totalPaginasSolicitacoes}
-                  >
-                    Proxima
-                  </Button>
-                </div>
+            <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[10px] text-muted-foreground">
+                {inicioEventos}-{fimEventos} de {eventosFiltrados.length} | Pagina {paginaEventos} de {totalPaginasEventos}
+              </p>
+              <div className="flex min-w-[220px] justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
+                  onClick={() => setPaginaEventos((paginaAtual) => Math.max(1, paginaAtual - 1))}
+                  disabled={paginaEventos === 1}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
+                  onClick={() => setPaginaEventos((paginaAtual) => Math.min(totalPaginasEventos, paginaAtual + 1))}
+                  disabled={paginaEventos === totalPaginasEventos}
+                >
+                  Proxima
+                </Button>
               </div>
-            </SectionCard>
-
-            <SectionCard
-              title={<span className="text-sm font-semibold">Devolucoes</span>}
-              icon={Undo2}
-              actions={<StatusPill tone="info" className="text-[10px]">{devolucoesFiltradas.length} registros</StatusPill>}
-              className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)] dark:border-border/85 dark:bg-card/90"
-              headerClassName="pb-1.5"
-              contentClassName="pt-0"
-            >
-              <div className="h-[198px] overflow-y-auto">
-                <DataTable
-                  columns={COLUNAS_MOVIMENTACAO}
-                  rows={devolucoesPaginadas}
-                  getRowKey={(row) => row.id}
-                  onRowClick={(row) => {
-                    void openKit(row.item_codigo);
-                  }}
-                  loading={loading}
-                  emptyMessage="Sem devolucoes para os filtros atuais."
-                  minWidthClassName="min-w-0"
-                  containerClassName="overflow-x-hidden border-border/65 bg-background/70 dark:border-border/85 dark:bg-background/55"
-                  emptyCellClassName="py-3"
-                  renderRow={(row) => {
-                    const dataHora = formatarTimestamp(row.timestamp);
-                    return (
-                      <>
-                        <td className="max-w-0" title={dataHora.completo}>
-                          <div className="flex flex-col items-center gap-0.5">
-                            <span className="text-xs leading-tight">{dataHora.data}</span>
-                            <span className="text-[10px] leading-tight text-muted-foreground">{dataHora.hora}</span>
-                          </div>
-                        </td>
-                        <td className="max-w-0 truncate" title={row.matricula}>
-                          <button
-                            type="button"
-                            data-row-ignore-click="true"
-                            className="font-mono text-primary underline-offset-2 hover:underline"
-                            onClick={() => {
-                              void openFuncionario(row.matricula);
-                            }}
-                          >
-                            {row.matricula}
-                          </button>
-                        </td>
-                        <td className="max-w-0 truncate" title={row.nome_funcionario}>{row.nome_funcionario}</td>
-                        <td className="max-w-0 truncate" title={row.unidade ?? "-"}>{row.unidade ?? "-"}</td>
-                        <td className="max-w-0 truncate" title={row.setor ?? "-"}>{row.setor ?? "-"}</td>
-                        <td className="max-w-0 truncate" title={row.item_codigo}>
-                          <button
-                            type="button"
-                            data-row-ignore-click="true"
-                            className="font-mono text-primary underline-offset-2 hover:underline"
-                            onClick={() => {
-                              void openKit(row.item_codigo);
-                            }}
-                          >
-                            {row.item_codigo}
-                          </button>
-                        </td>
-                      </>
-                    );
-                  }}
-                />
-              </div>
-
-              <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-[10px] text-muted-foreground">
-                  {inicioDevolucoes}-{fimDevolucoes} de {devolucoesFiltradas.length} | Pagina {paginaDevolucoes} de {totalPaginasDevolucoes}
-                </p>
-                <div className="flex min-w-[220px] justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
-                    onClick={() => setPaginaDevolucoes((paginaAtual) => Math.max(1, paginaAtual - 1))}
-                    disabled={paginaDevolucoes === 1}
-                  >
-                    Anterior
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 min-w-20 border-border/80 bg-background/85 text-[10px] dark:border-border/90 dark:bg-background/60 dark:hover:bg-accent/35"
-                    onClick={() => setPaginaDevolucoes((paginaAtual) => Math.min(totalPaginasDevolucoes, paginaAtual + 1))}
-                    disabled={paginaDevolucoes === totalPaginasDevolucoes}
-                  >
-                    Proxima
-                  </Button>
-                </div>
-              </div>
-            </SectionCard>
-          </div>
+            </div>
+          </SectionCard>
         </>
       ) : (
         <Card className="border-border/70 bg-card/90 shadow-[var(--shadow-soft)] dark:border-border/85 dark:bg-card/88">

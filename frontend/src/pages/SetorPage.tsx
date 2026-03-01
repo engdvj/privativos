@@ -28,6 +28,8 @@ import {
   WifiOff,
   CircleAlert,
   ChevronRight,
+  Building2,
+  UserRound,
 } from "lucide-react";
 
 interface FuncionarioInfo {
@@ -40,13 +42,36 @@ interface FuncionarioInfo {
 
 interface ItemEmprestado {
   codigo: string;
-  descricao: string;
+  descricao: string | null;
+  tipo: string;
   tamanho: string;
 }
 
 interface TamanhoDisponivel {
+  tipo: string;
   tamanho: string;
   disponiveis: number;
+}
+
+interface PendenciaSetor {
+  setor: string;
+  tipo: string;
+  tamanho: string;
+  quantidade_pendente: number;
+}
+
+interface PendenciasSetorResponse {
+  setor: string | null;
+  total_pendente: number;
+  pendencias: PendenciaSetor[];
+}
+
+interface TamanhoDisponivelOpcao extends TamanhoDisponivel {
+  disponiveis_restantes: number;
+}
+
+interface PendenciaDisponivelOpcao extends PendenciaSetor {
+  quantidade_disponivel: number;
 }
 
 interface BuscaSugestao {
@@ -54,6 +79,12 @@ interface BuscaSugestao {
   chave: string;
   titulo: string;
   subtitulo: string;
+}
+
+interface SelecaoPedido {
+  tipo: string;
+  tamanho: string;
+  quantidade: number;
 }
 
 type BuscaGlobalResultado =
@@ -85,6 +116,7 @@ type BuscaGlobalResultado =
 
 type Etapa = "busca" | "resumo" | "resultado";
 type BuscaEstado = "idle" | "loading" | "success" | "empty" | "notFound" | "networkError" | "error";
+type OperacaoTipo = "solicitacao" | "devolucao";
 
 function enviarMonitorEmEspera(mensagem: string) {
   publishOperacaoMonitor({
@@ -99,7 +131,9 @@ function enviarMonitorResumo(params: {
   matricula: string;
   funcionario: FuncionarioInfo;
   quantidade: number;
+  tipoItem?: string | null;
   tamanho?: string | null;
+  selecoes?: SelecaoPedido[];
   itens?: ItemEmprestado[];
 }) {
   publishOperacaoMonitor({
@@ -112,14 +146,30 @@ function enviarMonitorResumo(params: {
       funcionarioSetor: params.funcionario.setor,
       matricula: params.matricula,
       quantidade: params.quantidade,
+      tipo_item: params.tipoItem ?? null,
       tamanho: params.tamanho ?? null,
+      selecoes: params.selecoes ?? [],
       itens: (params.itens ?? []).map((item) => ({
         codigo: item.codigo,
         descricao: item.descricao,
+        tipo: item.tipo,
         tamanho: item.tamanho,
       })),
     },
   });
+}
+
+function descricaoItemLabel(descricao: string | null | undefined) {
+  const normalized = (descricao ?? "").trim();
+  return normalized;
+}
+
+function chaveSelecao(tipo: string, tamanho: string) {
+  return `${tipo}::${tamanho}`;
+}
+
+function isPendenciaDisponivelOpcao(row: PendenciaSetor | PendenciaDisponivelOpcao): row is PendenciaDisponivelOpcao {
+  return typeof (row as PendenciaDisponivelOpcao).quantidade_disponivel === "number";
 }
 
 function enviarMonitorResultado(params: {
@@ -457,7 +507,9 @@ function ResumoEtapa({
   funcionario,
   matricula,
   quantidade,
+  tipoItem,
   tamanho,
+  selecoes,
   itens,
   loading,
   onCancelar,
@@ -467,7 +519,9 @@ function ResumoEtapa({
   funcionario: FuncionarioInfo;
   matricula: string;
   quantidade?: number;
+  tipoItem?: string;
   tamanho?: string;
+  selecoes?: SelecaoPedido[];
   itens?: ItemEmprestado[];
   loading: boolean;
   onCancelar: () => void;
@@ -485,7 +539,7 @@ function ResumoEtapa({
               <Icon className="h-5 w-5 text-primary" />
             </div>
             <h3 className="text-base font-bold text-foreground">
-              {isEmprestimo ? "Confirmar Emprestimo" : "Confirmar Devolucao"}
+              {isEmprestimo ? "Confirmar Solicitacao" : "Confirmar Devolucao"}
             </h3>
             <p className="text-xs text-muted-foreground">Revise as informacoes antes de confirmar.</p>
           </div>
@@ -520,7 +574,39 @@ function ResumoEtapa({
                     {quantidade} {quantidade === 1 ? "kit" : "kits"}
                   </StatusPill>
                 </div>
-                {tamanho && (
+                {selecoes && selecoes.length > 0 ? (
+                  <>
+                    <Separator />
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Pedido ({selecoes.length} selecao(oes))</p>
+                      <div className="max-h-40 space-y-1 overflow-y-auto">
+                        {selecoes.map((selecao) => (
+                          <div
+                            key={chaveSelecao(selecao.tipo, selecao.tamanho)}
+                            className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-background/75 p-2"
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <StatusPill tone="neutral">{selecao.tipo}</StatusPill>
+                              <StatusPill tone="neutral">{selecao.tamanho}</StatusPill>
+                            </div>
+                            <StatusPill tone="info" className="tabular-nums">
+                              {selecao.quantidade}
+                            </StatusPill>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : tipoItem ? (
+                  <>
+                    <Separator />
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Tipo</span>
+                      <StatusPill tone="neutral">{tipoItem}</StatusPill>
+                    </div>
+                  </>
+                ) : null}
+                {!selecoes?.length && tamanho && (
                   <>
                     <Separator />
                     <div className="flex items-center justify-between">
@@ -541,8 +627,9 @@ function ResumoEtapa({
                     {itens.map((item) => (
                       <div key={item.codigo} className="flex items-center gap-2 rounded-lg border border-border/50 bg-background/75 p-2">
                         <span className="font-mono text-xs font-semibold text-primary">{item.codigo}</span>
+                        <StatusPill tone="neutral">{item.tipo}</StatusPill>
                         <StatusPill tone="neutral">{item.tamanho}</StatusPill>
-                        <span className="truncate text-xs text-muted-foreground">{item.descricao}</span>
+                        <span className="truncate text-xs text-muted-foreground">{descricaoItemLabel(item.descricao)}</span>
                       </div>
                     ))}
                   </div>
@@ -596,12 +683,12 @@ function ResultadoEtapa({
 
           <div>
             <h3 className="text-lg font-bold text-foreground">
-              {resultado.sucesso ? (isEmprestimo ? "Emprestimo Realizado!" : "Devolucao Realizada!") : "Operacao Cancelada"}
+              {resultado.sucesso ? (isEmprestimo ? "Solicitacao Realizada!" : "Devolucao Realizada!") : "Operacao Cancelada"}
             </h3>
             <p className="text-xs text-muted-foreground">
               {resultado.sucesso
                 ? isEmprestimo
-                  ? "O emprestimo foi confirmado com sucesso."
+                  ? "A solicitacao foi confirmada com sucesso."
                   : "A devolucao foi confirmada com sucesso."
                 : "A operacao foi cancelada e nenhuma alteracao foi realizada."}
             </p>
@@ -610,7 +697,7 @@ function ResultadoEtapa({
           {resultado.sucesso && resultado.itens.length > 0 && (
             <div className="rounded-xl border border-border/70 bg-surface-2/70 p-3">
               <p className="mb-2 text-xs font-medium text-muted-foreground">
-                {isEmprestimo ? "Itens emprestados:" : "Itens devolvidos:"}
+                {isEmprestimo ? "Itens solicitados:" : "Itens devolvidos:"}
               </p>
               <div className="flex flex-wrap justify-center gap-1.5">
                 {resultado.itens.map((item) => (
@@ -636,8 +723,10 @@ function EmprestimoTab() {
   const [matriculaError, setMatriculaError] = useState<string | null>(null);
   const [funcionario, setFuncionario] = useState<FuncionarioInfo | null>(null);
   const [tamanhosDisponiveis, setTamanhosDisponiveis] = useState<TamanhoDisponivel[]>([]);
+  const [tipoSelecionado, setTipoSelecionado] = useState("");
   const [tamanhoSelecionado, setTamanhoSelecionado] = useState("");
-  const [quantidade, setQuantidade] = useState(1);
+  const [quantidadeSelecionada, setQuantidadeSelecionada] = useState(1);
+  const [pedido, setPedido] = useState<SelecaoPedido[]>([]);
   const [etapa, setEtapa] = useState<Etapa>("busca");
   const [resultado, setResultado] = useState<{ sucesso: boolean; itens: string[] } | null>(null);
   const [buscaEstado, setBuscaEstado] = useState<BuscaEstado>("idle");
@@ -656,8 +745,10 @@ function EmprestimoTab() {
     setMatriculaError(null);
     setFuncionario(null);
     setTamanhosDisponiveis([]);
+    setTipoSelecionado("");
     setTamanhoSelecionado("");
-    setQuantidade(1);
+    setQuantidadeSelecionada(1);
+    setPedido([]);
     setResultado(null);
     setBuscaEstado("idle");
     setBuscaMensagem(null);
@@ -673,10 +764,12 @@ function EmprestimoTab() {
     if (funcionario || buscaEstado !== "idle") {
       setFuncionario(null);
       setTamanhosDisponiveis([]);
+      setTipoSelecionado("");
       setTamanhoSelecionado("");
       setBuscaEstado("idle");
       setBuscaMensagem(null);
-      setQuantidade(1);
+      setQuantidadeSelecionada(1);
+      setPedido([]);
     }
   }
 
@@ -693,7 +786,9 @@ function EmprestimoTab() {
     setBuscaMensagem(null);
     setFuncionario(null);
     setTamanhosDisponiveis([]);
+    setTipoSelecionado("");
     setTamanhoSelecionado("");
+    setPedido([]);
     enviarMonitorEmEspera("Operador consultando seus dados...");
 
     try {
@@ -706,8 +801,14 @@ function EmprestimoTab() {
       setMatricula(matriculaResolvida);
       setFuncionario(data);
       setTamanhosDisponiveis(tamanhos);
-      setTamanhoSelecionado(tamanhos[0]?.tamanho ?? "");
-      setQuantidade(1);
+      const primeiroTipo = tamanhos[0]?.tipo ?? "";
+      const primeiroTamanho = primeiroTipo
+        ? (tamanhos.find((row) => row.tipo === primeiroTipo)?.tamanho ?? "")
+        : "";
+      setTipoSelecionado(primeiroTipo);
+      setTamanhoSelecionado(primeiroTamanho);
+      setQuantidadeSelecionada(1);
+      setPedido([]);
       setBuscaEstado("success");
       enviarMonitorEmEspera("Dados localizados. Aguardando resumo para confirmacao.");
     } catch (err) {
@@ -716,7 +817,9 @@ function EmprestimoTab() {
       setBuscaMensagem(classificado.mensagem);
       setFuncionario(null);
       setTamanhosDisponiveis([]);
+      setTipoSelecionado("");
       setTamanhoSelecionado("");
+      setPedido([]);
       enviarMonitorEmEspera("Nao foi possivel localizar os dados. Aguardando nova tentativa.");
     } finally {
       setBuscaLoading(false);
@@ -749,46 +852,145 @@ function EmprestimoTab() {
     };
   }, [etapa, matricula, buscaLoading, buscaEstado]);
 
+  const tiposDisponiveis = Array.from(new Set(tamanhosDisponiveis.map((row) => row.tipo)));
+  const tamanhosDoTipoSelecionado = tipoSelecionado
+    ? tamanhosDisponiveis.filter((row) => row.tipo === tipoSelecionado)
+    : [];
+
+  function selecionarTipo(value: string) {
+    setTipoSelecionado(value);
+    const primeiroTamanho = tamanhosDisponiveis.find((row) => row.tipo === value)?.tamanho ?? "";
+    setTamanhoSelecionado(primeiroTamanho);
+    setQuantidadeSelecionada(1);
+  }
+
   function selecionarTamanho(value: string) {
     setTamanhoSelecionado(value);
-    setQuantidade(1);
+    setQuantidadeSelecionada(1);
+  }
+
+  const disponivel = funcionario ? funcionario.kits_em_uso < funcionario.max_kits : false;
+  const maxEmprestavel = funcionario ? Math.max(0, funcionario.max_kits - funcionario.kits_em_uso) : 0;
+  const estoqueTamanhoSelecionado = tamanhosDisponiveis.find(
+    (row) => row.tipo === tipoSelecionado && row.tamanho === tamanhoSelecionado,
+  )?.disponiveis ?? 0;
+  const quantidadeJaNoPedido = pedido.find(
+    (row) => row.tipo === tipoSelecionado && row.tamanho === tamanhoSelecionado,
+  )?.quantidade ?? 0;
+  const totalSelecionado = pedido.reduce((acc, row) => acc + row.quantidade, 0);
+  const restanteLimiteFuncionario = Math.max(0, maxEmprestavel - totalSelecionado);
+  const restanteNoEstoque = Math.max(0, estoqueTamanhoSelecionado - quantidadeJaNoPedido);
+  const maxSolicitavelAtual = Math.min(restanteLimiteFuncionario, restanteNoEstoque);
+
+  useEffect(() => {
+    if (maxSolicitavelAtual <= 0) {
+      setQuantidadeSelecionada(1);
+      return;
+    }
+
+    setQuantidadeSelecionada((atual) => Math.min(Math.max(1, atual), maxSolicitavelAtual));
+  }, [maxSolicitavelAtual]);
+
+  const podeAdicionar =
+    Boolean(funcionario) &&
+    disponivel &&
+    Boolean(tipoSelecionado) &&
+    Boolean(tamanhoSelecionado) &&
+    maxSolicitavelAtual > 0 &&
+    quantidadeSelecionada >= 1 &&
+    quantidadeSelecionada <= maxSolicitavelAtual;
+  const podeContinuar = Boolean(funcionario) && pedido.length > 0;
+
+  let motivoAdicionar: string | null = null;
+  if (funcionario && !disponivel) {
+    motivoAdicionar = "Sem disponibilidade para nova solicitacao.";
+  } else if (funcionario && tamanhosDisponiveis.length === 0) {
+    motivoAdicionar = "Nao ha kits disponiveis no estoque.";
+  } else if (funcionario && !tipoSelecionado) {
+    motivoAdicionar = "Selecione o tipo do item.";
+  } else if (funcionario && !tamanhoSelecionado) {
+    motivoAdicionar = "Selecione o tamanho do kit.";
+  } else if (funcionario && restanteNoEstoque === 0) {
+    motivoAdicionar = "Sem estoque disponivel para adicionar este tamanho.";
+  } else if (funcionario && restanteLimiteFuncionario === 0) {
+    motivoAdicionar = "Limite maximo do funcionario ja atingido no pedido.";
+  } else if (funcionario && !podeAdicionar) {
+    motivoAdicionar = `Selecione de 1 a ${maxSolicitavelAtual}.`;
+  }
+
+  function adicionarAoPedido() {
+    if (!podeAdicionar) return;
+
+    setPedido((prev) => {
+      const index = prev.findIndex((item) => item.tipo === tipoSelecionado && item.tamanho === tamanhoSelecionado);
+      if (index === -1) {
+        return [
+          ...prev,
+          {
+            tipo: tipoSelecionado,
+            tamanho: tamanhoSelecionado,
+            quantidade: quantidadeSelecionada,
+          },
+        ];
+      }
+
+      return prev.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              quantidade: item.quantidade + quantidadeSelecionada,
+            }
+          : item,
+      );
+    });
+    setQuantidadeSelecionada(1);
+  }
+
+  function removerDoPedido(tipo: string, tamanho: string) {
+    setPedido((prev) => prev.filter((item) => !(item.tipo === tipo && item.tamanho === tamanho)));
   }
 
   function abrirResumo() {
-    if (!funcionario) return;
-    if (!tamanhoSelecionado) return;
+    if (!funcionario || pedido.length === 0) return;
+
     enviarMonitorResumo({
       tipo: "emprestimo",
       matricula: matricula.trim(),
       funcionario,
-      quantidade,
-      tamanho: tamanhoSelecionado,
+      quantidade: totalSelecionado,
+      selecoes: pedido,
     });
     setEtapa("resumo");
   }
 
   async function confirmarEmprestimo() {
-    if (!funcionario) return;
-    if (!tamanhoSelecionado) return;
+    if (!funcionario || pedido.length === 0) return;
 
     setConfirmLoading(true);
     try {
-      const data = await api.post<{ sucesso: boolean; itens_emprestados: string[] }>("/ops/emprestimo-direto", {
-        matricula: matricula.trim(),
-        quantidade,
-        tamanho: tamanhoSelecionado,
-      });
-      setResultado({ sucesso: true, itens: data.itens_emprestados });
+      const itensEmprestados: string[] = [];
+
+      for (const selecao of pedido) {
+        const data = await api.post<{ sucesso: boolean; itens_emprestados: string[] }>("/ops/emprestimo-direto", {
+          matricula: matricula.trim(),
+          quantidade: selecao.quantidade,
+          tipo_item: selecao.tipo,
+          tamanho: selecao.tamanho,
+        });
+        itensEmprestados.push(...data.itens_emprestados);
+      }
+
+      setResultado({ sucesso: true, itens: itensEmprestados });
       setEtapa("resultado");
-      success(`Emprestimo realizado: ${data.itens_emprestados.join(", ")}`);
+      success(`Solicitacao realizada: ${itensEmprestados.join(", ")}`);
       enviarMonitorResultado({
         tipo: "emprestimo",
         sucesso: true,
-        mensagem: "Emprestimo confirmado com sucesso.",
-        itens: data.itens_emprestados,
+        mensagem: "Solicitacao confirmada com sucesso.",
+        itens: itensEmprestados,
       });
     } catch (err) {
-      const mensagem = err instanceof Error ? err.message : "Erro ao realizar emprestimo";
+      const mensagem = err instanceof Error ? err.message : "Erro ao realizar solicitacao";
       error(mensagem);
       enviarMonitorResultado({
         tipo: "emprestimo",
@@ -807,35 +1009,8 @@ function EmprestimoTab() {
     setEtapa("busca");
   }
 
-  const disponivel = funcionario ? funcionario.kits_em_uso < funcionario.max_kits : false;
-  const maxEmprestavel = funcionario ? Math.max(0, funcionario.max_kits - funcionario.kits_em_uso) : 0;
-  const estoqueTamanhoSelecionado = tamanhosDisponiveis.find(
-    (row) => row.tamanho === tamanhoSelecionado,
-  )?.disponiveis ?? 0;
-  const maxSolicitavel = Math.min(maxEmprestavel, estoqueTamanhoSelecionado);
-  const quantidadeValida = maxSolicitavel > 0 && quantidade >= 1 && quantidade <= maxSolicitavel;
-  const podeContinuar =
-    Boolean(funcionario) &&
-    disponivel &&
-    Boolean(tamanhoSelecionado) &&
-    estoqueTamanhoSelecionado > 0 &&
-    quantidadeValida;
-
-  let motivoContinuar: string | null = null;
-  if (funcionario && !disponivel) {
-    motivoContinuar = "Sem disponibilidade para novo emprestimo.";
-  } else if (funcionario && tamanhosDisponiveis.length === 0) {
-    motivoContinuar = "Nao ha kits disponiveis no estoque.";
-  } else if (funcionario && !tamanhoSelecionado) {
-    motivoContinuar = "Selecione o tamanho do kit.";
-  } else if (funcionario && estoqueTamanhoSelecionado === 0) {
-    motivoContinuar = "Sem estoque para o tamanho selecionado.";
-  } else if (funcionario && !quantidadeValida) {
-    motivoContinuar = `Selecione de 1 a ${maxSolicitavel}.`;
-  }
-
   return (
-    <div className="w-full space-y-3">
+    <div className="w-full space-y-3 xl:pr-[25rem]">
       {etapa === "busca" && (
         <div className="w-full space-y-3">
           <Card className="w-full border-border/70 bg-gradient-to-br from-background via-accent/12 to-muted/28 shadow-[var(--shadow-soft)]">
@@ -869,83 +1044,164 @@ function EmprestimoTab() {
               )}
 
               {buscaEstado === "success" && funcionario && (
-                <div className="space-y-3 animate-in fade-in-0 slide-in-from-bottom-2">
-                  <Card className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)]">
-                    <CardContent className="space-y-2.5 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Funcionario</p>
-                      <FuncionarioCard funcionario={funcionario} />
-                    </CardContent>
-                  </Card>
+                <div className="grid gap-3 animate-in fade-in-0 slide-in-from-bottom-2 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)] xl:items-start">
+                  <div className="space-y-3">
+                    <Card className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)]">
+                      <CardContent className="space-y-2.5 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Funcionario</p>
+                        <FuncionarioCard funcionario={funcionario} />
+                      </CardContent>
+                    </Card>
 
-                  <Card className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)]">
+                    <Card className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)]">
+                      <CardContent className="space-y-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status/Operacao</p>
+                          <StatusPill tone={disponivel ? "success" : "danger"} className="text-[10px]">
+                            {disponivel ? "Disponivel" : "Limite atingido"}
+                          </StatusPill>
+                        </div>
+
+                        <div className="rounded-xl border border-border/65 bg-surface-2/60 p-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-muted-foreground">Kits em uso</p>
+                            <p className="text-sm font-semibold tabular-nums text-foreground">
+                              {funcionario.kits_em_uso}
+                              <span className="font-normal text-muted-foreground"> / {funcionario.max_kits}</span>
+                            </p>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between">
+                            <p className="text-xs text-muted-foreground">Estoque selecionado</p>
+                            <p className="text-sm font-semibold tabular-nums text-foreground">
+                              {tipoSelecionado || "-"} / {tamanhoSelecionado || "-"}
+                              <span className="font-normal text-muted-foreground"> / {estoqueTamanhoSelecionado}</span>
+                            </p>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between">
+                            <p className="text-xs text-muted-foreground">Itens no carrinho</p>
+                            <p className="text-sm font-semibold tabular-nums text-foreground">
+                              {totalSelecionado}
+                              <span className="font-normal text-muted-foreground"> / {maxEmprestavel}</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        <Separator />
+
+                        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+                          <div className="space-y-1">
+                            <Label htmlFor="emprestimo-tipo" className="text-xs text-muted-foreground">
+                              Tipo
+                            </Label>
+                            <Select
+                              value={tipoSelecionado}
+                              onValueChange={selecionarTipo}
+                              disabled={!disponivel || tiposDisponiveis.length === 0}
+                            >
+                              <SelectTrigger id="emprestimo-tipo" className="h-10 rounded-xl border-border/80 bg-background/85 text-xs">
+                                <SelectValue placeholder="Selecione o tipo" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {tiposDisponiveis.map((tipo) => (
+                                  <SelectItem key={tipo} value={tipo}>
+                                    {tipo}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label htmlFor="emprestimo-tamanho" className="text-xs text-muted-foreground">
+                              Tamanho
+                            </Label>
+                            <Select
+                              value={tamanhoSelecionado}
+                              onValueChange={selecionarTamanho}
+                              disabled={!disponivel || !tipoSelecionado || tamanhosDoTipoSelecionado.length === 0}
+                            >
+                              <SelectTrigger id="emprestimo-tamanho" className="h-10 rounded-xl border-border/80 bg-background/85 text-xs">
+                                <SelectValue placeholder="Selecione o tamanho" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {tamanhosDoTipoSelecionado.map((row) => (
+                                  <SelectItem key={row.tamanho} value={row.tamanho}>
+                                    {row.tamanho} ({row.disponiveis} disp.)
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <QuantitySelector
+                            value={quantidadeSelecionada}
+                            onChange={setQuantidadeSelecionada}
+                            min={1}
+                            max={Math.max(1, maxSolicitavelAtual)}
+                            disabled={!disponivel || !tipoSelecionado || !tamanhoSelecionado || maxSolicitavelAtual === 0}
+                            label={`Quantidade (max. ${maxSolicitavelAtual})`}
+                          />
+                          <Button
+                            variant="outline"
+                            onClick={adicionarAoPedido}
+                            disabled={!podeAdicionar}
+                            className="h-10 w-full rounded-xl text-xs md:min-w-40 md:w-auto"
+                          >
+                            Adicionar
+                          </Button>
+                          {!podeAdicionar && motivoAdicionar && (
+                            <p className="text-xs text-muted-foreground sm:col-span-4" role="status">
+                              {motivoAdicionar}
+                            </p>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <Card className="h-fit border-border/70 bg-gradient-to-b from-card/96 to-card/90 shadow-[var(--shadow-soft)] xl:sticky xl:top-2">
                     <CardContent className="space-y-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
                       <div className="flex items-center justify-between">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status/Operacao</p>
-                        <StatusPill tone={disponivel ? "success" : "danger"} className="text-[10px]">
-                          {disponivel ? "Disponivel" : "Limite atingido"}
-                        </StatusPill>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Carrinho</p>
+                        <StatusPill tone="info" className="text-[10px]">Itens: {totalSelecionado}</StatusPill>
                       </div>
 
-                      <div className="rounded-xl border border-border/65 bg-surface-2/60 p-3">
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs text-muted-foreground">Kits em uso</p>
-                          <p className="text-sm font-semibold tabular-nums text-foreground">
-                            {funcionario.kits_em_uso}
-                            <span className="font-normal text-muted-foreground"> / {funcionario.max_kits}</span>
-                          </p>
+                      {pedido.length === 0 ? (
+                        <p className="rounded-xl border border-dashed border-border/70 bg-surface-2/60 px-3 py-2 text-xs text-muted-foreground">
+                          Adicione os tamanhos desejados para montar o pedido.
+                        </p>
+                      ) : (
+                        <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+                          {pedido.map((item) => (
+                            <div
+                              key={chaveSelecao(item.tipo, item.tamanho)}
+                              className="flex items-center justify-between gap-2 rounded-xl border border-border/55 bg-background/80 px-3 py-2"
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <StatusPill tone="neutral">{item.tipo}</StatusPill>
+                                <StatusPill tone="neutral">{item.tamanho}</StatusPill>
+                                <StatusPill tone="info" className="tabular-nums">
+                                  {item.quantidade}
+                                </StatusPill>
+                              </div>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 rounded-lg"
+                                aria-label={`Remover ${item.tipo} ${item.tamanho}`}
+                                onClick={() => removerDoPedido(item.tipo, item.tamanho)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
                         </div>
-                        <div className="mt-2 flex items-center justify-between">
-                          <p className="text-xs text-muted-foreground">Estoque do tamanho</p>
-                          <p className="text-sm font-semibold tabular-nums text-foreground">
-                            {tamanhoSelecionado || "-"}
-                            <span className="font-normal text-muted-foreground"> / {estoqueTamanhoSelecionado}</span>
-                          </p>
-                        </div>
-                      </div>
+                      )}
 
-                      <Separator />
-
-                      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
-                        <div className="space-y-1">
-                          <Label htmlFor="emprestimo-tamanho" className="text-xs text-muted-foreground">
-                            Tamanho
-                          </Label>
-                          <Select
-                            value={tamanhoSelecionado}
-                            onValueChange={selecionarTamanho}
-                            disabled={!disponivel || tamanhosDisponiveis.length === 0}
-                          >
-                            <SelectTrigger id="emprestimo-tamanho" className="h-10 rounded-xl border-border/80 bg-background/85 text-xs">
-                              <SelectValue placeholder="Selecione o tamanho" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {tamanhosDisponiveis.map((row) => (
-                                <SelectItem key={row.tamanho} value={row.tamanho}>
-                                  {row.tamanho} ({row.disponiveis} disp.)
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <QuantitySelector
-                          value={quantidade}
-                          onChange={setQuantidade}
-                          min={1}
-                          max={Math.max(1, maxSolicitavel)}
-                          disabled={!disponivel || !tamanhoSelecionado || estoqueTamanhoSelecionado === 0}
-                          label={`Quantidade (max. ${maxSolicitavel})`}
-                        />
-                        <Button onClick={abrirResumo} disabled={!podeContinuar} className="h-10 w-full rounded-xl text-xs md:min-w-40 md:w-auto" aria-label="Continuar para resumo de emprestimo">
-                          Continuar
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                        {!podeContinuar && motivoContinuar && (
-                          <p className="text-xs text-muted-foreground sm:col-span-2" role="status">
-                            {motivoContinuar}
-                          </p>
-                        )}
-                      </div>
+                      <Button onClick={abrirResumo} disabled={!podeContinuar} className="h-10 w-full rounded-xl text-xs" aria-label="Continuar para resumo de solicitacao">
+                        Revisar pedido
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
                     </CardContent>
                   </Card>
                 </div>
@@ -960,8 +1216,8 @@ function EmprestimoTab() {
           tipo="emprestimo"
           funcionario={funcionario}
           matricula={matricula}
-          quantidade={quantidade}
-          tamanho={tamanhoSelecionado}
+          quantidade={totalSelecionado}
+          selecoes={pedido}
           loading={confirmLoading}
           onCancelar={cancelarResumo}
           onConfirmar={confirmarEmprestimo}
@@ -1165,6 +1421,7 @@ function DevolucaoTab() {
   }
 
   const selecionadosCount = selecionados.size;
+  const itensSelecionados = itens.filter((item) => selecionados.has(item.codigo));
   const podeContinuar = buscaEstado === "success" && selecionadosCount > 0;
   const motivoContinuar = buscaEstado === "empty"
     ? "Nenhum item disponivel para devolucao."
@@ -1207,89 +1464,131 @@ function DevolucaoTab() {
               )}
 
               {(buscaEstado === "success" || buscaEstado === "empty") && funcionario && (
-                <div className="space-y-3 animate-in fade-in-0 slide-in-from-bottom-2">
-                  <Card className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)]">
-                    <CardContent className="space-y-2.5 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Funcionario</p>
-                      <FuncionarioCard funcionario={funcionario} />
-                    </CardContent>
-                  </Card>
+                <div className="grid gap-3 animate-in fade-in-0 slide-in-from-bottom-2 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)] xl:items-start">
+                  <div className="space-y-3">
+                    <Card className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)]">
+                      <CardContent className="space-y-2.5 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Funcionario</p>
+                        <FuncionarioCard funcionario={funcionario} />
+                      </CardContent>
+                    </Card>
 
-                  <Card className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)]">
+                    <Card className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)]">
+                      <CardContent className="space-y-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status/Operacao</p>
+                          <StatusPill tone={buscaEstado === "empty" ? "danger" : "info"} className="text-[10px]">
+                            {buscaEstado === "empty" ? "Sem itens" : `${itens.length} item(ns)`}
+                          </StatusPill>
+                        </div>
+
+                        {buscaEstado === "empty" ? (
+                          <div className="rounded-xl border border-border/65 bg-surface-2/60 p-4 text-center">
+                            <Package className="mx-auto mb-2 h-7 w-7 text-muted-foreground/60" />
+                            <p className="text-sm font-medium text-foreground">Nenhum item emprestado</p>
+                            <p className="text-xs text-muted-foreground">Este funcionario nao possui itens para devolucao.</p>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-between">
+                              <p className="text-xs font-medium text-muted-foreground">Itens emprestados ({itens.length})</p>
+                              <p className="text-xs font-semibold text-foreground">Selecionados: {selecionadosCount}</p>
+                            </div>
+
+                            <div className="max-h-[26rem] space-y-1.5 overflow-y-auto pr-1">
+                              {itens.map((item, index) => {
+                                const checked = selecionados.has(item.codigo);
+                                return (
+                                  <div
+                                    key={item.codigo}
+                                    role="checkbox"
+                                    aria-checked={checked}
+                                    aria-label={`Selecionar item ${item.codigo} tamanho ${item.tamanho}`}
+                                    tabIndex={0}
+                                    onClick={() => toggleItem(item.codigo)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === " " || e.key === "Enter") {
+                                        e.preventDefault();
+                                        toggleItem(item.codigo);
+                                      }
+                                    }}
+                                    className={cn(
+                                      "flex cursor-pointer items-center gap-2 rounded-xl border bg-background/80 px-3 py-2 transition-all hover:border-primary/30 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 animate-in fade-in-0 slide-in-from-bottom-2",
+                                      checked ? "border-primary/40 bg-primary/[0.04]" : "border-border/50",
+                                    )}
+                                    style={{ animationDelay: `${index * 30}ms` }}
+                                  >
+                                    <Checkbox
+                                      checked={checked}
+                                      tabIndex={-1}
+                                      onCheckedChange={(value) => setItemSelecionado(item.codigo, Boolean(value))}
+                                      onClick={(e) => e.stopPropagation()}
+                                      aria-label={`Checkbox item ${item.codigo}`}
+                                    />
+                                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                                      <span className="font-mono text-xs font-semibold text-primary">{item.codigo}</span>
+                                      <StatusPill tone="neutral">{item.tipo}</StatusPill>
+                                      <StatusPill tone="neutral">{item.tamanho}</StatusPill>
+                                      <span className="truncate text-sm text-muted-foreground">
+                                        {descricaoItemLabel(item.descricao)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <Card className="h-fit border-border/70 bg-gradient-to-b from-card/96 to-card/90 shadow-[var(--shadow-soft)] xl:sticky xl:top-2">
                     <CardContent className="space-y-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
                       <div className="flex items-center justify-between">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Status/Operacao</p>
-                        <StatusPill tone={buscaEstado === "empty" ? "danger" : "info"} className="text-[10px]">
-                          {buscaEstado === "empty" ? "Sem itens" : `${itens.length} item(ns)`}
-                        </StatusPill>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Carrinho de devolucao</p>
+                        <StatusPill tone="info" className="text-[10px]">Itens: {selecionadosCount}</StatusPill>
                       </div>
 
-                      {buscaEstado === "empty" ? (
-                        <div className="rounded-xl border border-border/65 bg-surface-2/60 p-4 text-center">
-                          <Package className="mx-auto mb-2 h-7 w-7 text-muted-foreground/60" />
-                          <p className="text-sm font-medium text-foreground">Nenhum item emprestado</p>
-                          <p className="text-xs text-muted-foreground">Este funcionario nao possui itens para devolucao.</p>
-                        </div>
+                      {itensSelecionados.length === 0 ? (
+                        <p className="rounded-xl border border-dashed border-border/70 bg-surface-2/60 px-3 py-2 text-xs text-muted-foreground">
+                          Selecione ao menos um item para montar o pedido.
+                        </p>
                       ) : (
-                        <>
-                          <div className="flex items-center justify-between">
-                            <p className="text-xs font-medium text-muted-foreground">Itens emprestados ({itens.length})</p>
-                            <p className="text-xs font-semibold text-foreground">Selecionados: {selecionadosCount}</p>
-                          </div>
-
-                          <div className="space-y-1.5">
-                            {itens.map((item, index) => {
-                              const checked = selecionados.has(item.codigo);
-                              return (
-                                <div
-                                  key={item.codigo}
-                                  role="checkbox"
-                                  aria-checked={checked}
-                                  aria-label={`Selecionar item ${item.codigo} tamanho ${item.tamanho}`}
-                                  tabIndex={0}
-                                  onClick={() => toggleItem(item.codigo)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === " " || e.key === "Enter") {
-                                      e.preventDefault();
-                                      toggleItem(item.codigo);
-                                    }
-                                  }}
-                                  className={cn(
-                                    "flex cursor-pointer items-center gap-2 rounded-xl border bg-background/80 px-3 py-2 transition-all hover:border-primary/30 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2 animate-in fade-in-0 slide-in-from-bottom-2",
-                                    checked ? "border-primary/40 bg-primary/[0.04]" : "border-border/50",
-                                  )}
-                                  style={{ animationDelay: `${index * 30}ms` }}
-                                >
-                                  <Checkbox
-                                    checked={checked}
-                                    tabIndex={-1}
-                                    onCheckedChange={(value) => setItemSelecionado(item.codigo, Boolean(value))}
-                                    onClick={(e) => e.stopPropagation()}
-                                    aria-label={`Checkbox item ${item.codigo}`}
-                                  />
-                                  <div className="flex min-w-0 flex-1 items-center gap-2">
-                                    <span className="font-mono text-xs font-semibold text-primary">{item.codigo}</span>
-                                    <StatusPill tone="neutral">{item.tamanho}</StatusPill>
-                                    <span className="truncate text-sm text-muted-foreground">{item.descricao}</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </>
+                        <div className="max-h-72 space-y-1.5 overflow-y-auto pr-1">
+                          {itensSelecionados.map((item) => (
+                            <div
+                              key={item.codigo}
+                              className="flex items-center justify-between gap-2 rounded-xl border border-border/55 bg-background/80 px-3 py-2"
+                            >
+                              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                <StatusPill tone="neutral">{item.tipo}</StatusPill>
+                                <StatusPill tone="neutral">{item.tamanho}</StatusPill>
+                                <StatusPill tone="info" className="font-mono">{item.codigo}</StatusPill>
+                              </div>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 rounded-lg"
+                                onClick={() => setItemSelecionado(item.codigo, false)}
+                                aria-label={`Remover ${item.codigo}`}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
                       )}
 
-                      <div className="space-y-2 pt-1">
-                        <Button onClick={abrirResumo} disabled={!podeContinuar} className="h-10 rounded-xl text-xs sm:min-w-40" aria-label="Continuar para resumo de devolucao">
-                          Continuar ({selecionadosCount})
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                        {!podeContinuar && motivoContinuar && (
-                          <p className="text-xs text-muted-foreground" role="status">
-                            {motivoContinuar}
-                          </p>
-                        )}
-                      </div>
+                      <Button onClick={abrirResumo} disabled={!podeContinuar} className="h-10 w-full rounded-xl text-xs" aria-label="Continuar para resumo de devolucao">
+                        Revisar pedido
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                      {!podeContinuar && motivoContinuar && (
+                        <p className="text-xs text-muted-foreground" role="status">
+                          {motivoContinuar}
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
                 </div>
@@ -1304,7 +1603,7 @@ function DevolucaoTab() {
           tipo="devolucao"
           funcionario={funcionario}
           matricula={matricula}
-          itens={itens.filter((item) => selecionados.has(item.codigo))}
+          itens={itensSelecionados}
           loading={confirmLoading}
           onCancelar={cancelarResumo}
           onConfirmar={confirmarDevolucao}
@@ -1317,6 +1616,1044 @@ function DevolucaoTab() {
     </div>
   );
 }
+
+function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
+  const [setores, setSetores] = useState<string[]>([]);
+  const [setorSelecionado, setSetorSelecionado] = useState("");
+  const [estoque, setEstoque] = useState<TamanhoDisponivel[]>([]);
+  const [pendencias, setPendencias] = useState<PendenciaSetor[]>([]);
+  const [loadingBase, setLoadingBase] = useState(true);
+  const [loadingPendencias, setLoadingPendencias] = useState(false);
+  const [loadingSaida, setLoadingSaida] = useState(false);
+  const [loadingDevolucao, setLoadingDevolucao] = useState(false);
+  const [tipoSaida, setTipoSaida] = useState("");
+  const [tamanhoSaida, setTamanhoSaida] = useState("");
+  const [quantidadeSaida, setQuantidadeSaida] = useState(1);
+  const [pedidoSaida, setPedidoSaida] = useState<SelecaoPedido[]>([]);
+  const [resumoSaidaAberto, setResumoSaidaAberto] = useState(false);
+  const [tipoDevolucao, setTipoDevolucao] = useState("");
+  const [tamanhoDevolucao, setTamanhoDevolucao] = useState("");
+  const [quantidadeDevolucao, setQuantidadeDevolucao] = useState(1);
+  const [pedidoDevolucao, setPedidoDevolucao] = useState<SelecaoPedido[]>([]);
+  const [resumoDevolucaoAberto, setResumoDevolucaoAberto] = useState(false);
+  const [pendenciaRapidaSelecionada, setPendenciaRapidaSelecionada] = useState<string | null>(null);
+  const [quantidadePendenciaRapida, setQuantidadePendenciaRapida] = useState(1);
+  const { success, error } = useToast();
+  const isSolicitacao = tipoOperacao === "solicitacao";
+
+  async function carregarEstoque() {
+    const data = await api.get<TamanhoDisponivel[]>("/ops/tamanhos-disponiveis");
+    setEstoque(data);
+  }
+
+  async function carregarPendencias(setor: string) {
+    if (!setor) {
+      setPendencias([]);
+      return;
+    }
+
+    setLoadingPendencias(true);
+    try {
+      const data = await api.get<PendenciasSetorResponse>(
+        `/ops/pendencias-setor?setor=${encodeURIComponent(setor)}`,
+      );
+      setPendencias(data.pendencias);
+    } catch (err) {
+      setPendencias([]);
+      error(err instanceof Error ? err.message : "Erro ao carregar pendencias do setor");
+    } finally {
+      setLoadingPendencias(false);
+    }
+  }
+
+  useEffect(() => {
+    let ativo = true;
+
+    const carregar = async () => {
+      setLoadingBase(true);
+      try {
+        const [setoresData, estoqueData] = await Promise.all([
+          api.get<{ setores: string[] }>("/ops/setores-disponiveis"),
+          api.get<TamanhoDisponivel[]>("/ops/tamanhos-disponiveis"),
+        ]);
+
+        if (!ativo) return;
+        setSetores(setoresData.setores);
+        setSetorSelecionado(setoresData.setores[0] ?? "");
+        setEstoque(estoqueData);
+      } catch (err) {
+        if (!ativo) return;
+        error(err instanceof Error ? err.message : "Erro ao carregar operacoes por setor");
+      } finally {
+        if (ativo) {
+          setLoadingBase(false);
+        }
+      }
+    };
+
+    void carregar();
+
+    return () => {
+      ativo = false;
+    };
+  }, [error]);
+
+  useEffect(() => {
+    if (!setorSelecionado) {
+      setPendencias([]);
+      return;
+    }
+    void carregarPendencias(setorSelecionado);
+  }, [setorSelecionado]);
+
+  const quantidadeSaidaPorChave = new Map<string, number>();
+  pedidoSaida.forEach((row) => {
+    quantidadeSaidaPorChave.set(chaveSelecao(row.tipo, row.tamanho), row.quantidade);
+  });
+
+  const estoqueDisponivel: TamanhoDisponivelOpcao[] = estoque
+    .map((row) => ({
+      ...row,
+      disponiveis_restantes: Math.max(
+        0,
+        row.disponiveis - (quantidadeSaidaPorChave.get(chaveSelecao(row.tipo, row.tamanho)) ?? 0),
+      ),
+    }))
+    .filter((row) => row.disponiveis_restantes > 0);
+
+  const tiposSaida = Array.from(new Set(estoqueDisponivel.map((row) => row.tipo)));
+  const tamanhosSaida = tipoSaida ? estoqueDisponivel.filter((row) => row.tipo === tipoSaida) : [];
+
+  useEffect(() => {
+    if (tiposSaida.length === 0) {
+      setTipoSaida("");
+      return;
+    }
+    if (!tipoSaida || !tiposSaida.includes(tipoSaida)) {
+      setTipoSaida(tiposSaida[0]);
+    }
+  }, [tiposSaida, tipoSaida]);
+
+  useEffect(() => {
+    if (!tipoSaida) {
+      setTamanhoSaida("");
+      return;
+    }
+
+    const opcoes = tamanhosSaida.map((row) => row.tamanho);
+    if (opcoes.length === 0) {
+      setTamanhoSaida("");
+      return;
+    }
+
+    if (!tamanhoSaida || !opcoes.includes(tamanhoSaida)) {
+      setTamanhoSaida(opcoes[0]);
+    }
+  }, [tamanhosSaida, tipoSaida, tamanhoSaida]);
+
+  const estoqueSelecionado = estoqueDisponivel.find(
+    (row) => row.tipo === tipoSaida && row.tamanho === tamanhoSaida,
+  );
+  const maxSaida = estoqueSelecionado?.disponiveis_restantes ?? 0;
+  const maxSaidaDisponivel = maxSaida;
+
+  useEffect(() => {
+    if (maxSaidaDisponivel <= 0) {
+      setQuantidadeSaida(1);
+      return;
+    }
+    setQuantidadeSaida((atual) => Math.min(Math.max(1, atual), maxSaidaDisponivel));
+  }, [maxSaidaDisponivel]);
+
+  const quantidadeDevolucaoPorChave = new Map<string, number>();
+  pedidoDevolucao.forEach((row) => {
+    quantidadeDevolucaoPorChave.set(chaveSelecao(row.tipo, row.tamanho), row.quantidade);
+  });
+
+  const pendenciasDisponiveis: PendenciaDisponivelOpcao[] = pendencias
+    .map((row) => ({
+      ...row,
+      quantidade_disponivel: Math.max(
+        0,
+        row.quantidade_pendente - (quantidadeDevolucaoPorChave.get(chaveSelecao(row.tipo, row.tamanho)) ?? 0),
+      ),
+    }))
+    .filter((row) => row.quantidade_disponivel > 0);
+
+  const tiposPendentes = Array.from(new Set(pendenciasDisponiveis.map((row) => row.tipo)));
+  const pendenciasDoTipo = tipoDevolucao
+    ? pendenciasDisponiveis.filter((row) => row.tipo === tipoDevolucao)
+    : [];
+
+  useEffect(() => {
+    if (tiposPendentes.length === 0) {
+      setTipoDevolucao("");
+      return;
+    }
+    if (!tipoDevolucao || !tiposPendentes.includes(tipoDevolucao)) {
+      setTipoDevolucao(tiposPendentes[0]);
+    }
+  }, [tiposPendentes, tipoDevolucao]);
+
+  useEffect(() => {
+    if (!tipoDevolucao) {
+      setTamanhoDevolucao("");
+      return;
+    }
+    const opcoes = pendenciasDoTipo.map((row) => row.tamanho);
+    if (opcoes.length === 0) {
+      setTamanhoDevolucao("");
+      return;
+    }
+    if (!tamanhoDevolucao || !opcoes.includes(tamanhoDevolucao)) {
+      setTamanhoDevolucao(opcoes[0]);
+    }
+  }, [pendenciasDoTipo, tipoDevolucao, tamanhoDevolucao]);
+
+  const pendenciaSelecionada = pendenciasDisponiveis.find(
+    (row) => row.tipo === tipoDevolucao && row.tamanho === tamanhoDevolucao,
+  );
+  const maxDevolucao = pendenciaSelecionada?.quantidade_disponivel ?? 0;
+  const maxDevolucaoDisponivel = maxDevolucao;
+
+  useEffect(() => {
+    if (maxDevolucaoDisponivel <= 0) {
+      setQuantidadeDevolucao(1);
+      return;
+    }
+    setQuantidadeDevolucao((atual) => Math.min(Math.max(1, atual), maxDevolucaoDisponivel));
+  }, [maxDevolucaoDisponivel]);
+
+  const pendenciaRapidaSelecionadaRow = pendenciasDisponiveis.find(
+    (row) => chaveSelecao(row.tipo, row.tamanho) === pendenciaRapidaSelecionada,
+  );
+  const pendenciaRapidaMax = pendenciaRapidaSelecionadaRow?.quantidade_disponivel ?? 0;
+
+  useEffect(() => {
+    if (isSolicitacao) {
+      setPendenciaRapidaSelecionada(null);
+      setQuantidadePendenciaRapida(1);
+    }
+  }, [isSolicitacao]);
+
+  useEffect(() => {
+    if (!pendenciaRapidaSelecionada) {
+      setQuantidadePendenciaRapida(1);
+      return;
+    }
+
+    if (pendenciaRapidaMax <= 0) {
+      setPendenciaRapidaSelecionada(null);
+      setQuantidadePendenciaRapida(1);
+      return;
+    }
+
+    setQuantidadePendenciaRapida((atual) => Math.min(Math.max(1, atual), pendenciaRapidaMax));
+  }, [pendenciaRapidaSelecionada, pendenciaRapidaMax]);
+
+  const totalPendente = pendencias.reduce((acc, row) => acc + row.quantidade_pendente, 0);
+  const totalPedidoSaida = pedidoSaida.reduce((acc, row) => acc + row.quantidade, 0);
+  const totalPedidoDevolucao = pedidoDevolucao.reduce((acc, row) => acc + row.quantidade, 0);
+  const pendenciasListadas = isSolicitacao ? pendencias : pendenciasDisponiveis;
+  const podeAdicionarSaida =
+    Boolean(setorSelecionado) &&
+    Boolean(tipoSaida) &&
+    Boolean(tamanhoSaida) &&
+    maxSaidaDisponivel > 0 &&
+    quantidadeSaida >= 1 &&
+    quantidadeSaida <= maxSaidaDisponivel;
+  const podeAdicionarDevolucao =
+    Boolean(setorSelecionado) &&
+    Boolean(tipoDevolucao) &&
+    Boolean(tamanhoDevolucao) &&
+    maxDevolucaoDisponivel > 0 &&
+    quantidadeDevolucao >= 1 &&
+    quantidadeDevolucao <= maxDevolucaoDisponivel;
+  const podeRevisarSaida = Boolean(setorSelecionado) && pedidoSaida.length > 0;
+  const podeRevisarDevolucao = Boolean(setorSelecionado) && pedidoDevolucao.length > 0;
+  const podeAdicionarPendenciaRapida =
+    Boolean(pendenciaRapidaSelecionadaRow) &&
+    pendenciaRapidaMax > 0 &&
+    quantidadePendenciaRapida >= 1 &&
+    quantidadePendenciaRapida <= pendenciaRapidaMax;
+
+  let motivoAdicionarSaida: string | null = null;
+  if (!setorSelecionado) {
+    motivoAdicionarSaida = "Selecione um setor.";
+  } else if (estoque.length > 0 && estoqueDisponivel.length === 0) {
+    motivoAdicionarSaida = "Todos os tamanhos disponiveis ja foram adicionados ao pedido.";
+  } else if (!tipoSaida) {
+    motivoAdicionarSaida = "Selecione o tipo.";
+  } else if (!tamanhoSaida) {
+    motivoAdicionarSaida = "Selecione o tamanho.";
+  } else if (maxSaida === 0) {
+    motivoAdicionarSaida = "Sem estoque para este tipo/tamanho.";
+  } else if (maxSaidaDisponivel === 0) {
+    motivoAdicionarSaida = "Quantidade maxima deste tamanho ja foi adicionada ao pedido.";
+  } else if (!podeAdicionarSaida) {
+    motivoAdicionarSaida = `Selecione de 1 a ${maxSaidaDisponivel}.`;
+  }
+
+  let motivoAdicionarDevolucao: string | null = null;
+  if (!setorSelecionado) {
+    motivoAdicionarDevolucao = "Selecione um setor.";
+  } else if (pendencias.length > 0 && pendenciasDisponiveis.length === 0) {
+    motivoAdicionarDevolucao = "Todas as pendencias ja foram adicionadas ao pedido.";
+  } else if (!tipoDevolucao) {
+    motivoAdicionarDevolucao = "Selecione o tipo.";
+  } else if (!tamanhoDevolucao) {
+    motivoAdicionarDevolucao = "Selecione o tamanho.";
+  } else if (maxDevolucao === 0) {
+    motivoAdicionarDevolucao = "Sem pendencia para este tipo/tamanho.";
+  } else if (maxDevolucaoDisponivel === 0) {
+    motivoAdicionarDevolucao = "Quantidade maxima deste tamanho ja foi adicionada ao pedido.";
+  } else if (!podeAdicionarDevolucao) {
+    motivoAdicionarDevolucao = `Selecione de 1 a ${maxDevolucaoDisponivel}.`;
+  }
+
+  const totalNoCarrinho = isSolicitacao ? totalPedidoSaida : totalPedidoDevolucao;
+  const tiposAtivos = isSolicitacao ? tiposSaida.length : tiposPendentes.length;
+  const variacoesAtivas = isSolicitacao ? estoqueDisponivel.length : pendenciasDisponiveis.length;
+  const descricaoFluxo = isSolicitacao
+    ? "Selecione itens no painel lateral para montar a solicitacao deste setor."
+    : "Selecione pendencias no painel lateral para montar a devolucao deste setor.";
+
+  async function recarregarDados() {
+    if (!setorSelecionado) {
+      await carregarEstoque();
+      return;
+    }
+    await Promise.all([carregarEstoque(), carregarPendencias(setorSelecionado)]);
+  }
+
+  function adicionarSaidaAoPedido() {
+    if (!podeAdicionarSaida) return;
+
+    setPedidoSaida((prev) => {
+      const index = prev.findIndex((row) => row.tipo === tipoSaida && row.tamanho === tamanhoSaida);
+      if (index === -1) {
+        return [...prev, { tipo: tipoSaida, tamanho: tamanhoSaida, quantidade: quantidadeSaida }];
+      }
+
+      return prev.map((row, rowIndex) =>
+        rowIndex === index
+          ? {
+              ...row,
+              quantidade: row.quantidade + quantidadeSaida,
+            }
+          : row,
+      );
+    });
+    setQuantidadeSaida(1);
+  }
+
+  function removerSaidaDoPedido(tipo: string, tamanho: string) {
+    setPedidoSaida((prev) => prev.filter((row) => !(row.tipo === tipo && row.tamanho === tamanho)));
+  }
+
+  function adicionarLinhaPedidoDevolucao(tipo: string, tamanho: string, quantidade: number) {
+    setPedidoDevolucao((prev) => {
+      const index = prev.findIndex((row) => row.tipo === tipo && row.tamanho === tamanho);
+      if (index === -1) {
+        return [...prev, { tipo, tamanho, quantidade }];
+      }
+
+      return prev.map((row, rowIndex) =>
+        rowIndex === index
+          ? {
+              ...row,
+              quantidade: row.quantidade + quantidade,
+            }
+          : row,
+      );
+    });
+  }
+
+  function adicionarDevolucaoAoPedido() {
+    if (!podeAdicionarDevolucao) return;
+
+    adicionarLinhaPedidoDevolucao(tipoDevolucao, tamanhoDevolucao, quantidadeDevolucao);
+    setQuantidadeDevolucao(1);
+  }
+
+  function selecionarPendenciaParaDevolucao(row: PendenciaDisponivelOpcao) {
+    if (isSolicitacao) return;
+    const chave = chaveSelecao(row.tipo, row.tamanho);
+    setTipoDevolucao(row.tipo);
+    setTamanhoDevolucao(row.tamanho);
+    setQuantidadeDevolucao(1);
+    setPendenciaRapidaSelecionada((atual) => (atual === chave ? null : chave));
+    setQuantidadePendenciaRapida(1);
+  }
+
+  function adicionarPendenciaRapidaAoPedido(row: PendenciaDisponivelOpcao) {
+    const max = row.quantidade_disponivel;
+    if (max <= 0) return;
+
+    const quantidade = Math.min(Math.max(1, quantidadePendenciaRapida), max);
+    adicionarLinhaPedidoDevolucao(row.tipo, row.tamanho, quantidade);
+    setTipoDevolucao(row.tipo);
+    setTamanhoDevolucao(row.tamanho);
+    setQuantidadeDevolucao(1);
+    setPendenciaRapidaSelecionada(chaveSelecao(row.tipo, row.tamanho));
+    setQuantidadePendenciaRapida(1);
+  }
+
+  function removerDevolucaoDoPedido(tipo: string, tamanho: string) {
+    setPedidoDevolucao((prev) => prev.filter((row) => !(row.tipo === tipo && row.tamanho === tamanho)));
+  }
+
+  async function confirmarSaidaSetor() {
+    if (!podeRevisarSaida) return;
+
+    setLoadingSaida(true);
+    try {
+      const itensEmprestados: string[] = [];
+      for (const selecao of pedidoSaida) {
+        const data = await api.post<{ sucesso: boolean; setor: string; itens_emprestados: string[] }>(
+          "/ops/saida-setor-direta",
+          {
+            setor: setorSelecionado,
+            quantidade: selecao.quantidade,
+            tipo_item: selecao.tipo,
+            tamanho: selecao.tamanho,
+          },
+        );
+        itensEmprestados.push(...data.itens_emprestados);
+      }
+      success(`Solicitacao registrada para ${setorSelecionado}: ${itensEmprestados.length} item(ns).`);
+      setPedidoSaida([]);
+      setResumoSaidaAberto(false);
+      await recarregarDados();
+    } catch (err) {
+      error(err instanceof Error ? err.message : "Erro ao registrar solicitacao para setor");
+    } finally {
+      setLoadingSaida(false);
+    }
+  }
+
+  async function confirmarDevolucaoSetor() {
+    if (!podeRevisarDevolucao) return;
+
+    setLoadingDevolucao(true);
+    try {
+      const itensDevolvidos: string[] = [];
+      for (const selecao of pedidoDevolucao) {
+        const data = await api.post<{ sucesso: boolean; setor: string; itens_devolvidos: string[] }>(
+          "/ops/devolucao-setor-direta",
+          {
+            setor: setorSelecionado,
+            quantidade: selecao.quantidade,
+            tipo_item: selecao.tipo,
+            tamanho: selecao.tamanho,
+          },
+        );
+        itensDevolvidos.push(...data.itens_devolvidos);
+      }
+      success(`Devolucao registrada para ${setorSelecionado}: ${itensDevolvidos.length} item(ns).`);
+      setPedidoDevolucao([]);
+      setResumoDevolucaoAberto(false);
+      await recarregarDados();
+    } catch (err) {
+      error(err instanceof Error ? err.message : "Erro ao registrar devolucao para setor");
+    } finally {
+      setLoadingDevolucao(false);
+    }
+  }
+
+  return (
+    <div className="w-full space-y-3">
+      <Card className="border-border/70 bg-gradient-to-r from-card/96 via-card/92 to-card/96 shadow-[var(--shadow-soft)]">
+        <CardContent className="space-y-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {isSolicitacao ? "Solicitacao por setor" : "Devolucao por setor"}
+            </p>
+            <StatusPill tone="info" className="text-[10px]">
+              Pedido total: {totalNoCarrinho}
+            </StatusPill>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+            <div className="space-y-1">
+              <Label htmlFor="setor-operacao" className="text-xs text-muted-foreground">
+                Setor
+              </Label>
+              <Select
+                value={setorSelecionado}
+                onValueChange={(value) => {
+                  setSetorSelecionado(value);
+                  setPedidoSaida([]);
+                  setPedidoDevolucao([]);
+                  setResumoSaidaAberto(false);
+                  setResumoDevolucaoAberto(false);
+                  setPendenciaRapidaSelecionada(null);
+                  setQuantidadePendenciaRapida(1);
+                  setQuantidadeSaida(1);
+                  setQuantidadeDevolucao(1);
+                }}
+                disabled={loadingBase || setores.length === 0}
+              >
+                <SelectTrigger id="setor-operacao" className="h-10 rounded-xl border-border/80 bg-background/85 text-xs">
+                  <SelectValue placeholder="Selecione o setor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {setores.map((setor) => (
+                    <SelectItem key={setor} value={setor}>
+                      {setor}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button
+              variant="outline"
+              onClick={() => void recarregarDados()}
+              disabled={loadingBase || loadingPendencias || !setorSelecionado}
+              className="h-10 rounded-xl text-xs md:min-w-36"
+            >
+              {loadingPendencias ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Atualizar
+            </Button>
+          </div>
+
+          {setores.length === 0 && !loadingBase && (
+            <p className="text-xs text-muted-foreground">Nenhum setor ativo disponivel para operacao.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="space-y-3">
+        <Card className="border-border/70 bg-gradient-to-b from-card/96 to-card/90 shadow-[var(--shadow-soft)]">
+          <CardContent className="space-y-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {isSolicitacao ? "Detalhes do setor para solicitacao" : "Detalhes do setor para devolucao"}
+              </p>
+              <StatusPill tone={setorSelecionado ? "success" : "neutral"} className="text-[10px]">
+                {setorSelecionado || "Setor nao selecionado"}
+              </StatusPill>
+            </div>
+
+            {!setorSelecionado ? (
+              <div className="rounded-xl border border-border/60 bg-surface-2/60 px-4 py-5 text-center">
+                <p className="text-sm font-medium text-foreground">Selecione um setor para iniciar.</p>
+                <p className="text-xs text-muted-foreground">
+                  O painel lateral sera liberado automaticamente para montar o pedido.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-xl border border-border/60 bg-surface-2/60 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {isSolicitacao ? "Variacoes disponiveis" : "Variacoes pendentes"}
+                    </p>
+                    <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">{variacoesAtivas}</p>
+                    <p className="text-xs text-muted-foreground">{tiposAtivos} tipo(s) ativo(s)</p>
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-surface-2/60 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Pendencias totais</p>
+                    <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">{totalPendente}</p>
+                    <p className="text-xs text-muted-foreground">Atualizado em tempo real para o setor.</p>
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-surface-2/60 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Itens no carrinho</p>
+                    <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">{totalNoCarrinho}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {isSolicitacao ? "Pronto para confirmar solicitacao." : "Pronto para confirmar devolucao."}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-border/60 bg-surface-2/60 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Fluxo atual</p>
+                    <StatusPill tone={isSolicitacao ? "success" : "info"} className="mt-1 text-[10px]">
+                      {isSolicitacao ? "Solicitacao" : "Devolucao"}
+                    </StatusPill>
+                    <p className="mt-2 text-xs text-muted-foreground">{descricaoFluxo}</p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-dashed border-border/60 bg-background/65 px-3 py-2">
+                  <p className="text-xs text-muted-foreground">
+                    Selecao de itens, carrinho e revisao ficam no painel lateral para reduzir scroll e acelerar operacao.
+                  </p>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="space-y-3 xl:fixed xl:right-4 xl:top-[6.5rem] xl:z-40 xl:w-[24rem] xl:max-h-[calc(100dvh-7.25rem)] xl:overflow-y-auto xl:pr-1">
+          <Card className="h-fit border-border/70 bg-gradient-to-b from-card/96 to-card/90 shadow-[var(--shadow-soft)]">
+            <CardContent className="space-y-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {isSolicitacao ? "Painel lateral da solicitacao" : "Painel lateral da devolucao"}
+                </p>
+                <StatusPill tone="info" className="text-[10px]">
+                  Pedido: {totalNoCarrinho}
+                </StatusPill>
+              </div>
+
+              {isSolicitacao ? (
+                resumoSaidaAberto ? (
+                  <div className="space-y-3 rounded-xl border border-border/70 bg-surface-2/60 p-3">
+                    <p className="text-xs font-semibold text-foreground">Resumo da solicitacao</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Setor</span>
+                      <StatusPill tone="neutral">{setorSelecionado || "-"}</StatusPill>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Quantidade total</span>
+                      <StatusPill tone="info">{totalPedidoSaida}</StatusPill>
+                    </div>
+                    <div className="space-y-1.5">
+                      {pedidoSaida.map((row) => (
+                        <div
+                          key={chaveSelecao(row.tipo, row.tamanho)}
+                          className="flex items-center justify-between rounded-lg border border-border/60 bg-background/80 px-3 py-2"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <StatusPill tone="neutral">{row.tipo}</StatusPill>
+                            <StatusPill tone="neutral">{row.tamanho}</StatusPill>
+                          </div>
+                          <StatusPill tone="info">{row.quantidade}</StatusPill>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setResumoSaidaAberto(false)}
+                        disabled={loadingSaida}
+                        className="h-10 flex-1 rounded-xl text-xs"
+                      >
+                        Voltar
+                      </Button>
+                      <Button
+                        onClick={() => void confirmarSaidaSetor()}
+                        disabled={loadingSaida || !podeRevisarSaida}
+                        className="h-10 flex-1 rounded-xl text-xs"
+                      >
+                        {loadingSaida ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
+                        Confirmar
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="setor-saida-tipo" className="text-xs text-muted-foreground">
+                          Tipo
+                        </Label>
+                        <Select
+                          value={tipoSaida}
+                          onValueChange={(value) => {
+                            setTipoSaida(value);
+                            setQuantidadeSaida(1);
+                          }}
+                          disabled={loadingBase || tiposSaida.length === 0 || !setorSelecionado}
+                        >
+                          <SelectTrigger id="setor-saida-tipo" className="h-10 rounded-xl border-border/80 bg-background/85 text-xs">
+                            <SelectValue placeholder="Selecione o tipo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {tiposSaida.map((tipo) => (
+                              <SelectItem key={tipo} value={tipo}>
+                                {tipo}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label htmlFor="setor-saida-tamanho" className="text-xs text-muted-foreground">
+                          Tamanho
+                        </Label>
+                        <Select
+                          value={tamanhoSaida}
+                          onValueChange={(value) => {
+                            setTamanhoSaida(value);
+                            setQuantidadeSaida(1);
+                          }}
+                          disabled={loadingBase || !tipoSaida || tamanhosSaida.length === 0 || !setorSelecionado}
+                        >
+                          <SelectTrigger id="setor-saida-tamanho" className="h-10 rounded-xl border-border/80 bg-background/85 text-xs">
+                            <SelectValue placeholder="Selecione o tamanho" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {tamanhosSaida.map((row) => (
+                              <SelectItem key={`${row.tipo}-${row.tamanho}`} value={row.tamanho}>
+                                {row.tamanho} ({row.disponiveis_restantes} disp.)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                      <QuantitySelector
+                        value={quantidadeSaida}
+                        onChange={setQuantidadeSaida}
+                        min={1}
+                        max={Math.max(1, maxSaidaDisponivel)}
+                        disabled={!setorSelecionado || !tipoSaida || !tamanhoSaida || maxSaidaDisponivel === 0 || loadingSaida}
+                        label={`Quantidade (max. ${maxSaidaDisponivel})`}
+                      />
+
+                      <Button
+                        onClick={adicionarSaidaAoPedido}
+                        disabled={!podeAdicionarSaida || loadingSaida}
+                        className="h-10 w-full rounded-xl text-xs sm:min-w-40"
+                        variant="outline"
+                      >
+                        Adicionar ao pedido
+                      </Button>
+                    </div>
+                    {!podeAdicionarSaida && motivoAdicionarSaida && (
+                      <p className="text-xs text-muted-foreground">{motivoAdicionarSaida}</p>
+                    )}
+
+                    <div className="space-y-1.5 rounded-2xl border border-border/70 bg-surface-2/60 p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-medium text-muted-foreground">Carrinho de solicitacao</p>
+                        <p className="text-xs font-semibold text-foreground">{pedidoSaida.length} selecao(oes)</p>
+                      </div>
+                      {pedidoSaida.length === 0 ? (
+                        <p className="rounded-xl border border-dashed border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+                          Adicione os tamanhos para montar a solicitacao.
+                        </p>
+                      ) : (
+                        <div className="max-h-56 space-y-1.5 overflow-y-auto pr-1">
+                          {pedidoSaida.map((row) => (
+                            <div
+                              key={chaveSelecao(row.tipo, row.tamanho)}
+                              className="flex items-center justify-between rounded-xl border border-border/55 bg-background/80 px-3 py-2"
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <StatusPill tone="neutral">{row.tipo}</StatusPill>
+                                <StatusPill tone="neutral">{row.tamanho}</StatusPill>
+                                <StatusPill tone="info">{row.quantidade}</StatusPill>
+                              </div>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 rounded-lg"
+                                onClick={() => removerSaidaDoPedido(row.tipo, row.tamanho)}
+                                aria-label={`Remover ${row.tipo} ${row.tamanho}`}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <Button
+                      onClick={() => setResumoSaidaAberto(true)}
+                      disabled={!podeRevisarSaida || loadingSaida}
+                      className="h-10 w-full rounded-xl text-xs"
+                    >
+                      Revisar pedido
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </>
+                )
+              ) : (
+                resumoDevolucaoAberto ? (
+                  <div className="space-y-3 rounded-xl border border-border/70 bg-surface-2/60 p-3">
+                    <p className="text-xs font-semibold text-foreground">Resumo da devolucao</p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Setor</span>
+                      <StatusPill tone="neutral">{setorSelecionado || "-"}</StatusPill>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Quantidade total</span>
+                      <StatusPill tone="info">{totalPedidoDevolucao}</StatusPill>
+                    </div>
+                    <div className="space-y-1.5">
+                      {pedidoDevolucao.map((row) => (
+                        <div
+                          key={chaveSelecao(row.tipo, row.tamanho)}
+                          className="flex items-center justify-between rounded-lg border border-border/60 bg-background/80 px-3 py-2"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <StatusPill tone="neutral">{row.tipo}</StatusPill>
+                            <StatusPill tone="neutral">{row.tamanho}</StatusPill>
+                          </div>
+                          <StatusPill tone="info">{row.quantidade}</StatusPill>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setResumoDevolucaoAberto(false)}
+                        disabled={loadingDevolucao}
+                        className="h-10 flex-1 rounded-xl text-xs"
+                      >
+                        Voltar
+                      </Button>
+                      <Button
+                        onClick={() => void confirmarDevolucaoSetor()}
+                        disabled={loadingDevolucao || !podeRevisarDevolucao}
+                        className="h-10 flex-1 rounded-xl text-xs"
+                      >
+                        {loadingDevolucao ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
+                        Confirmar
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="setor-dev-tipo" className="text-xs text-muted-foreground">
+                          Tipo
+                        </Label>
+                        <Select
+                          value={tipoDevolucao}
+                          onValueChange={(value) => {
+                            setTipoDevolucao(value);
+                            setQuantidadeDevolucao(1);
+                          }}
+                          disabled={!setorSelecionado || tiposPendentes.length === 0 || loadingPendencias}
+                        >
+                          <SelectTrigger id="setor-dev-tipo" className="h-10 rounded-xl border-border/80 bg-background/85 text-xs">
+                            <SelectValue placeholder="Selecione o tipo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {tiposPendentes.map((tipo) => (
+                              <SelectItem key={tipo} value={tipo}>
+                                {tipo}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label htmlFor="setor-dev-tamanho" className="text-xs text-muted-foreground">
+                          Tamanho
+                        </Label>
+                        <Select
+                          value={tamanhoDevolucao}
+                          onValueChange={(value) => {
+                            setTamanhoDevolucao(value);
+                            setQuantidadeDevolucao(1);
+                          }}
+                          disabled={!setorSelecionado || !tipoDevolucao || pendenciasDoTipo.length === 0 || loadingPendencias}
+                        >
+                          <SelectTrigger id="setor-dev-tamanho" className="h-10 rounded-xl border-border/80 bg-background/85 text-xs">
+                            <SelectValue placeholder="Selecione o tamanho" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {pendenciasDoTipo.map((row) => (
+                              <SelectItem key={`${row.tipo}-${row.tamanho}`} value={row.tamanho}>
+                                {row.tamanho} ({row.quantidade_disponivel} pend.)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                      <QuantitySelector
+                        value={quantidadeDevolucao}
+                        onChange={setQuantidadeDevolucao}
+                        min={1}
+                        max={Math.max(1, maxDevolucaoDisponivel)}
+                        disabled={!setorSelecionado || !tipoDevolucao || !tamanhoDevolucao || maxDevolucaoDisponivel === 0 || loadingDevolucao}
+                        label={`Quantidade (max. ${maxDevolucaoDisponivel})`}
+                      />
+
+                      <Button
+                        onClick={adicionarDevolucaoAoPedido}
+                        disabled={!podeAdicionarDevolucao || loadingDevolucao}
+                        className="h-10 w-full rounded-xl text-xs sm:min-w-40"
+                        variant="outline"
+                      >
+                        Adicionar ao pedido
+                      </Button>
+                    </div>
+                    {!podeAdicionarDevolucao && motivoAdicionarDevolucao && (
+                      <p className="text-xs text-muted-foreground">{motivoAdicionarDevolucao}</p>
+                    )}
+
+                    <div className="space-y-1.5 rounded-2xl border border-border/70 bg-surface-2/60 p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-medium text-muted-foreground">Carrinho de devolucao</p>
+                        <p className="text-xs font-semibold text-foreground">{pedidoDevolucao.length} selecao(oes)</p>
+                      </div>
+                      {pedidoDevolucao.length === 0 ? (
+                        <p className="rounded-xl border border-dashed border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+                          Adicione os tamanhos para montar a devolucao.
+                        </p>
+                      ) : (
+                        <div className="max-h-56 space-y-1.5 overflow-y-auto pr-1">
+                          {pedidoDevolucao.map((row) => (
+                            <div
+                              key={chaveSelecao(row.tipo, row.tamanho)}
+                              className="flex items-center justify-between rounded-xl border border-border/55 bg-background/80 px-3 py-2"
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <StatusPill tone="neutral">{row.tipo}</StatusPill>
+                                <StatusPill tone="neutral">{row.tamanho}</StatusPill>
+                                <StatusPill tone="info">{row.quantidade}</StatusPill>
+                              </div>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 rounded-lg"
+                                onClick={() => removerDevolucaoDoPedido(row.tipo, row.tamanho)}
+                                aria-label={`Remover ${row.tipo} ${row.tamanho}`}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <Button
+                      onClick={() => setResumoDevolucaoAberto(true)}
+                      disabled={!podeRevisarDevolucao || loadingDevolucao}
+                      className="h-10 w-full rounded-xl text-xs"
+                    >
+                      Revisar pedido
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </>
+                )
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="h-fit border-border/70 bg-gradient-to-b from-card/96 to-card/90 shadow-[var(--shadow-soft)]">
+            <CardContent className="space-y-3 px-3 pb-3 pt-3 sm:px-4 sm:pb-4 sm:pt-4">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Pendencias em aberto</p>
+                <StatusPill tone={totalPendente > 0 ? "danger" : "success"} className="text-[10px]">
+                  {totalPendente > 0 ? `${totalPendente} pendente(s)` : "Sem pendencias"}
+                </StatusPill>
+              </div>
+
+              {loadingPendencias ? (
+                <div className="rounded-xl border border-border/60 bg-surface-2/65 p-3">
+                  <p className="text-xs text-muted-foreground">Atualizando pendencias do setor...</p>
+                </div>
+              ) : pendencias.length === 0 ? (
+                <div className="rounded-xl border border-border/60 bg-surface-2/65 p-3 text-center">
+                  <p className="text-sm font-medium text-foreground">Nenhuma pendencia para o setor selecionado.</p>
+                  <p className="text-xs text-muted-foreground">Saidas e devolucoes estao balanceadas.</p>
+                </div>
+              ) : !isSolicitacao && pendenciasListadas.length === 0 ? (
+                <div className="rounded-xl border border-border/60 bg-surface-2/65 p-3 text-center">
+                  <p className="text-sm font-medium text-foreground">Todas as pendencias ja estao no pedido.</p>
+                  <p className="text-xs text-muted-foreground">Revise e confirme para concluir a devolucao.</p>
+                </div>
+              ) : (
+                <div className="max-h-[24rem] space-y-1.5 overflow-y-auto pr-1">
+                  {pendenciasListadas.map((row, index) => {
+                    const chave = chaveSelecao(row.tipo, row.tamanho);
+                    const quantidadeDisponivelRow =
+                      isPendenciaDisponivelOpcao(row) ? row.quantidade_disponivel : row.quantidade_pendente;
+                    const selecionada = !isSolicitacao && pendenciaRapidaSelecionada === chave;
+
+                    return (
+                      <div
+                        key={`${row.setor}-${row.tipo}-${row.tamanho}`}
+                        className="rounded-xl border border-border/60 bg-background/80 px-3 py-2 animate-in fade-in-0 slide-in-from-bottom-2"
+                        style={{ animationDelay: `${index * 35}ms` }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!isSolicitacao && isPendenciaDisponivelOpcao(row)) {
+                              selecionarPendenciaParaDevolucao(row);
+                            }
+                          }}
+                          disabled={isSolicitacao}
+                          className="flex w-full items-center justify-between gap-2 text-left"
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <StatusPill tone="neutral">{row.tipo}</StatusPill>
+                            <StatusPill tone="neutral">{row.tamanho}</StatusPill>
+                          </div>
+                          <StatusPill tone="danger">{quantidadeDisponivelRow} pend.</StatusPill>
+                        </button>
+
+                        {!isSolicitacao && selecionada && isPendenciaDisponivelOpcao(row) && (
+                          <div className="mt-2 grid gap-2 rounded-xl border border-border/60 bg-surface-2/55 p-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                            <QuantitySelector
+                              value={quantidadePendenciaRapida}
+                              onChange={setQuantidadePendenciaRapida}
+                              min={1}
+                              max={Math.max(1, row.quantidade_disponivel)}
+                              label={`Qtd. para adicionar (max. ${row.quantidade_disponivel})`}
+                            />
+                            <Button
+                              onClick={() => adicionarPendenciaRapidaAoPedido(row)}
+                              disabled={!podeAdicionarPendenciaRapida || loadingDevolucao}
+                              className="h-10 rounded-xl text-xs sm:min-w-32"
+                              variant="outline"
+                            >
+                              Adicionar
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OperacaoDestinoTabs({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
+  const isSolicitacao = tipoOperacao === "solicitacao";
+
+  return (
+    <Tabs defaultValue="usuario" className="w-full space-y-3">
+      <TabsList className="mx-auto grid h-auto w-full max-w-xl grid-cols-2 gap-1 rounded-full border border-border/70 bg-gradient-to-r from-surface-2/95 via-background/92 to-surface-2/95 p-1 shadow-[0_14px_30px_-24px_hsl(201_58%_32%_/_0.85)]">
+        <TabsTrigger
+          value="usuario"
+          className="gap-2 rounded-full border border-transparent py-2 text-[13px] font-semibold tracking-wide text-muted-foreground transition-all duration-200 data-[state=active]:border-primary/20 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/18 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+        >
+          <UserRound className="h-4 w-4" />
+          <span className="font-medium">Usuario</span>
+        </TabsTrigger>
+        <TabsTrigger
+          value="setor"
+          className="gap-2 rounded-full border border-transparent py-2 text-[13px] font-semibold tracking-wide text-muted-foreground transition-all duration-200 data-[state=active]:border-emerald-300/45 data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500/18 data-[state=active]:to-teal-500/10 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm dark:data-[state=active]:text-emerald-300"
+        >
+          <Building2 className="h-4 w-4" />
+          <span className="font-medium">Setor</span>
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="usuario" className="mt-3 w-full">
+        {isSolicitacao ? <EmprestimoTab /> : <DevolucaoTab />}
+      </TabsContent>
+      <TabsContent value="setor" className="mt-3 w-full">
+        <SetorOperacoesTab tipoOperacao={tipoOperacao} />
+      </TabsContent>
+    </Tabs>
+  );
+}
+
 export function SetorPage() {
   useEffect(() => {
     enviarMonitorEmEspera("Aguardando uma operacao na tela principal.");
@@ -1332,54 +2669,55 @@ export function SetorPage() {
 
       <Header />
       <main className="relative min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-6xl p-4 sm:p-6">
+        <div className="mx-auto w-full max-w-[1280px] p-4 sm:p-6">
           <Card className="w-full border-border/80 bg-card/95 shadow-[0_30px_60px_-34px_hsl(200_76%_20%_/_0.65)] backdrop-blur-xl animate-in fade-in-50 slide-in-from-bottom-8 duration-700">
-          <CardHeader className="border-b border-border/65 bg-gradient-to-r from-primary/8 via-transparent to-accent/14 px-4 pb-4 pt-4 sm:px-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex min-w-0 items-start gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/28 bg-gradient-to-br from-primary/18 via-background to-accent/45 p-2.5 shadow-[0_10px_26px_-18px_hsl(198_68%_24%_/_0.68)]">
-                  <img src="/logo-privativos.png" alt="Privativos" className="h-full w-full rounded-lg object-cover" />
+            <CardHeader className="border-b border-border/65 bg-gradient-to-r from-primary/8 via-transparent to-accent/14 px-4 pb-4 pt-4 sm:px-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/28 bg-gradient-to-br from-primary/18 via-background to-accent/45 p-2.5 shadow-[0_10px_26px_-18px_hsl(198_68%_24%_/_0.68)]">
+                    <img src="/logo-privativos.png" alt="Privativos" className="h-full w-full rounded-lg object-cover" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">Privativos</p>
+                    <CardTitle className="text-lg font-bold sm:text-2xl">Operacoes</CardTitle>
+                    <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
+                      Gerencie solicitacoes e devolucoes para usuarios e setores.
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">Privativos</p>
-                  <CardTitle className="text-lg font-bold sm:text-2xl">Operacoes</CardTitle>
-                  <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
-                    Gerencie emprestimos e devolucoes de kits com validacao rapida.
-                  </p>
-                </div>
-              </div>
 
-              <StatusPill tone="info" className="text-[10px]">
-                Fluxo operacional ativo
-              </StatusPill>
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 pt-5 sm:px-5 sm:pb-5">
-            <Tabs defaultValue="emprestimo" className="w-full space-y-4">
-              <TabsList className="mx-auto grid h-auto w-full max-w-lg grid-cols-2 gap-1 rounded-2xl border border-border/70 bg-gradient-to-r from-surface-2/95 via-background/92 to-surface-2/95 p-1.5 shadow-sm">
-                <TabsTrigger
-                  value="emprestimo"
-                  className="gap-2 rounded-xl border border-transparent py-2.5 text-[13px] font-semibold tracking-wide transition-all duration-200 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/16 data-[state=active]:to-primary/6 data-[state=active]:text-primary data-[state=active]:shadow-sm"
-                >
-                  <Package className="h-4 w-4" />
-                  <span className="font-medium">Emprestimo</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="devolucao"
-                  className="gap-2 rounded-xl border border-transparent py-2.5 text-[13px] font-semibold tracking-wide transition-all duration-200 data-[state=active]:border-sky-300/45 data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500/15 data-[state=active]:to-cyan-500/10 data-[state=active]:text-sky-700 data-[state=active]:shadow-sm dark:data-[state=active]:text-sky-300"
-                >
-                  <Undo2 className="h-4 w-4" />
-                  <span className="font-medium">Devolucao</span>
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="emprestimo" className="mt-4 w-full">
-                <EmprestimoTab />
-              </TabsContent>
-              <TabsContent value="devolucao" className="mt-4 w-full">
-                <DevolucaoTab />
-              </TabsContent>
-            </Tabs>
-          </CardContent>
+                <StatusPill tone="info" className="text-[10px]">
+                  Fluxo operacional ativo
+                </StatusPill>
+              </div>
+            </CardHeader>
+            <CardContent className="px-4 pb-4 pt-5 sm:px-5 sm:pb-5">
+              <Tabs defaultValue="solicitacao" className="w-full space-y-3">
+                <TabsList className="mx-auto grid h-auto w-full max-w-2xl grid-cols-2 gap-1 rounded-full border border-border/70 bg-gradient-to-r from-surface-2/95 via-background/92 to-surface-2/95 p-1 shadow-[0_16px_36px_-26px_hsl(200_60%_30%_/_0.85)]">
+                  <TabsTrigger
+                    value="solicitacao"
+                    className="gap-2 rounded-full border border-transparent py-2 text-[13px] font-semibold tracking-wide text-muted-foreground transition-all duration-200 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/18 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+                  >
+                    <Package className="h-4 w-4" />
+                    <span className="font-medium">Solicitacao</span>
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="devolucao"
+                    className="gap-2 rounded-full border border-transparent py-2 text-[13px] font-semibold tracking-wide text-muted-foreground transition-all duration-200 data-[state=active]:border-sky-300/45 data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-500/18 data-[state=active]:to-cyan-500/10 data-[state=active]:text-sky-700 data-[state=active]:shadow-sm dark:data-[state=active]:text-sky-300"
+                  >
+                    <Undo2 className="h-4 w-4" />
+                    <span className="font-medium">Devolucao</span>
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="solicitacao" className="mt-3 w-full">
+                  <OperacaoDestinoTabs tipoOperacao="solicitacao" />
+                </TabsContent>
+                <TabsContent value="devolucao" className="mt-3 w-full">
+                  <OperacaoDestinoTabs tipoOperacao="devolucao" />
+                </TabsContent>
+              </Tabs>
+            </CardContent>
           </Card>
         </div>
       </main>
