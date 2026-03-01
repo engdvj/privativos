@@ -514,6 +514,20 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(200).send(rows);
   });
 
+  app.get("/admin/funcoes/:id/funcionarios", async (request, reply) => {
+    const params = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
+    const query = setorFuncionariosQuerySchema.parse(request.query ?? {});
+    const includeInactive = parseBool(query.include_inactive);
+
+    const result = await adminService.listFuncionariosPorFuncao(params.id, {
+      pagina: query.pagina,
+      limite: query.limite,
+      includeInactive,
+    });
+
+    return reply.status(200).send(result);
+  });
+
   app.post("/admin/funcoes", async (request, reply) => {
     const parsed = catalogoCreateSchema.safeParse(request.body);
     if (!parsed.success) {

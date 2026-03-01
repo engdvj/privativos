@@ -58,7 +58,7 @@ const historicoDetalhesSchema = z.object({
   entidade: z.enum(["funcionario", "kit"]),
   id: z.string().min(1).max(50),
   pagina: z.coerce.number().int().positive().default(1),
-  limite: z.coerce.number().int().min(5).max(100).default(25),
+  limite: z.coerce.number().int().min(3).max(100).default(25),
 });
 
 type EventoHistoricoRaw = {

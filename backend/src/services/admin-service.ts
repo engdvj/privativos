@@ -706,10 +706,95 @@ export class AdminService {
   }
 
   async listFuncoes(includeInactive = false) {
-    return prisma.funcao.findMany({
+    const rows = await prisma.funcao.findMany({
       where: includeInactive ? undefined : { statusAtivo: true },
       orderBy: [{ nome: "asc" }],
+      include: {
+        _count: {
+          select: {
+            funcionarios: true,
+          },
+        },
+      },
     });
+
+    return rows.map(({ _count, ...row }) => ({
+      ...row,
+      totalFuncionarios: _count.funcionarios,
+    }));
+  }
+
+  async listFuncionariosPorFuncao(
+    funcaoId: number,
+    input: {
+      pagina: number;
+      limite: number;
+      includeInactive: boolean;
+    },
+  ) {
+    const where: Prisma.FuncionarioFuncaoWhereInput = {
+      funcaoId,
+      ...(input.includeInactive ? {} : { funcionario: { statusAtivo: true } }),
+    };
+
+    const [total, rows] = await Promise.all([
+      prisma.funcionarioFuncao.count({ where }),
+      prisma.funcionarioFuncao.findMany({
+        where,
+        include: {
+          funcionario: {
+            select: {
+              matricula: true,
+              nome: true,
+              unidade: true,
+              setor: true,
+              funcao: true,
+              statusAtivo: true,
+              unidades: {
+                include: {
+                  unidade: {
+                    select: { nome: true },
+                  },
+                },
+                orderBy: {
+                  unidade: { nome: "asc" },
+                },
+              },
+              setores: {
+                include: {
+                  setor: {
+                    select: { nome: true },
+                  },
+                },
+                orderBy: {
+                  setor: { nome: "asc" },
+                },
+              },
+              funcoes: {
+                include: {
+                  funcao: {
+                    select: { nome: true },
+                  },
+                },
+                orderBy: {
+                  funcao: { nome: "asc" },
+                },
+              },
+            },
+          },
+        },
+        orderBy: [{ funcionario: { nome: "asc" } }, { funcionario: { matricula: "asc" } }],
+        skip: (input.pagina - 1) * input.limite,
+        take: input.limite,
+      }),
+    ]);
+
+    return {
+      pagina: input.pagina,
+      limite: input.limite,
+      total,
+      rows: rows.map((row) => this.mapFuncionarioComSetores(row.funcionario)),
+    };
   }
 
   async createFuncao(input: { nome: string; operador: string }) {
