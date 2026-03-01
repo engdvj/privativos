@@ -3,6 +3,13 @@ import { api } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DataTable } from "@/components/ui/data-table";
@@ -13,7 +20,8 @@ import { SectionCard } from "@/components/ui/section-card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { TableActions } from "@/components/ui/table-actions";
 import { useToast } from "@/components/ui/use-toast";
-import { Package, Pencil, Plus, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Check, ChevronDown, Package, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useGlobalDetail } from "@/components/global-detail/GlobalDetailProvider";
 import type { ItemRow, ItemStatus } from "../types";
 
@@ -21,6 +29,7 @@ const NOVO_TAMANHO_OPTION = "__novo_tamanho__";
 const NOVO_TIPO_OPTION = "__novo_tipo__";
 const TAMANHOS_PADRAO = ["UNICO", "PP", "P", "M", "G", "GG", "XG"];
 const TIPOS_PADRAO = ["Kit roupa", "Lencol", "Sem tipo"];
+const TIPO_FALLBACK_PADRAO = "Sem tipo";
 const CODIGO_BASE_PADRAO = "KIT-";
 const CASAS_CODIGO_PADRAO = 3;
 const MAX_ITENS_LOTE = 200;
@@ -44,6 +53,30 @@ function normalizarTipo(valor: string) {
   return valor.trim().replace(/\s+/g, " ");
 }
 
+function normalizarTipoChave(valor: string) {
+  return normalizarTipo(valor).toLowerCase();
+}
+
+function deduplicarTiposMantendoOrdem(tipos: string[]) {
+  const seen = new Set<string>();
+  const tiposUnicos: string[] = [];
+
+  for (const tipo of tipos) {
+    const tipoNormalizado = normalizarTipo(tipo);
+    if (!tipoNormalizado) {
+      continue;
+    }
+    const chave = normalizarTipoChave(tipoNormalizado);
+    if (seen.has(chave)) {
+      continue;
+    }
+    seen.add(chave);
+    tiposUnicos.push(tipoNormalizado);
+  }
+
+  return tiposUnicos;
+}
+
 function descricaoItemLabel(descricao: string | null | undefined) {
   const normalized = (descricao ?? "").trim();
   return normalized;
@@ -61,16 +94,15 @@ function montarOpcoesTamanho(tamanhosExistentes: string[]) {
   return [...TAMANHOS_PADRAO, ...extras];
 }
 
-function montarOpcoesTipo(tiposExistentes: string[]) {
-  const extras = [...new Set(
-    tiposExistentes
-      .map(normalizarTipo)
-      .filter(Boolean),
-  )]
-    .filter((tipo) => !TIPOS_PADRAO.includes(tipo))
+function montarOpcoesTipo(tiposExistentes: string[], tiposBase: string[]) {
+  const base = deduplicarTiposMantendoOrdem(tiposBase);
+  const baseChaves = new Set(base.map((tipo) => normalizarTipoChave(tipo)));
+
+  const extras = deduplicarTiposMantendoOrdem(tiposExistentes)
+    .filter((tipo) => !baseChaves.has(normalizarTipoChave(tipo)))
     .sort((a, b) => a.localeCompare(b));
 
-  return [...TIPOS_PADRAO, ...extras];
+  return [...base, ...extras];
 }
 
 type ModoCriacaoItem = "unitario" | "lote";
@@ -153,10 +185,13 @@ export function ItensTab() {
     descricao: "",
     status: "disponivel" as ItemStatus,
   });
+  const [tiposBase, setTiposBase] = useState<string[]>(TIPOS_PADRAO);
   const [tipoSelecionado, setTipoSelecionado] = useState(TIPOS_PADRAO[0]);
+  const [dropdownTipoAberto, setDropdownTipoAberto] = useState(false);
   const [novoTipo, setNovoTipo] = useState("");
   const [tamanhoSelecionado, setTamanhoSelecionado] = useState("UNICO");
   const [novoTamanho, setNovoTamanho] = useState("");
+  const [gerenciandoTipo, setGerenciandoTipo] = useState(false);
   const [modoCriacao, setModoCriacao] = useState<ModoCriacaoItem>("unitario");
   const [lote, setLote] = useState({
     codigoBase: CODIGO_BASE_PADRAO,
@@ -194,7 +229,19 @@ export function ItensTab() {
   }, [carregar]);
 
   const opcoesTamanho = useMemo(() => montarOpcoesTamanho(rows.map((row) => row.tamanho)), [rows]);
-  const opcoesTipo = useMemo(() => montarOpcoesTipo(rows.map((row) => row.tipo)), [rows]);
+  const opcoesTipo = useMemo(() => montarOpcoesTipo(rows.map((row) => row.tipo), tiposBase), [rows, tiposBase]);
+
+  useEffect(() => {
+    if (tipoSelecionado === NOVO_TIPO_OPTION || opcoesTipo.length === 0) {
+      return;
+    }
+    const selecionadoExiste = opcoesTipo.some(
+      (tipo) => normalizarTipoChave(tipo) === normalizarTipoChave(tipoSelecionado),
+    );
+    if (!selecionadoExiste) {
+      setTipoSelecionado(opcoesTipo[0]);
+    }
+  }, [opcoesTipo, tipoSelecionado]);
 
   const codigosLotePreview = useMemo(() => {
     if (modoCriacao !== "lote") {
@@ -225,13 +272,15 @@ export function ItensTab() {
 
   function resetarFormularioCriacao() {
     const sugestao = sugerirSequenciaCodigo(rows);
+    const tipoInicial = opcoesTipo[0] ?? TIPOS_PADRAO[0];
 
     setNovo({
       codigo: gerarCodigoSequencial(sugestao.base, sugestao.proximoNumero, sugestao.casasNumero),
       descricao: "",
       status: "disponivel",
     });
-    setTipoSelecionado(TIPOS_PADRAO[0]);
+    setTipoSelecionado(tipoInicial);
+    setDropdownTipoAberto(false);
     setNovoTipo("");
     setTamanhoSelecionado("UNICO");
     setNovoTamanho("");
@@ -358,6 +407,167 @@ export function ItensTab() {
       await carregar();
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function atualizarTipoEmMassa(tipoOrigem: string, tipoDestino: string) {
+    const origemNormalizada = normalizarTipo(tipoOrigem);
+    const destinoNormalizado = normalizarTipo(tipoDestino);
+
+    if (!origemNormalizada || !destinoNormalizado) {
+      error("Tipo invalido");
+      return;
+    }
+
+    if (origemNormalizada.toLowerCase() === destinoNormalizado.toLowerCase()) {
+      return;
+    }
+
+    const itensAlvo = rows.filter(
+      (item) =>
+        normalizarTipo(item.tipo).toLowerCase() === origemNormalizada.toLowerCase(),
+    );
+
+    if (itensAlvo.length === 0) {
+      error("Nenhum item encontrado para esse tipo");
+      return;
+    }
+
+    setGerenciandoTipo(true);
+    try {
+      for (const item of itensAlvo) {
+        await api.put(`/admin/itens/${encodeURIComponent(item.codigo)}`, {
+          descricao: item.descricao ?? null,
+          tipo: destinoNormalizado,
+          tamanho: item.tamanho,
+          status: item.status,
+          status_ativo: item.statusAtivo,
+        });
+      }
+
+      if (normalizarTipo(tipoSelecionado).toLowerCase() === origemNormalizada.toLowerCase()) {
+        setTipoSelecionado(destinoNormalizado);
+      }
+
+      success(`Tipo atualizado em ${itensAlvo.length} item(ns)`);
+      await carregar();
+    } catch (err) {
+      error(err instanceof Error ? err.message : "Erro ao atualizar tipo");
+      await carregar();
+    } finally {
+      setGerenciandoTipo(false);
+    }
+  }
+
+  function atualizarCatalogoTipo(tipoOrigem: string, tipoDestino: string) {
+    const origemChave = normalizarTipoChave(tipoOrigem);
+    const destinoNormalizado = normalizarTipo(tipoDestino);
+    if (!origemChave || !destinoNormalizado) {
+      return;
+    }
+
+    setTiposBase((tiposAtuais) => {
+      const tiposMapeados = tiposAtuais.map((tipo) =>
+        normalizarTipoChave(tipo) === origemChave ? destinoNormalizado : normalizarTipo(tipo),
+      );
+      if (!tiposMapeados.some((tipo) => normalizarTipoChave(tipo) === normalizarTipoChave(destinoNormalizado))) {
+        tiposMapeados.push(destinoNormalizado);
+      }
+      return deduplicarTiposMantendoOrdem(tiposMapeados);
+    });
+  }
+
+  function removerTipoDoCatalogo(tipoRemovido: string) {
+    const removidoChave = normalizarTipoChave(tipoRemovido);
+    if (!removidoChave) {
+      return;
+    }
+
+    setTiposBase((tiposAtuais) => {
+      const filtrados = tiposAtuais.filter((tipo) => normalizarTipoChave(tipo) !== removidoChave);
+      return filtrados.length > 0 ? deduplicarTiposMantendoOrdem(filtrados) : tiposAtuais;
+    });
+  }
+
+  async function editarTipoEspecifico(tipoAlvo: string) {
+    if (gerenciandoTipo || creating) {
+      return;
+    }
+
+    const tipoAtual = normalizarTipo(tipoAlvo);
+    const novoNomePrompt = window.prompt("Novo nome do tipo", tipoAtual);
+    if (novoNomePrompt == null) {
+      return;
+    }
+    const novoNome = normalizarTipo(novoNomePrompt);
+    if (!novoNome) {
+      error("Informe um nome valido para o tipo");
+      return;
+    }
+
+    const conflito = opcoesTipo.some(
+      (tipo) =>
+        normalizarTipo(tipo).toLowerCase() === novoNome.toLowerCase() &&
+        normalizarTipo(tipo).toLowerCase() !== tipoAtual.toLowerCase(),
+    );
+    if (conflito) {
+      error("Ja existe um tipo com esse nome");
+      return;
+    }
+
+    const possuiItens = rows.some(
+      (item) => normalizarTipoChave(item.tipo) === normalizarTipoChave(tipoAtual),
+    );
+
+    if (possuiItens) {
+      await atualizarTipoEmMassa(tipoAtual, novoNome);
+    } else {
+      success(`Tipo "${tipoAtual}" atualizado para "${novoNome}"`);
+    }
+
+    atualizarCatalogoTipo(tipoAtual, novoNome);
+    if (normalizarTipoChave(tipoSelecionado) === normalizarTipoChave(tipoAtual)) {
+      setTipoSelecionado(novoNome);
+    }
+  }
+
+  async function removerTipoEspecifico(tipoAlvo: string) {
+    if (gerenciandoTipo || creating) {
+      return;
+    }
+
+    const tipoAtual = normalizarTipo(tipoAlvo);
+    const tipoAtualChave = normalizarTipoChave(tipoAtual);
+    const candidatosFallback = opcoesTipo.filter((tipo) => normalizarTipoChave(tipo) !== tipoAtualChave);
+    const tipoFallback =
+      candidatosFallback.find((tipo) => normalizarTipoChave(tipo) === normalizarTipoChave(TIPO_FALLBACK_PADRAO))
+      ?? candidatosFallback[0]
+      ?? "";
+    const possuiItens = rows.some((item) => normalizarTipoChave(item.tipo) === tipoAtualChave);
+
+    if (possuiItens && !tipoFallback) {
+      error("Nao existe outro tipo para converter os itens desse grupo");
+      return;
+    }
+
+    const confirmou = window.confirm(
+      possuiItens
+        ? `Remover o tipo "${tipoAtual}" da lista? Os itens desse tipo serao convertidos para "${tipoFallback}".`
+        : `Remover o tipo "${tipoAtual}" da lista?`,
+    );
+    if (!confirmou) {
+      return;
+    }
+
+    if (possuiItens) {
+      await atualizarTipoEmMassa(tipoAtual, tipoFallback);
+    } else {
+      success(`Tipo "${tipoAtual}" removido da lista`);
+    }
+
+    removerTipoDoCatalogo(tipoAtual);
+    if (normalizarTipoChave(tipoSelecionado) === tipoAtualChave) {
+      setTipoSelecionado(tipoFallback || NOVO_TIPO_OPTION);
     }
   }
 
@@ -682,173 +892,254 @@ export function ItensTab() {
             ? "Use um codigo base e uma quantidade para gerar codigos em sequencia."
             : "Cadastre codigo, tipo, descricao opcional, tamanho e status inicial."
         }
-        maxWidthClassName="max-w-3xl"
+        maxWidthClassName="max-w-4xl"
       >
-        <div className="space-y-3">
-          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-            <FormField label="Modo de criacao" htmlFor="novo-item-modo">
-              <Select value={modoCriacao} onValueChange={(value) => setModoCriacao(value as ModoCriacaoItem)}>
-                <SelectTrigger id="novo-item-modo" className="h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="unitario">Unitario</SelectItem>
-                  <SelectItem value="lote">Lote</SelectItem>
-                </SelectContent>
-              </Select>
-            </FormField>
-
-            {modoCriacao === "unitario" ? (
-              <FormField label="Codigo" htmlFor="novo-item-codigo">
-                <Input
-                  id="novo-item-codigo"
-                  value={novo.codigo}
-                  onChange={(e) => setNovo((p) => ({ ...p, codigo: e.target.value }))}
-                  placeholder="Codigo"
-                  className="h-9 text-xs"
-                />
+        <div className="space-y-4">
+          <div className="space-y-3 rounded-2xl border border-border/65 bg-surface-2/45 p-3 sm:p-4">
+            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-12">
+              <FormField label="Modo de criacao" htmlFor="novo-item-modo" className="xl:col-span-3">
+                <Select value={modoCriacao} onValueChange={(value) => setModoCriacao(value as ModoCriacaoItem)}>
+                  <SelectTrigger id="novo-item-modo" className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unitario">Unitario</SelectItem>
+                    <SelectItem value="lote">Lote</SelectItem>
+                  </SelectContent>
+                </Select>
               </FormField>
-            ) : (
-              <>
-                <FormField label="Codigo base" htmlFor="novo-item-lote-base">
-                  <Input
-                    id="novo-item-lote-base"
-                    value={lote.codigoBase}
-                    onChange={(e) => setLote((prev) => ({ ...prev, codigoBase: e.target.value }))}
-                    placeholder="Ex.: KIT-"
-                    className="h-9 text-xs"
-                  />
-                </FormField>
-                <FormField label="Numero inicial" htmlFor="novo-item-lote-inicial">
-                  <Input
-                    id="novo-item-lote-inicial"
-                    type="number"
-                    min={0}
-                    value={lote.numeroInicial}
-                    onChange={(e) => setLote((prev) => ({ ...prev, numeroInicial: e.target.value }))}
-                    className="h-9 text-xs"
-                  />
-                </FormField>
-                <FormField label="Quantidade" htmlFor="novo-item-lote-quantidade">
-                  <Input
-                    id="novo-item-lote-quantidade"
-                    type="number"
-                    min={1}
-                    max={MAX_ITENS_LOTE}
-                    value={lote.quantidade}
-                    onChange={(e) => setLote((prev) => ({ ...prev, quantidade: e.target.value }))}
-                    className="h-9 text-xs"
-                  />
-                </FormField>
-                <FormField label="Casas do codigo" htmlFor="novo-item-lote-casas">
-                  <Input
-                    id="novo-item-lote-casas"
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={lote.casasNumero}
-                    onChange={(e) => setLote((prev) => ({ ...prev, casasNumero: e.target.value }))}
-                    className="h-9 text-xs"
-                  />
-                </FormField>
-              </>
-            )}
-          </div>
 
-          {modoCriacao === "lote" && (
-            <div className="rounded-xl border border-border/70 bg-surface-2/60 px-3 py-2.5 text-xs text-muted-foreground">
-              {codigosLotePreview.length > 0 ? (
-                <p>
-                  Previa de codigos: <span className="font-mono text-foreground">{resumirCodigos(codigosLotePreview)}</span>
-                  {Number.parseInt(lote.quantidade, 10) > codigosLotePreview.length ? " ..." : ""}
-                </p>
+              {modoCriacao === "unitario" ? (
+                <FormField label="Codigo" htmlFor="novo-item-codigo" className="xl:col-span-9">
+                  <Input
+                    id="novo-item-codigo"
+                    value={novo.codigo}
+                    onChange={(e) => setNovo((p) => ({ ...p, codigo: e.target.value }))}
+                    placeholder="Codigo"
+                    className="h-9 text-xs"
+                  />
+                </FormField>
               ) : (
-                <p>Preencha o padrao do lote para gerar a previa de codigos.</p>
+                <>
+                  <FormField label="Codigo base" htmlFor="novo-item-lote-base" className="xl:col-span-4">
+                    <Input
+                      id="novo-item-lote-base"
+                      value={lote.codigoBase}
+                      onChange={(e) => setLote((prev) => ({ ...prev, codigoBase: e.target.value }))}
+                      placeholder="Ex.: KIT-"
+                      className="h-9 text-xs"
+                    />
+                  </FormField>
+                  <FormField label="Numero inicial" htmlFor="novo-item-lote-inicial" className="xl:col-span-3">
+                    <Input
+                      id="novo-item-lote-inicial"
+                      type="number"
+                      min={0}
+                      value={lote.numeroInicial}
+                      onChange={(e) => setLote((prev) => ({ ...prev, numeroInicial: e.target.value }))}
+                      className="h-9 text-xs"
+                    />
+                  </FormField>
+                  <FormField label="Quantidade" htmlFor="novo-item-lote-quantidade" className="xl:col-span-3">
+                    <Input
+                      id="novo-item-lote-quantidade"
+                      type="number"
+                      min={1}
+                      max={MAX_ITENS_LOTE}
+                      value={lote.quantidade}
+                      onChange={(e) => setLote((prev) => ({ ...prev, quantidade: e.target.value }))}
+                      className="h-9 text-xs"
+                    />
+                  </FormField>
+                  <FormField label="Casas do codigo" htmlFor="novo-item-lote-casas" className="xl:col-span-2">
+                    <Input
+                      id="novo-item-lote-casas"
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={lote.casasNumero}
+                      onChange={(e) => setLote((prev) => ({ ...prev, casasNumero: e.target.value }))}
+                      className="h-9 text-xs"
+                    />
+                  </FormField>
+                </>
               )}
             </div>
-          )}
 
-          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
-            <FormField label="Tipo" htmlFor="novo-item-tipo-select">
-              <Select value={tipoSelecionado} onValueChange={setTipoSelecionado}>
-                <SelectTrigger id="novo-item-tipo-select" className="h-9 text-xs">
-                  <SelectValue placeholder="Selecione o tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {opcoesTipo.map((tipo) => (
-                    <SelectItem key={tipo} value={tipo}>
-                      {tipo}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value={NOVO_TIPO_OPTION}>Criar novo tipo...</SelectItem>
-                </SelectContent>
-              </Select>
-            </FormField>
-            <FormField label="Descricao (opcional)" htmlFor="novo-item-descricao" className="sm:col-span-2 xl:col-span-1">
-              <Input
-                id="novo-item-descricao"
-                value={novo.descricao}
-                onChange={(e) => setNovo((p) => ({ ...p, descricao: e.target.value }))}
-                placeholder="Descricao"
-                className="h-9 text-xs"
-              />
-            </FormField>
-            <FormField label="Tamanho" htmlFor="novo-item-tamanho-select">
-              <Select value={tamanhoSelecionado} onValueChange={setTamanhoSelecionado}>
-                <SelectTrigger id="novo-item-tamanho-select" className="h-9 text-xs">
-                  <SelectValue placeholder="Selecione o tamanho" />
-                </SelectTrigger>
-                <SelectContent>
-                  {opcoesTamanho.map((tamanho) => (
-                    <SelectItem key={tamanho} value={tamanho}>
-                      {tamanho}
-                    </SelectItem>
-                  ))}
-                  <SelectItem value={NOVO_TAMANHO_OPTION}>Criar novo tamanho...</SelectItem>
-                </SelectContent>
-              </Select>
-            </FormField>
-            <FormField label="Status" htmlFor="novo-item-status">
-              <Select
-                value={novo.status}
-                onValueChange={(value) => setNovo((p) => ({ ...p, status: value as ItemStatus }))}
-              >
-                <SelectTrigger id="novo-item-status" className="h-9 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="disponivel">disponivel</SelectItem>
-                  <SelectItem value="emprestado">emprestado</SelectItem>
-                  <SelectItem value="inativo">inativo</SelectItem>
-                </SelectContent>
-              </Select>
-            </FormField>
-            {tipoSelecionado === NOVO_TIPO_OPTION && (
-              <FormField label="Novo tipo" htmlFor="novo-item-tipo-custom" className="sm:col-span-2 xl:col-span-2">
-                <Input
-                  id="novo-item-tipo-custom"
-                  value={novoTipo}
-                  onChange={(e) => setNovoTipo(e.target.value)}
-                  placeholder="Ex.: Kit roupa cirurgico"
-                  maxLength={100}
-                  className="h-9 text-xs"
-                />
-              </FormField>
-            )}
-            {tamanhoSelecionado === NOVO_TAMANHO_OPTION && (
-              <FormField label="Novo tamanho" htmlFor="novo-item-tamanho-custom" className="sm:col-span-2 xl:col-span-2">
-                <Input
-                  id="novo-item-tamanho-custom"
-                  value={novoTamanho}
-                  onChange={(e) => setNovoTamanho(e.target.value.toUpperCase())}
-                  placeholder="Ex.: EXG"
-                  maxLength={20}
-                  className="h-9 text-xs"
-                />
-              </FormField>
+            {modoCriacao === "lote" && (
+              <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-2.5 text-xs text-muted-foreground">
+                {codigosLotePreview.length > 0 ? (
+                  <p>
+                    Previa de codigos: <span className="font-mono text-foreground">{resumirCodigos(codigosLotePreview)}</span>
+                    {Number.parseInt(lote.quantidade, 10) > codigosLotePreview.length ? " ..." : ""}
+                  </p>
+                ) : (
+                  <p>Preencha o padrao do lote para gerar a previa de codigos.</p>
+                )}
+              </div>
             )}
           </div>
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+
+          <div className="rounded-2xl border border-border/65 bg-surface-2/45 p-3 sm:p-4">
+            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-12">
+              <FormField label="Tipo" htmlFor="novo-item-tipo-select" className="sm:col-span-2 xl:col-span-4">
+                <DropdownMenu open={dropdownTipoAberto} onOpenChange={setDropdownTipoAberto} modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      id="novo-item-tipo-select"
+                      type="button"
+                      variant="outline"
+                      className="group h-9 w-full justify-between rounded-xl border-input bg-surface-2 px-3.5 text-xs font-normal shadow-sm hover:border-primary/40 hover:bg-surface-2"
+                      disabled={gerenciandoTipo || creating}
+                    >
+                      <span className={cn("truncate", tipoSelecionado === NOVO_TIPO_OPTION && "text-muted-foreground")}>
+                        {tipoSelecionado === NOVO_TIPO_OPTION ? "Criar novo tipo..." : tipoSelecionado}
+                      </span>
+                      <ChevronDown
+                        className={cn(
+                          "h-4 w-4 text-muted-foreground transition-transform duration-200",
+                          dropdownTipoAberto && "rotate-180",
+                        )}
+                      />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="start"
+                    className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[var(--radix-dropdown-menu-trigger-width)] p-1"
+                  >
+                    {opcoesTipo.map((tipo) => {
+                      const selecionado = normalizarTipoChave(tipoSelecionado) === normalizarTipoChave(tipo);
+                      return (
+                        <DropdownMenuItem
+                          key={tipo}
+                          className="gap-1.5 px-2 py-1.5 text-xs"
+                          onSelect={(event) => {
+                            event.preventDefault();
+                            setTipoSelecionado(tipo);
+                            setDropdownTipoAberto(false);
+                          }}
+                        >
+                          <span className="inline-flex h-4 w-4 items-center justify-center text-primary/80">
+                            {selecionado ? <Check className="h-3.5 w-3.5" /> : null}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate">{tipo}</span>
+                          <div className="ml-1 flex items-center gap-0.5">
+                            <button
+                              type="button"
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setDropdownTipoAberto(false);
+                                void editarTipoEspecifico(tipo);
+                              }}
+                              aria-label={`Editar tipo ${tipo}`}
+                              title={`Editar ${tipo}`}
+                              disabled={gerenciandoTipo || creating}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                setDropdownTipoAberto(false);
+                                void removerTipoEspecifico(tipo);
+                              }}
+                              aria-label={`Remover tipo ${tipo}`}
+                              title={`Remover ${tipo}`}
+                              disabled={gerenciandoTipo || creating}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="gap-2 px-2.5 py-1.5 text-xs"
+                      onSelect={(event) => {
+                        event.preventDefault();
+                        setTipoSelecionado(NOVO_TIPO_OPTION);
+                        setDropdownTipoAberto(false);
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5 text-primary/80" />
+                      Criar novo tipo...
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </FormField>
+              <FormField label="Descricao (opcional)" htmlFor="novo-item-descricao" className="sm:col-span-2 xl:col-span-4">
+                <Input
+                  id="novo-item-descricao"
+                  value={novo.descricao}
+                  onChange={(e) => setNovo((p) => ({ ...p, descricao: e.target.value }))}
+                  placeholder="Descricao"
+                  className="h-9 text-xs"
+                />
+              </FormField>
+              <FormField label="Tamanho" htmlFor="novo-item-tamanho-select" className="xl:col-span-2">
+                <Select value={tamanhoSelecionado} onValueChange={setTamanhoSelecionado}>
+                  <SelectTrigger id="novo-item-tamanho-select" className="h-9 text-xs">
+                    <SelectValue placeholder="Selecione o tamanho" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {opcoesTamanho.map((tamanho) => (
+                      <SelectItem key={tamanho} value={tamanho}>
+                        {tamanho}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value={NOVO_TAMANHO_OPTION}>Criar novo tamanho...</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
+              <FormField label="Status" htmlFor="novo-item-status" className="xl:col-span-2">
+                <Select
+                  value={novo.status}
+                  onValueChange={(value) => setNovo((p) => ({ ...p, status: value as ItemStatus }))}
+                >
+                  <SelectTrigger id="novo-item-status" className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="disponivel">disponivel</SelectItem>
+                    <SelectItem value="emprestado">emprestado</SelectItem>
+                    <SelectItem value="inativo">inativo</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
+              {tipoSelecionado === NOVO_TIPO_OPTION && (
+                <FormField label="Novo tipo" htmlFor="novo-item-tipo-custom" className="sm:col-span-2 xl:col-span-6">
+                  <Input
+                    id="novo-item-tipo-custom"
+                    value={novoTipo}
+                    onChange={(e) => setNovoTipo(e.target.value)}
+                    placeholder="Ex.: Kit roupa cirurgico"
+                    maxLength={100}
+                    className="h-9 text-xs"
+                  />
+                </FormField>
+              )}
+              {tamanhoSelecionado === NOVO_TAMANHO_OPTION && (
+                <FormField label="Novo tamanho" htmlFor="novo-item-tamanho-custom" className="sm:col-span-2 xl:col-span-6">
+                  <Input
+                    id="novo-item-tamanho-custom"
+                    value={novoTamanho}
+                    onChange={(e) => setNovoTamanho(e.target.value.toUpperCase())}
+                    placeholder="Ex.: EXG"
+                    maxLength={20}
+                    className="h-9 text-xs"
+                  />
+                </FormField>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
             <Button variant="outline" className="h-9 text-xs" onClick={() => setOpenCreateModal(false)}>
               Cancelar
             </Button>
