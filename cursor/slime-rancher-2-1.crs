@@ -1,0 +1,51 @@
+﻿[Arrow]
+Path=Selección normal (slime).cur
+
+[Help]
+Path=Selección de ayuda (slime).cur
+
+[AppStarting]
+Path=Trabajando en segundo plano (slime).ani
+
+[Wait]
+Path=Ocupado (slime).ani
+
+[Crosshair]
+Path=Selección con presición (slime).cur
+
+[IBeam]
+Path=Selección de texto (slime).cur
+
+[NWPen]
+Path=Escritura manual (slime).cur
+
+[No]
+Path=No disponible (slime).cur
+
+[SizeNS]
+Path=Ajuste vertical (slime).cur
+
+[SizeWE]
+Path=Ajuste horizontal (slime).cur
+
+[SizeNWSE]
+Path=Ajuste diagonal 1 (slime).cur
+
+[SizeNESW]
+Path=Ajuste diagonal 2 (slime).cur
+
+[SizeAll]
+Path=Mover (slime).cur
+
+[UpArrow]
+Path=Selección alternativa (slime).cur
+
+[Hand]
+Path=Selección de vínculo (slime).cur
+
+[Pin]
+Path=Selección de ubicación (slime).cur
+
+[Person]
+Path=Selección de persona (slime).cur
+
