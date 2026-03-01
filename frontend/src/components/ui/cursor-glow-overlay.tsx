@@ -13,57 +13,74 @@ type CursorVariant =
 
 type CursorPaint = {
   border: string;
-  fill: string;
-  halo: string;
+  bg: string;
+  shadow: string;
 };
 
 const CURSOR_VARIANT_STYLE: Record<CursorVariant, CursorPaint> = {
   default: {
-    border: "rgba(56, 189, 248, 0.9)",
-    fill: "rgba(125, 211, 252, 0.9)",
-    halo: "rgba(56, 189, 248, 0.35)",
+    border: "rgba(14, 165, 233, 0.66)",
+    bg: "rgba(14, 165, 233, 0.07)",
+    shadow: "0 0 0 1px rgba(14, 165, 233, 0.2)",
   },
   pointer: {
-    border: "rgba(34, 197, 94, 0.9)",
-    fill: "rgba(134, 239, 172, 0.92)",
-    halo: "rgba(34, 197, 94, 0.35)",
+    border: "rgba(34, 197, 94, 0.68)",
+    bg: "rgba(34, 197, 94, 0.07)",
+    shadow: "0 0 0 1px rgba(22, 163, 74, 0.2)",
   },
   text: {
-    border: "rgba(250, 204, 21, 0.9)",
-    fill: "rgba(254, 240, 138, 0.92)",
-    halo: "rgba(250, 204, 21, 0.35)",
+    border: "rgba(250, 204, 21, 0.68)",
+    bg: "rgba(250, 204, 21, 0.07)",
+    shadow: "0 0 0 1px rgba(217, 119, 6, 0.2)",
   },
   move: {
-    border: "rgba(168, 85, 247, 0.9)",
-    fill: "rgba(216, 180, 254, 0.92)",
-    halo: "rgba(168, 85, 247, 0.34)",
+    border: "rgba(168, 85, 247, 0.68)",
+    bg: "rgba(168, 85, 247, 0.07)",
+    shadow: "0 0 0 1px rgba(126, 34, 206, 0.2)",
   },
   resize: {
-    border: "rgba(251, 146, 60, 0.9)",
-    fill: "rgba(254, 215, 170, 0.92)",
-    halo: "rgba(251, 146, 60, 0.35)",
+    border: "rgba(251, 146, 60, 0.68)",
+    bg: "rgba(251, 146, 60, 0.07)",
+    shadow: "0 0 0 1px rgba(194, 65, 12, 0.2)",
   },
   "not-allowed": {
-    border: "rgba(248, 113, 113, 0.92)",
-    fill: "rgba(254, 202, 202, 0.92)",
-    halo: "rgba(248, 113, 113, 0.36)",
+    border: "rgba(248, 113, 113, 0.68)",
+    bg: "rgba(248, 113, 113, 0.07)",
+    shadow: "0 0 0 1px rgba(185, 28, 28, 0.2)",
   },
   help: {
-    border: "rgba(129, 140, 248, 0.9)",
-    fill: "rgba(199, 210, 254, 0.92)",
-    halo: "rgba(129, 140, 248, 0.35)",
+    border: "rgba(129, 140, 248, 0.68)",
+    bg: "rgba(129, 140, 248, 0.07)",
+    shadow: "0 0 0 1px rgba(67, 56, 202, 0.2)",
   },
   wait: {
-    border: "rgba(244, 114, 182, 0.9)",
-    fill: "rgba(251, 207, 232, 0.92)",
-    halo: "rgba(244, 114, 182, 0.35)",
+    border: "rgba(244, 114, 182, 0.68)",
+    bg: "rgba(244, 114, 182, 0.07)",
+    shadow: "0 0 0 1px rgba(190, 24, 93, 0.2)",
   },
   crosshair: {
-    border: "rgba(45, 212, 191, 0.9)",
-    fill: "rgba(153, 246, 228, 0.92)",
-    halo: "rgba(45, 212, 191, 0.34)",
+    border: "rgba(45, 212, 191, 0.68)",
+    bg: "rgba(45, 212, 191, 0.07)",
+    shadow: "0 0 0 1px rgba(13, 148, 136, 0.2)",
   },
 };
+
+const TEXT_INPUT_TYPES = new Set([
+  "text",
+  "search",
+  "email",
+  "url",
+  "tel",
+  "password",
+  "number",
+  "date",
+  "datetime-local",
+  "month",
+  "time",
+  "week",
+]);
+
+const INTERACTIVE_ROLES = new Set(["button", "link", "menuitem", "tab", "option", "switch", "checkbox", "radio"]);
 
 function detectCursorVariant(cursorValueRaw: string): CursorVariant {
   const cursorValue = cursorValueRaw.toLowerCase();
@@ -135,21 +152,7 @@ function detectVariantFromClassName(className: string): CursorVariant | null {
 function isTextEditable(element: Element): boolean {
   if (element instanceof HTMLTextAreaElement) return true;
   if (element instanceof HTMLInputElement) {
-    const textLikeTypes = new Set([
-      "text",
-      "search",
-      "email",
-      "url",
-      "tel",
-      "password",
-      "number",
-      "date",
-      "datetime-local",
-      "month",
-      "time",
-      "week",
-    ]);
-    return textLikeTypes.has(element.type);
+    return TEXT_INPUT_TYPES.has(element.type);
   }
   if (element instanceof HTMLElement && element.isContentEditable) return true;
   return false;
@@ -169,7 +172,7 @@ function isPointerElement(element: Element): boolean {
   if (!(element instanceof HTMLElement)) return false;
 
   const role = element.getAttribute("role");
-  if (role && ["button", "link", "menuitem", "tab", "option", "switch", "checkbox", "radio"].includes(role)) {
+  if (role && INTERACTIVE_ROLES.has(role)) {
     return true;
   }
 
@@ -223,24 +226,23 @@ function resolveCursorVariant(target: Element | null): CursorVariant {
   return "default";
 }
 
-function applyVariantStyle(target: HTMLElement, variant: CursorVariant) {
+function applyVariantStyle(target: HTMLElement, variant: CursorVariant, liteMode = false) {
   const paint = CURSOR_VARIANT_STYLE[variant];
   target.style.setProperty("--cursor-dot-border", paint.border);
-  target.style.setProperty("--cursor-dot-fill", paint.fill);
-  target.style.setProperty("--cursor-dot-halo", paint.halo);
+  target.style.setProperty("--cursor-dot-bg", liteMode ? "transparent" : paint.bg);
+  target.style.setProperty("--cursor-dot-shadow", liteMode ? "none" : paint.shadow);
 }
 
 export function CursorGlowOverlay() {
   const [enabled, setEnabled] = useState(false);
-  const bubbleRef = useRef<HTMLSpanElement | null>(null);
-  const paintHostRef = useRef<HTMLDivElement | null>(null);
+  const ringRef = useRef<HTMLSpanElement | null>(null);
   const visibleRef = useRef(false);
   const variantRef = useRef<CursorVariant>("default");
-  const pendingPointerRef = useRef<{ x: number; y: number; target: Element | null } | null>(null);
-  const rafIdRef = useRef<number | null>(null);
   const lastTargetRef = useRef<Element | null>(null);
   const lastBodyCursorRef = useRef("");
+  const lastModalStateRef = useRef(false);
   const lastResolvedVariantRef = useRef<CursorVariant>("default");
+  const liteModeRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -253,63 +255,82 @@ export function CursorGlowOverlay() {
     };
 
     const showDot = () => {
-      const bubble = bubbleRef.current;
-      if (!bubble || visibleRef.current) return;
-      bubble.style.opacity = "1";
+      const ring = ringRef.current;
+      if (!ring || visibleRef.current) return;
+      ring.style.opacity = "1";
       visibleRef.current = true;
     };
 
     const hideDot = () => {
-      const bubble = bubbleRef.current;
-      if (!bubble) return;
-      bubble.style.opacity = "0";
+      const ring = ringRef.current;
+      if (!ring) return;
+      ring.style.opacity = "0";
       visibleRef.current = false;
-      pendingPointerRef.current = null;
-      if (rafIdRef.current !== null) {
-        window.cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
+    };
+
+    const syncLiteMode = () => {
+      const isModalOpen = document.body.style.overflow === "hidden";
+      if (isModalOpen !== liteModeRef.current && ringRef.current) {
+        liteModeRef.current = isModalOpen;
+        applyVariantStyle(ringRef.current, variantRef.current, isModalOpen);
+      }
+      return isModalOpen;
+    };
+
+    const applyVariantForTarget = (target: Element | null, force = false) => {
+      const isModalOpen = syncLiteMode();
+      const bodyCursor = document.body.style.cursor;
+
+      if (
+        !force &&
+        target === lastTargetRef.current &&
+        bodyCursor === lastBodyCursorRef.current &&
+        isModalOpen === lastModalStateRef.current
+      ) {
+        return;
+      }
+
+      const variant = isModalOpen ? "default" : resolveCursorVariant(target);
+      lastTargetRef.current = target;
+      lastBodyCursorRef.current = bodyCursor;
+      lastModalStateRef.current = isModalOpen;
+      lastResolvedVariantRef.current = variant;
+
+      if (ringRef.current && variantRef.current !== variant) {
+        applyVariantStyle(ringRef.current, variant, liteModeRef.current);
+        variantRef.current = variant;
       }
     };
 
-    const flushPointerFrame = () => {
-      rafIdRef.current = null;
-      const pending = pendingPointerRef.current;
-      if (!pending) return;
-      pendingPointerRef.current = null;
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse" && event.pointerType !== "pen") return;
 
-      if (bubbleRef.current) {
-        bubbleRef.current.style.transform = `translate3d(${pending.x}px, ${pending.y}px, 0)`;
-      }
-
-      const bodyCursor = document.body.style.cursor;
-      const variant = pending.target === lastTargetRef.current && bodyCursor === lastBodyCursorRef.current
-        ? lastResolvedVariantRef.current
-        : resolveCursorVariant(pending.target);
-
-      if (pending.target !== lastTargetRef.current || bodyCursor !== lastBodyCursorRef.current) {
-        lastTargetRef.current = pending.target;
-        lastBodyCursorRef.current = bodyCursor;
-        lastResolvedVariantRef.current = variant;
-      }
-
-      if (paintHostRef.current && variantRef.current !== variant) {
-        applyVariantStyle(paintHostRef.current, variant);
-        variantRef.current = variant;
+      if (ringRef.current) {
+        ringRef.current.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0)`;
       }
 
       showDot();
+
+      if (!lastTargetRef.current) {
+        applyVariantForTarget(event.target instanceof Element ? event.target : null, true);
+        return;
+      }
+
+      const bodyCursor = document.body.style.cursor;
+      const isModalOpen = document.body.style.overflow === "hidden";
+      if (bodyCursor !== lastBodyCursorRef.current || isModalOpen !== lastModalStateRef.current) {
+        applyVariantForTarget(lastTargetRef.current, true);
+      }
     };
 
-    const queuePointerFrame = (event: PointerEvent) => {
+    const onPointerOver = (event: PointerEvent) => {
       if (event.pointerType !== "mouse" && event.pointerType !== "pen") return;
-      pendingPointerRef.current = {
-        x: event.clientX,
-        y: event.clientY,
-        target: event.target instanceof Element ? event.target : null,
-      };
-      if (rafIdRef.current === null) {
-        rafIdRef.current = window.requestAnimationFrame(flushPointerFrame);
-      }
+      applyVariantForTarget(event.target instanceof Element ? event.target : null, true);
+    };
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse" && event.pointerType !== "pen") return;
+      applyVariantForTarget(event.target instanceof Element ? event.target : null, true);
     };
 
     const onPointerLeave = () => hideDot();
@@ -320,8 +341,9 @@ export function CursorGlowOverlay() {
 
     finePointer.addEventListener("change", syncEnabled);
     reducedMotion.addEventListener("change", syncEnabled);
-    window.addEventListener("pointermove", queuePointerFrame, { passive: true });
-    window.addEventListener("pointerdown", queuePointerFrame, { passive: true });
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    window.addEventListener("pointerover", onPointerOver, { passive: true });
+    window.addEventListener("pointerdown", onPointerDown, { passive: true });
     window.addEventListener("pointerleave", onPointerLeave);
     window.addEventListener("pointercancel", onPointerCancel);
     window.addEventListener("blur", onBlur);
@@ -329,15 +351,12 @@ export function CursorGlowOverlay() {
     return () => {
       finePointer.removeEventListener("change", syncEnabled);
       reducedMotion.removeEventListener("change", syncEnabled);
-      window.removeEventListener("pointermove", queuePointerFrame);
-      window.removeEventListener("pointerdown", queuePointerFrame);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerover", onPointerOver);
+      window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("pointerleave", onPointerLeave);
       window.removeEventListener("pointercancel", onPointerCancel);
       window.removeEventListener("blur", onBlur);
-      if (rafIdRef.current !== null) {
-        window.cancelAnimationFrame(rafIdRef.current);
-        rafIdRef.current = null;
-      }
     };
   }, []);
 
@@ -363,20 +382,17 @@ export function CursorGlowOverlay() {
   }, [enabled]);
 
   useEffect(() => {
-    if (!enabled || !paintHostRef.current || !bubbleRef.current) return;
-    applyVariantStyle(paintHostRef.current, "default");
-    bubbleRef.current.style.opacity = "0";
-    bubbleRef.current.style.transform = "translate3d(-120px, -120px, 0)";
+    if (!enabled || !ringRef.current) return;
+    applyVariantStyle(ringRef.current, "default", false);
+    ringRef.current.style.opacity = "0";
+    ringRef.current.style.transform = "translate3d(-120px, -120px, 0)";
     visibleRef.current = false;
     variantRef.current = "default";
-    pendingPointerRef.current = null;
-    if (rafIdRef.current !== null) {
-      window.cancelAnimationFrame(rafIdRef.current);
-      rafIdRef.current = null;
-    }
     lastTargetRef.current = null;
     lastBodyCursorRef.current = "";
+    lastModalStateRef.current = false;
     lastResolvedVariantRef.current = "default";
+    liteModeRef.current = false;
   }, [enabled]);
 
   if (!enabled) {
@@ -384,31 +400,15 @@ export function CursorGlowOverlay() {
   }
 
   return (
-    <div ref={paintHostRef} aria-hidden className="pointer-events-none fixed inset-0 z-[140]">
+    <div aria-hidden className="pointer-events-none fixed inset-0 z-[140]">
       <span
-        ref={bubbleRef}
-        className="absolute left-0 top-0 h-0 w-0 will-change-transform transition-opacity duration-75"
+        ref={ringRef}
+        className="absolute left-0 top-0 h-[1.35rem] w-[1.35rem] -translate-x-1/2 -translate-y-1/2 rounded-full border will-change-transform transition-opacity duration-50 [background-color:var(--cursor-dot-bg)] [border-color:var(--cursor-dot-border)] [box-shadow:var(--cursor-dot-shadow)]"
         style={{
           transform: "translate3d(-120px, -120px, 0)",
           opacity: 0,
         }}
-      >
-        <span
-          className="absolute left-1/2 top-1/2 h-[1.35rem] w-[1.35rem] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[3px] transition-colors duration-75"
-          style={{
-            background: "radial-gradient(circle, var(--cursor-dot-halo) 0%, rgba(0,0,0,0) 72%)",
-          }}
-        />
-        <span
-          className="absolute left-1/2 top-1/2 h-[0.72rem] w-[0.72rem] -translate-x-1/2 -translate-y-1/2 rounded-full border transition-colors duration-75"
-          style={{
-            borderColor: "var(--cursor-dot-border)",
-            background:
-              "linear-gradient(180deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.1) 36%, rgba(255,255,255,0) 100%), var(--cursor-dot-fill)",
-            boxShadow: "0 1px 4px rgba(2, 6, 23, 0.24)",
-          }}
-        />
-      </span>
+      />
     </div>
   );
 }
