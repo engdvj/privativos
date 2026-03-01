@@ -28,7 +28,7 @@ import { AuditoriaTab } from "./admin/tabs/AuditoriaTab";
 import { ConfiguracoesTab } from "./admin/tabs/ConfiguracoesTab";
 import { ManutencaoTab } from "./admin/tabs/ManutencaoTab";
 
-const SIDEBAR_MIN_WIDTH = 216;
+const SIDEBAR_MIN_WIDTH = 184;
 const SIDEBAR_MAX_WIDTH = 344;
 const SIDEBAR_DEFAULT_WIDTH = 248;
 const SIDEBAR_COLLAPSED_WIDTH = 78;

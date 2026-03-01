@@ -713,24 +713,40 @@ export function DashboardTab() {
       filtros.unidade,
     ],
   );
+  const filtroMatriculaAtivo = useMemo(() => Boolean(filtros.matricula.trim()), [filtros.matricula]);
   const codigosItensNoRecorte = useMemo(
     () => new Set(eventosFiltrados.map((evento) => evento.item_codigo)),
     [eventosFiltrados],
   );
+  const itensAtivos = useMemo(
+    () => itensResumo.filter((item) => item.statusAtivo),
+    [itensResumo],
+  );
   const itensAtivosNoRecorte = useMemo(
-    () =>
-      itensResumo
-        .filter((item) => item.statusAtivo)
-        .filter((item) => !filtrosDashboardAtivos || codigosItensNoRecorte.has(item.codigo)),
-    [codigosItensNoRecorte, filtrosDashboardAtivos, itensResumo],
+    () => itensAtivos.filter((item) => !filtrosDashboardAtivos || codigosItensNoRecorte.has(item.codigo)),
+    [codigosItensNoRecorte, filtrosDashboardAtivos, itensAtivos],
   );
   const itensDisponiveisNoRecorte = useMemo(
-    () => itensAtivosNoRecorte.filter((item) => item.status === "disponivel"),
-    [itensAtivosNoRecorte],
+    () => itensAtivos.filter((item) => item.status === "disponivel"),
+    [itensAtivos],
   );
   const itensEmprestadosNoRecorte = useMemo(
-    () => itensAtivosNoRecorte.filter((item) => item.status === "emprestado"),
-    [itensAtivosNoRecorte],
+    () => {
+      let itensEmprestados = itensAtivosNoRecorte.filter((item) => item.status === "emprestado");
+
+      if (filtros.origem === "colaborador") {
+        itensEmprestados = itensEmprestados.filter((item) => !(item.setorSolicitante ?? "").trim());
+      } else if (filtros.origem === "setor") {
+        itensEmprestados = itensEmprestados.filter((item) => Boolean((item.setorSolicitante ?? "").trim()));
+      }
+
+      if (!filtroMatriculaAtivo) {
+        return itensEmprestados;
+      }
+      const matriculaFiltro = filtros.matricula.trim();
+      return itensEmprestados.filter((item) => item.solicitanteMatricula === matriculaFiltro);
+    },
+    [filtroMatriculaAtivo, filtros.matricula, filtros.origem, itensAtivosNoRecorte],
   );
   const eventosTabelaFiltrados = useMemo(() => {
     if (!kpiSelecionado) {
@@ -764,7 +780,11 @@ export function DashboardTab() {
       return [] satisfies ItemTabelaRow[];
     }
 
-    return itensAtivosNoRecorte
+    const itensBaseTabela = kpiSelecionado === "disponiveis"
+      ? itensAtivos
+      : itensEmprestadosNoRecorte;
+
+    return itensBaseTabela
       .filter((item) => {
         if (kpiSelecionado === "disponiveis") {
           return item.status === "disponivel";
@@ -805,7 +825,7 @@ export function DashboardTab() {
         } satisfies ItemTabelaRow;
       })
       .sort((a, b) => a.codigo.localeCompare(b.codigo, "pt-BR", { numeric: true, sensitivity: "base" }));
-  }, [exibindoTabelaItens, funcionarioByMatricula, itensAtivosNoRecorte, kpiSelecionado, setorByNome]);
+  }, [exibindoTabelaItens, funcionarioByMatricula, itensAtivos, itensEmprestadosNoRecorte, kpiSelecionado, setorByNome]);
 
   useEffect(() => {
     setPaginaEventos(1);
@@ -920,7 +940,10 @@ export function DashboardTab() {
           chave: "emprestimos",
           label: "Emprestimos",
           valor: solicitacoesFiltradas.length,
-          helper: `Colaborador: ${resumoMovimentacoesPorOrigem.solicitacoesColaborador} | Setor: ${resumoMovimentacoesPorOrigem.solicitacoesSetor}`,
+          detalhes: [
+            { label: "Colaborador", valor: resumoMovimentacoesPorOrigem.solicitacoesColaborador },
+            { label: "Setor", valor: resumoMovimentacoesPorOrigem.solicitacoesSetor },
+          ],
           icon: Package,
           gradientClass: "from-primary/18 via-primary/8 to-transparent",
           iconClass: "text-primary",
@@ -929,7 +952,10 @@ export function DashboardTab() {
           chave: "devolucoes",
           label: "Devolucoes",
           valor: devolucoesFiltradas.length,
-          helper: `Colaborador: ${resumoMovimentacoesPorOrigem.devolucoesColaborador} | Setor: ${resumoMovimentacoesPorOrigem.devolucoesSetor}`,
+          detalhes: [
+            { label: "Colaborador", valor: resumoMovimentacoesPorOrigem.devolucoesColaborador },
+            { label: "Setor", valor: resumoMovimentacoesPorOrigem.devolucoesSetor },
+          ],
           icon: Undo2,
           gradientClass:
             "from-[hsl(203_88%_52%_/_0.18)] via-[hsl(203_88%_52%_/_0.08)] to-transparent",
@@ -939,9 +965,7 @@ export function DashboardTab() {
           chave: "disponiveis",
           label: "Itens disponiveis",
           valor: itensDisponiveisNoRecorte.length,
-          helper: filtrosDashboardAtivos
-            ? "Prontos para novo emprestimo dentro do recorte."
-            : "Prontos para novo emprestimo.",
+          detalhes: [{ label: "Status", valor: "Disponivel" }],
           icon: Boxes,
           gradientClass:
             "from-[hsl(197_92%_56%_/_0.2)] via-[hsl(197_92%_56%_/_0.08)] to-transparent",
@@ -951,7 +975,10 @@ export function DashboardTab() {
           chave: "emprestados",
           label: "Itens emprestados",
           valor: itensEmprestadosNoRecorte.length,
-          helper: `Colaborador: ${resumoEmprestadosPorOrigem.colaborador} | Setor: ${resumoEmprestadosPorOrigem.setor}`,
+          detalhes: [
+            { label: "Colaborador", valor: resumoEmprestadosPorOrigem.colaborador },
+            { label: "Setor", valor: resumoEmprestadosPorOrigem.setor },
+          ],
           icon: BarChart3,
           gradientClass:
             "from-[hsl(210_92%_56%_/_0.17)] via-[hsl(210_92%_56%_/_0.08)] to-transparent",
@@ -961,7 +988,7 @@ export function DashboardTab() {
         chave: KpiChave;
         label: string;
         valor: number;
-        helper: string;
+        detalhes: Array<{ label: string; valor: string | number }>;
         icon: typeof Package;
         gradientClass: string;
         iconClass: string;
@@ -1019,7 +1046,7 @@ export function DashboardTab() {
               <h2 className="text-base font-bold tracking-tight text-foreground sm:text-lg">
                 Panorama operacional em tempo real
               </h2>
-              <p className="max-w-xl text-[11px] leading-snug text-muted-foreground">
+              <p className="max-w-2xl text-pretty text-[11px] leading-snug text-muted-foreground">
                 Visualize movimentacoes, acompanhe os indicadores principais e detalhe operacoes por periodo, setor e funcionario.
               </p>
             </div>
@@ -1273,7 +1300,7 @@ export function DashboardTab() {
 
       {data ? (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {cardsKpi.map((card, index) => {
               const Icon = card.icon;
               const selecionado = kpiSelecionado === card.chave;
@@ -1281,31 +1308,32 @@ export function DashboardTab() {
                 <Card
                   key={card.chave}
                   className={cn(
-                    "group relative overflow-hidden border-border/70 bg-card/92 shadow-[var(--shadow-soft)] transition-all duration-200 animate-in fade-in-0 slide-in-from-bottom-2 dark:border-border/85 dark:bg-card/88",
+                    "group relative min-h-[126px] overflow-hidden border-border/65 bg-card/95 shadow-[var(--shadow-soft)] transition-all duration-200 animate-in fade-in-0 slide-in-from-bottom-2 dark:border-border/85 dark:bg-card/90",
                     selecionado
-                      ? "-translate-y-0.5 border-primary/80 bg-gradient-to-br from-primary/[0.14] via-primary/[0.06] to-card ring-2 ring-primary/50 shadow-[0_0_0_1px_hsl(var(--primary)/0.4),0_20px_32px_-24px_hsl(var(--primary)/0.95)] dark:border-primary/80"
-                      : "hover:-translate-y-1 hover:border-primary/45",
+                      ? "border-primary/55 bg-primary/[0.06] ring-1 ring-primary/30 shadow-[0_16px_28px_-24px_hsl(var(--primary)/0.95)] dark:border-primary/50 dark:bg-primary/[0.11]"
+                      : "hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-[0_16px_26px_-24px_hsl(var(--primary)/0.9)]",
                   )}
                   style={{ animationDelay: `${index * 30}ms` }}
                 >
                   {selecionado ? (
-                    <span className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 bg-primary/90" />
+                    <span className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-primary/65" />
                   ) : null}
                   <div className={cn("pointer-events-none absolute inset-0 bg-gradient-to-br", card.gradientClass)} />
+                  <div className="pointer-events-none absolute -right-10 -top-10 h-24 w-24 rounded-full bg-background/45 blur-2xl dark:bg-background/20" />
                   <button
                     type="button"
-                    className="relative w-full cursor-pointer rounded-[inherit] text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    className="relative h-full w-full cursor-pointer rounded-[inherit] text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                     onClick={() =>
                       setKpiSelecionado((anterior) => (anterior === card.chave ? null : card.chave))
                     }
                     aria-pressed={selecionado}
                     aria-label={`Filtrar eventos por ${card.label}`}
                   >
-                    <CardContent className="relative p-2.5">
-                      <div className="flex items-start justify-between gap-1.5">
+                    <CardContent className="relative flex h-full flex-col gap-3 p-3.5 sm:p-4">
+                      <div className="flex items-start justify-between gap-2.5">
                         <div>
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.09em] text-muted-foreground sm:text-xs">
                               {card.label}
                             </p>
                             {selecionado ? (
@@ -1314,22 +1342,31 @@ export function DashboardTab() {
                               </StatusPill>
                             ) : null}
                           </div>
-                          <p className="mt-1 text-xl font-bold leading-none text-foreground">{card.valor}</p>
+                          <p className="mt-2 text-[1.75rem] font-bold leading-none tracking-tight text-foreground sm:text-[1.95rem]">
+                            {card.valor}
+                          </p>
                         </div>
                         <div className={cn(
-                          "flex h-7 w-7 items-center justify-center rounded-lg border border-border/50 bg-background/75 dark:border-border/80 dark:bg-background/60",
-                          selecionado && "border-primary/50 bg-primary/[0.12] dark:border-primary/45 dark:bg-primary/[0.18]",
+                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/50 bg-background/80 shadow-sm dark:border-border/80 dark:bg-background/60",
+                          selecionado && "border-primary/40 bg-primary/[0.08] dark:border-primary/40 dark:bg-primary/[0.16]",
                         )}>
-                          <Icon className={cn("h-3.5 w-3.5", card.iconClass)} />
+                          <Icon className={cn("h-4 w-4", card.iconClass)} />
                         </div>
                       </div>
-                      <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground">{card.helper}</p>
-                      <p className={cn(
-                        "mt-1 text-[9px] font-medium",
-                        selecionado ? "text-primary" : "text-muted-foreground/75",
-                      )}>
-                        {selecionado ? "Clique para remover o filtro" : "Clique para filtrar a tabela"}
-                      </p>
+                      <div className="mt-auto flex flex-wrap gap-1.5">
+                        {card.detalhes.map((detalhe) => (
+                          <div
+                            key={`${card.chave}-${detalhe.label}`}
+                            className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border/65 bg-background/65 px-2.5 py-1.5 text-[11px] leading-none dark:border-border/80 dark:bg-background/45"
+                          >
+                            <span className="truncate font-medium uppercase tracking-[0.08em] text-muted-foreground">
+                              {detalhe.label}
+                            </span>
+                            <span className="h-1 w-1 shrink-0 rounded-full bg-muted-foreground/45" />
+                            <span className="truncate font-semibold text-foreground">{detalhe.valor}</span>
+                          </div>
+                        ))}
+                      </div>
                     </CardContent>
                   </button>
                 </Card>
@@ -1405,7 +1442,7 @@ export function DashboardTab() {
                         void openFuncionario(solicitacaoSelecionada.matricula);
                       }}
                     >
-                      Abrir funcionario
+                      Ver funcionario
                     </Button>
                   ) : null}
                   <Button
@@ -1416,7 +1453,7 @@ export function DashboardTab() {
                       void openKit(solicitacaoSelecionada.item_codigo);
                     }}
                   >
-                    Abrir item
+                    Ver item
                   </Button>
                 </div>
               </div>
@@ -1495,7 +1532,7 @@ export function DashboardTab() {
                         void openFuncionario(devolucaoSelecionada.matricula);
                       }}
                     >
-                      Abrir funcionario
+                      Ver funcionario
                     </Button>
                   ) : null}
                   <Button
@@ -1506,7 +1543,7 @@ export function DashboardTab() {
                       void openKit(devolucaoSelecionada.item_codigo);
                     }}
                   >
-                    Abrir item
+                    Ver item
                   </Button>
                 </div>
               </div>
