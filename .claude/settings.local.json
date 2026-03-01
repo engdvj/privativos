@@ -8,7 +8,17 @@
       "Bash(npm run build:*)",
       "Bash(npm ls:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat\\(frontend\\): implementa SPA React com login e painel do setor\n\nStack: React 19 + Vite + TypeScript + shadcn/ui + Tailwind CSS + React Router.\nInclui tela de login \\(usuario/senha/perfil\\), painel do setor com abas de\nemprestimo e devolucao, HTTP client com interceptor 401, componentes shadcn/ui\ne guard de autenticacao. Backend ajustado para servir frontend/dist com\nfallback SPA. TDD e CLAUDE.md atualizados com nova stack.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat\\(frontend\\): implementa SPA React com login e painel do setor\n\nStack: React 19 + Vite + TypeScript + shadcn/ui + Tailwind CSS + React Router.\nInclui tela de login \\(usuario/senha/perfil\\), painel do setor com abas de\nemprestimo e devolucao, HTTP client com interceptor 401, componentes shadcn/ui\ne guard de autenticacao. Backend ajustado para servir frontend/dist com\nfallback SPA. TDD e CLAUDE.md atualizados com nova stack.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(npx shadcn@latest add:*)",
+      "Bash(npm cache clean:*)",
+      "Bash(taskkill:*)",
+      "Bash(node --version:*)",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)",
+      "Bash(npm run prisma:seed:*)",
+      "Bash(npx prisma db execute:*)",
+      "Bash(npm run prisma:migrate:*)",
+      "Bash(npx tsx:*)"
     ]
   }
 }
