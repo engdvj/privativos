@@ -24,8 +24,15 @@ type SessionResponse =
     };
 
 class ApiClient {
+  private inFlightGetRequests = new Map<string, Promise<unknown>>();
+
   private getToken(): string | null {
     return localStorage.getItem("token");
+  }
+
+  private getInFlightGetKey(path: string): string {
+    const token = this.getToken() ?? "";
+    return `${token}::${path}`;
   }
 
   clearSession() {
@@ -33,6 +40,7 @@ class ApiClient {
     localStorage.removeItem("perfil");
     localStorage.removeItem("nome");
     localStorage.removeItem("theme");
+    this.inFlightGetRequests.clear();
   }
 
   isAuthenticated(): boolean {
@@ -92,7 +100,19 @@ class ApiClient {
   }
 
   async get<T>(path: string): Promise<T> {
-    return this.request<T>("GET", path);
+    const key = this.getInFlightGetKey(path);
+    const inFlight = this.inFlightGetRequests.get(key);
+    if (inFlight) {
+      return inFlight as Promise<T>;
+    }
+
+    const requestPromise = this.request<T>("GET", path)
+      .finally(() => {
+        this.inFlightGetRequests.delete(key);
+      }) as Promise<T>;
+
+    this.inFlightGetRequests.set(key, requestPromise as Promise<unknown>);
+    return requestPromise;
   }
 
   async post<T>(path: string, body?: unknown): Promise<T> {

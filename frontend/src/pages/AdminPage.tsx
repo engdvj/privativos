@@ -42,6 +42,7 @@ export function AdminPage() {
   const perfil = api.getPerfil();
   const isSuperadmin = perfil === "superadmin";
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [mountedTabs, setMountedTabs] = useState<string[]>(["dashboard"]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarExpandedWidth, setSidebarExpandedWidth] = useState(() => {
     if (typeof window === "undefined") return SIDEBAR_DEFAULT_WIDTH;
@@ -140,6 +141,10 @@ export function AdminPage() {
 
   const tabIds = menuSections.flatMap((section) => section.items.map((item) => item.id));
   const currentTab = tabIds.includes(activeTab) ? activeTab : tabIds[0] ?? "dashboard";
+
+  useEffect(() => {
+    setMountedTabs((previous) => (previous.includes(currentTab) ? previous : [...previous, currentTab]));
+  }, [currentTab]);
 
   function toggleSidebar() {
     setSidebarCollapsed((prev) => !prev);
@@ -270,18 +275,56 @@ export function AdminPage() {
           </div>
 
           <section className="min-h-0 min-w-0 overflow-y-auto p-3 md:p-4">
-            <div key={currentTab} className="animate-in fade-in-0 slide-in-from-bottom-2">
-              {currentTab === "dashboard" ? <DashboardTab /> : null}
-              {currentTab === "funcionarios" ? <FuncionariosTab /> : null}
-              {currentTab === "unidades" ? <UnidadesTab /> : null}
-              {currentTab === "setores" ? <SetoresTab /> : null}
-              {currentTab === "funcoes" ? <FuncoesTab /> : null}
-              {currentTab === "itens" ? <ItensTab /> : null}
-              {isSuperadmin && currentTab === "credenciais" ? <CredenciaisTab /> : null}
-              {isSuperadmin && currentTab === "auditoria" ? <AuditoriaTab /> : null}
-              {isSuperadmin && currentTab === "configuracoes" ? <ConfiguracoesTab /> : null}
-              {isSuperadmin && currentTab === "manutencao" ? <ManutencaoTab /> : null}
-            </div>
+            {mountedTabs.includes("dashboard") ? (
+              <div className={cn(currentTab === "dashboard" ? "block" : "hidden")}>
+                <DashboardTab />
+              </div>
+            ) : null}
+            {mountedTabs.includes("funcionarios") ? (
+              <div className={cn(currentTab === "funcionarios" ? "block" : "hidden")}>
+                <FuncionariosTab />
+              </div>
+            ) : null}
+            {mountedTabs.includes("unidades") ? (
+              <div className={cn(currentTab === "unidades" ? "block" : "hidden")}>
+                <UnidadesTab />
+              </div>
+            ) : null}
+            {mountedTabs.includes("setores") ? (
+              <div className={cn(currentTab === "setores" ? "block" : "hidden")}>
+                <SetoresTab />
+              </div>
+            ) : null}
+            {mountedTabs.includes("funcoes") ? (
+              <div className={cn(currentTab === "funcoes" ? "block" : "hidden")}>
+                <FuncoesTab />
+              </div>
+            ) : null}
+            {mountedTabs.includes("itens") ? (
+              <div className={cn(currentTab === "itens" ? "block" : "hidden")}>
+                <ItensTab />
+              </div>
+            ) : null}
+            {isSuperadmin && mountedTabs.includes("credenciais") ? (
+              <div className={cn(currentTab === "credenciais" ? "block" : "hidden")}>
+                <CredenciaisTab />
+              </div>
+            ) : null}
+            {isSuperadmin && mountedTabs.includes("auditoria") ? (
+              <div className={cn(currentTab === "auditoria" ? "block" : "hidden")}>
+                <AuditoriaTab />
+              </div>
+            ) : null}
+            {isSuperadmin && mountedTabs.includes("configuracoes") ? (
+              <div className={cn(currentTab === "configuracoes" ? "block" : "hidden")}>
+                <ConfiguracoesTab />
+              </div>
+            ) : null}
+            {isSuperadmin && mountedTabs.includes("manutencao") ? (
+              <div className={cn(currentTab === "manutencao" ? "block" : "hidden")}>
+                <ManutencaoTab />
+              </div>
+            ) : null}
           </section>
         </div>
       </main>

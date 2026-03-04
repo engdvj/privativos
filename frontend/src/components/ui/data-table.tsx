@@ -18,8 +18,6 @@ const alignJustifyClassName: Record<DataTableAlign, string> = {
 };
 
 const TABLE_CELL_PADDING_Y = "py-2.5";
-const MAX_STAGGERED_ROWS = 8;
-const ROW_STAGGER_MS = 26;
 type DataTableSortDirection = "asc" | "desc";
 type DataTableSortState = { key: string; direction: DataTableSortDirection } | null;
 
@@ -327,13 +325,10 @@ export function DataTable<T>({
               <tr
                 key={getRowKey(row)}
                 className={cn(
-                  "border-b border-border/65 transition-colors odd:bg-muted/15 hover:bg-accent/45 animate-in fade-in-0 slide-in-from-bottom-2 motion-reduce:animate-none",
+                  "border-b border-border/65 transition-colors odd:bg-muted/15 hover:bg-accent/45",
                   onRowClick ? "cursor-pointer" : null,
                   typeof rowClassName === "function" ? rowClassName(row, index) : rowClassName,
                 )}
-                style={{
-                  animationDelay: `${Math.min(index, MAX_STAGGERED_ROWS) * ROW_STAGGER_MS}ms`,
-                }}
                 tabIndex={onRowClick ? 0 : undefined}
                 onClick={(event) => {
                   if (!onRowClick || shouldIgnoreRowClick(event.target)) return;

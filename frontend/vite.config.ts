@@ -12,11 +12,13 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // `localhost` can resolve via IPv6 first on some Windows setups, adding ~200ms per proxied request.
+    // Force IPv4 loopback to keep local admin tables/dashboard snappy during development.
     proxy: {
-      "/auth": "http://localhost:3000",
-      "/ops": "http://localhost:3000",
-      "/admin": "http://localhost:3000",
-      "/health": "http://localhost:3000",
+      "/auth": "http://127.0.0.1:3000",
+      "/ops": "http://127.0.0.1:3000",
+      "/admin": "http://127.0.0.1:3000",
+      "/health": "http://127.0.0.1:3000",
     },
   },
 });

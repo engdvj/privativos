@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api } from "@/lib/api";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -12,15 +12,19 @@ import { useToast } from "@/components/ui/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { StatusPill } from "@/components/ui/status-pill";
+import { SetorItensPanel } from "@/components/setor/SetorItensPanel";
 import { cn } from "@/lib/utils";
 import { publishOperacaoMonitor, type MonitorTipoOperacao } from "@/lib/operacao-monitor";
 import {
+  Boxes,
   CheckCircle2,
   XCircle,
   RefreshCw,
   Package,
   Undo2,
   Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   X,
   SearchX,
@@ -2700,10 +2704,21 @@ export function SetorPage() {
     enviarMonitorEmEspera("Aguardando uma operacao na tela principal.");
   }, []);
 
+  const [menuAtivo, setMenuAtivo] = useState<"operacoes" | "itens">("operacoes");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [tipoOperacao, setTipoOperacao] = useState<OperacaoTipo>("solicitacao");
   const [destinoOperacao, setDestinoOperacao] = useState<"usuario" | "setor">("usuario");
   const animacaoContexto = useDelicateTransition(`contexto-${tipoOperacao}-${destinoOperacao}`);
   const animacaoConteudo = useDelicateTransition(`conteudo-${tipoOperacao}-${destinoOperacao}`);
+  const isIconOnly = sidebarCollapsed;
+  const sidebarWidth = sidebarCollapsed ? 78 : 248;
+  const layoutStyle = {
+    ["--setor-sidebar-width" as string]: `${sidebarWidth}px`,
+  } as CSSProperties;
+
+  function toggleSidebar() {
+    setSidebarCollapsed((prev) => !prev);
+  }
 
   return (
     <div className="relative flex h-dvh flex-col overflow-hidden bg-background animate-in fade-in-0">
@@ -2714,92 +2729,205 @@ export function SetorPage() {
       </div>
 
       <Header />
-      <main className="relative min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[1320px] px-6 py-6">
-          <section className="grid grid-cols-12 gap-6">
-            <div className="col-span-12 flex flex-wrap items-start justify-between gap-6">
-              <div className="space-y-2">
-                <h1 className="text-3xl font-bold text-foreground">Operacoes</h1>
-                <p className="text-sm text-muted-foreground">
-                  Gerencie solicitacoes e devolucoes para usuarios e setores.
+      <main className="relative min-h-0 flex-1 overflow-hidden">
+        <div
+          className="grid h-full min-h-0 transition-[grid-template-columns] duration-300 ease-[var(--motion-ease-standard)] motion-reduce:transition-none md:grid-cols-[var(--setor-sidebar-width)_minmax(0,1fr)]"
+          style={layoutStyle}
+        >
+          <aside className="relative flex h-full min-h-0 flex-col overflow-hidden border-r border-border/70 bg-gradient-to-b from-card/94 via-surface-2/88 to-card/92 backdrop-blur-xl transition-colors duration-200 dark:border-border/85 dark:from-card/88 dark:via-background/90 dark:to-card/86">
+            <div className="relative z-[1] min-h-0 flex-1 space-y-4 overflow-y-auto p-3 pt-4">
+              <div className="animate-in fade-in-0">
+                <p
+                  className={cn(
+                    "mb-1.5 overflow-hidden px-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground transition-all duration-200 dark:text-white/70",
+                    isIconOnly ? "max-h-0 opacity-0" : "max-h-5 opacity-100",
+                  )}
+                >
+                  Operacao
                 </p>
-              </div>
-              <StatusPill tone="info">Fluxo operacional ativo</StatusPill>
-            </div>
-          </section>
 
-          <section
-            className={cn(
-              "mt-6 grid grid-cols-12 gap-6 transition-[opacity,transform] duration-300 ease-[var(--motion-ease-standard)]",
-              animacaoContexto && "animate-in fade-in-0 slide-in-from-bottom-2",
-            )}
-          >
-            <div className="col-span-12">
-              <div className="relative overflow-visible rounded-2xl border border-border/75 bg-card/95 p-4 shadow-[var(--shadow-soft)]">
-                <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-surface-2/70 via-transparent to-accent/18" />
+                <div className="space-y-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className={cn(
+                      "group relative h-9 w-full overflow-hidden rounded-xl border transition-all duration-200",
+                      menuAtivo === "operacoes"
+                        ? "border-primary/35 bg-primary/14 !text-foreground shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.08)] dark:border-primary/40 dark:bg-primary/22 dark:!text-white"
+                        : "border-transparent bg-transparent text-foreground/88 hover:-translate-y-0.5 hover:border-primary/28 hover:!bg-primary/10 hover:!text-foreground dark:text-white/90 dark:hover:border-primary/35 dark:hover:!bg-primary/18 dark:hover:!text-white",
+                      isIconOnly ? "justify-center px-2" : "justify-start px-2.5",
+                    )}
+                    onClick={() => setMenuAtivo("operacoes")}
+                    title="Operacoes"
+                  >
+                    <Package
+                      className={cn(
+                        "h-4 w-4 transition-all duration-200 group-hover:scale-105",
+                        menuAtivo === "operacoes"
+                          ? "text-foreground dark:text-white"
+                          : "text-foreground/85 group-hover:text-foreground dark:text-white/85 dark:group-hover:text-white",
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        "origin-left overflow-hidden whitespace-nowrap text-[13px] font-semibold transition-all duration-200",
+                        menuAtivo === "operacoes"
+                          ? "text-foreground dark:text-white"
+                          : "group-hover:text-foreground dark:group-hover:text-white",
+                        isIconOnly ? "max-w-0 -translate-x-1 opacity-0" : "max-w-[12rem] translate-x-0 opacity-100",
+                      )}
+                    >
+                      Operacoes
+                    </span>
+                  </Button>
 
-                <div className="relative grid gap-4 lg:grid-cols-2">
-                  <Tabs value={tipoOperacao} onValueChange={(value) => setTipoOperacao(value as OperacaoTipo)} className="w-full space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Operacao</p>
-                    <TabsList className="grid h-10 w-full grid-cols-2 gap-1 rounded-xl border border-border/75 bg-background/70 p-1 shadow-[var(--shadow-soft)]">
-                      <TabsTrigger
-                        value="solicitacao"
-                        className="h-8 gap-2 rounded-lg border border-transparent text-[13px] font-semibold text-muted-foreground transition-all duration-200 hover:bg-accent/35 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/16 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
-                      >
-                        <Package className="h-4 w-4" />
-                        Solicitacao
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="devolucao"
-                        className="h-8 gap-2 rounded-lg border border-transparent text-[13px] font-semibold text-muted-foreground transition-all duration-200 hover:bg-accent/35 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/16 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
-                      >
-                        <Undo2 className="h-4 w-4" />
-                        Devolucao
-                      </TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-
-                  <Tabs value={destinoOperacao} onValueChange={(value) => setDestinoOperacao(value as "usuario" | "setor")} className="w-full space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Destino</p>
-                    <TabsList className="grid h-10 w-full grid-cols-2 gap-1 rounded-xl border border-border/75 bg-background/70 p-1 shadow-[var(--shadow-soft)]">
-                      <TabsTrigger
-                        value="usuario"
-                        className="h-8 gap-2 rounded-lg border border-transparent text-[13px] font-semibold text-muted-foreground transition-all duration-200 hover:bg-accent/35 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/16 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
-                      >
-                        <UserRound className="h-4 w-4" />
-                        Usuario
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="setor"
-                        className="h-8 gap-2 rounded-lg border border-transparent text-[13px] font-semibold text-muted-foreground transition-all duration-200 hover:bg-accent/35 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/16 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
-                      >
-                        <Building2 className="h-4 w-4" />
-                        Setor
-                      </TabsTrigger>
-                    </TabsList>
-                  </Tabs>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className={cn(
+                      "group relative h-9 w-full overflow-hidden rounded-xl border transition-all duration-200",
+                      menuAtivo === "itens"
+                        ? "border-primary/35 bg-primary/14 !text-foreground shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.08)] dark:border-primary/40 dark:bg-primary/22 dark:!text-white"
+                        : "border-transparent bg-transparent text-foreground/88 hover:-translate-y-0.5 hover:border-primary/28 hover:!bg-primary/10 hover:!text-foreground dark:text-white/90 dark:hover:border-primary/35 dark:hover:!bg-primary/18 dark:hover:!text-white",
+                      isIconOnly ? "justify-center px-2" : "justify-start px-2.5",
+                    )}
+                    onClick={() => setMenuAtivo("itens")}
+                    title="Itens"
+                  >
+                    <Boxes
+                      className={cn(
+                        "h-4 w-4 transition-all duration-200 group-hover:scale-105",
+                        menuAtivo === "itens"
+                          ? "text-foreground dark:text-white"
+                          : "text-foreground/85 group-hover:text-foreground dark:text-white/85 dark:group-hover:text-white",
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        "origin-left overflow-hidden whitespace-nowrap text-[13px] font-semibold transition-all duration-200",
+                        menuAtivo === "itens"
+                          ? "text-foreground dark:text-white"
+                          : "group-hover:text-foreground dark:group-hover:text-white",
+                        isIconOnly ? "max-w-0 -translate-x-1 opacity-0" : "max-w-[12rem] translate-x-0 opacity-100",
+                      )}
+                    >
+                      Itens
+                    </span>
+                  </Button>
                 </div>
               </div>
             </div>
-          </section>
+          </aside>
 
-          <section
-            className={cn(
-              "mt-6 grid grid-cols-12 gap-6 transition-[opacity,transform] duration-300 ease-[var(--motion-ease-standard)]",
-              animacaoConteudo && "animate-in fade-in-0 slide-in-from-bottom-2",
-            )}
-          >
-            <div className="col-span-12">
-              {destinoOperacao === "usuario"
-                ? tipoOperacao === "solicitacao"
-                  ? <EmprestimoTab />
-                  : <DevolucaoTab />
-                : <SetorOperacoesTab tipoOperacao={tipoOperacao} />}
+          <section className="min-h-0 min-w-0 overflow-y-auto">
+            <div className="w-full px-4 py-6 md:px-6">
+              <div className="mx-auto w-full max-w-[1320px]">
+                {menuAtivo === "operacoes" ? (
+                  <>
+                    <section className="grid grid-cols-12 gap-6">
+                      <div className="col-span-12 flex flex-wrap items-start justify-between gap-6">
+                        <div className="space-y-2">
+                          <h1 className="text-3xl font-bold text-foreground">Operacoes</h1>
+                          <p className="text-sm text-muted-foreground">
+                            Gerencie solicitacoes e devolucoes para usuarios e setores.
+                          </p>
+                        </div>
+                        <StatusPill tone="info">Fluxo operacional ativo</StatusPill>
+                      </div>
+                    </section>
+
+                    <section
+                      className={cn(
+                        "mt-6 grid grid-cols-12 gap-6 transition-[opacity,transform] duration-300 ease-[var(--motion-ease-standard)]",
+                        animacaoContexto && "animate-in fade-in-0 slide-in-from-bottom-2",
+                      )}
+                    >
+                      <div className="col-span-12">
+                        <div className="relative overflow-visible rounded-2xl border border-border/75 bg-card/95 p-4 shadow-[var(--shadow-soft)]">
+                          <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-surface-2/70 via-transparent to-accent/18" />
+
+                          <div className="relative grid gap-4 lg:grid-cols-2">
+                            <Tabs value={tipoOperacao} onValueChange={(value) => setTipoOperacao(value as OperacaoTipo)} className="w-full space-y-2">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Operacao</p>
+                              <TabsList className="grid h-10 w-full grid-cols-2 gap-1 rounded-xl border border-border/75 bg-background/70 p-1 shadow-[var(--shadow-soft)]">
+                                <TabsTrigger
+                                  value="solicitacao"
+                                  className="h-8 gap-2 rounded-lg border border-transparent text-[13px] font-semibold text-muted-foreground transition-all duration-200 hover:bg-accent/35 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/16 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+                                >
+                                  <Package className="h-4 w-4" />
+                                  Solicitacao
+                                </TabsTrigger>
+                                <TabsTrigger
+                                  value="devolucao"
+                                  className="h-8 gap-2 rounded-lg border border-transparent text-[13px] font-semibold text-muted-foreground transition-all duration-200 hover:bg-accent/35 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/16 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+                                >
+                                  <Undo2 className="h-4 w-4" />
+                                  Devolucao
+                                </TabsTrigger>
+                              </TabsList>
+                            </Tabs>
+
+                            <Tabs value={destinoOperacao} onValueChange={(value) => setDestinoOperacao(value as "usuario" | "setor")} className="w-full space-y-2">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Destino</p>
+                              <TabsList className="grid h-10 w-full grid-cols-2 gap-1 rounded-xl border border-border/75 bg-background/70 p-1 shadow-[var(--shadow-soft)]">
+                                <TabsTrigger
+                                  value="usuario"
+                                  className="h-8 gap-2 rounded-lg border border-transparent text-[13px] font-semibold text-muted-foreground transition-all duration-200 hover:bg-accent/35 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/16 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+                                >
+                                  <UserRound className="h-4 w-4" />
+                                  Usuario
+                                </TabsTrigger>
+                                <TabsTrigger
+                                  value="setor"
+                                  className="h-8 gap-2 rounded-lg border border-transparent text-[13px] font-semibold text-muted-foreground transition-all duration-200 hover:bg-accent/35 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/16 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
+                                >
+                                  <Building2 className="h-4 w-4" />
+                                  Setor
+                                </TabsTrigger>
+                              </TabsList>
+                            </Tabs>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+
+                    <section
+                      className={cn(
+                        "mt-6 grid grid-cols-12 gap-6 transition-[opacity,transform] duration-300 ease-[var(--motion-ease-standard)]",
+                        animacaoConteudo && "animate-in fade-in-0 slide-in-from-bottom-2",
+                      )}
+                    >
+                      <div className="col-span-12">
+                        {destinoOperacao === "usuario"
+                          ? tipoOperacao === "solicitacao"
+                            ? <EmprestimoTab />
+                            : <DevolucaoTab />
+                          : <SetorOperacoesTab tipoOperacao={tipoOperacao} />}
+                      </div>
+                    </section>
+                  </>
+                ) : (
+                  <SetorItensPanel />
+                )}
+              </div>
             </div>
           </section>
         </div>
       </main>
-      <Footer />
+      <Footer
+        leading={(
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={toggleSidebar}
+            aria-label={isIconOnly ? "Expandir menu lateral" : "Recolher menu lateral"}
+            title={isIconOnly ? "Expandir menu lateral" : "Recolher menu lateral"}
+            className="h-7 w-7 rounded-lg"
+          >
+            {isIconOnly ? <PanelLeftOpen className="h-3 w-3" /> : <PanelLeftClose className="h-3 w-3" />}
+          </Button>
+        )}
+      />
     </div>
   );
 }

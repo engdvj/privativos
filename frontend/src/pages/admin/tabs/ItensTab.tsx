@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DropdownMenu,
@@ -165,7 +166,11 @@ function resumirCodigos(codigos: string[], limite = 6) {
   return `${primeiros} ... (+${codigos.length - limite})`;
 }
 
-export function ItensTab() {
+interface ItensTabProps {
+  endpointBase?: string;
+}
+
+export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
   const [rows, setRows] = useState<ItemRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -177,6 +182,9 @@ export function ItensTab() {
   const [filtroAtivo, setFiltroAtivo] = useState<"todos" | "ativo" | "inativo">("todos");
   const [paginaItens, setPaginaItens] = useState(1);
   const [itemParaExcluir, setItemParaExcluir] = useState<ItemRow | null>(null);
+  const [codigosSelecionados, setCodigosSelecionados] = useState<string[]>([]);
+  const [excluirSelecionadosAberto, setExcluirSelecionadosAberto] = useState(false);
+  const [deletingBulk, setDeletingBulk] = useState(false);
   const { success, error } = useToast();
   const { openKit } = useGlobalDetail();
 
@@ -203,14 +211,14 @@ export function ItensTab() {
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.get<ItemRow[]>("/admin/itens?include_inactive=true");
+      const data = await api.get<ItemRow[]>(`${endpointBase}?include_inactive=true`);
       setRows(data);
     } catch (err) {
       error(err instanceof Error ? err.message : "Erro ao carregar itens");
     } finally {
       setLoading(false);
     }
-  }, [error]);
+  }, [endpointBase, error]);
 
   useEffect(() => {
     void carregar();
@@ -344,7 +352,7 @@ export function ItensTab() {
     setCreating(true);
     try {
       if (!isLote) {
-        await api.post("/admin/itens", {
+        await api.post(endpointBase, {
           codigo: novo.codigo.trim(),
           descricao: descricaoFinal,
           tipo: tipoFinal,
@@ -379,7 +387,7 @@ export function ItensTab() {
         const codigosCriados: string[] = [];
         for (const codigo of codigos) {
           try {
-            await api.post("/admin/itens", {
+            await api.post(endpointBase, {
               codigo,
               descricao: descricaoFinal,
               tipo: tipoFinal,
@@ -436,7 +444,7 @@ export function ItensTab() {
     setGerenciandoTipo(true);
     try {
       for (const item of itensAlvo) {
-        await api.put(`/admin/itens/${encodeURIComponent(item.codigo)}`, {
+        await api.put(`${endpointBase}/${encodeURIComponent(item.codigo)}`, {
           descricao: item.descricao ?? null,
           tipo: destinoNormalizado,
           tamanho: item.tamanho,
@@ -573,7 +581,7 @@ export function ItensTab() {
 
   async function apagar(row: ItemRow) {
     try {
-      await api.del(`/admin/itens/${row.codigo}`);
+      await api.del(`${endpointBase}/${encodeURIComponent(row.codigo)}`);
       success(`Item ${row.codigo} apagado`);
       await carregar();
     } catch (err) {
@@ -604,12 +612,27 @@ export function ItensTab() {
     const inicio = (paginaItens - 1) * ITENS_POR_PAGINA;
     return rowsFiltradas.slice(inicio, inicio + ITENS_POR_PAGINA);
   }, [rowsFiltradas, paginaItens]);
+  const codigosSelecionadosSet = useMemo(() => new Set(codigosSelecionados), [codigosSelecionados]);
+  const codigosFiltradosSet = useMemo(() => new Set(rowsFiltradas.map((row) => row.codigo)), [rowsFiltradas]);
+  const codigosSelecionadosFiltrados = useMemo(
+    () => codigosSelecionados.filter((codigo) => codigosFiltradosSet.has(codigo)),
+    [codigosSelecionados, codigosFiltradosSet],
+  );
+  const codigosPaginaAtual = useMemo(() => rowsPaginadas.map((row) => row.codigo), [rowsPaginadas]);
+  const todosSelecionadosNaPagina =
+    codigosPaginaAtual.length > 0 && codigosPaginaAtual.every((codigo) => codigosSelecionadosSet.has(codigo));
+  const algunsSelecionadosNaPagina = codigosPaginaAtual.some((codigo) => codigosSelecionadosSet.has(codigo));
 
   useEffect(() => {
     if (paginaItens > totalPaginasItens) {
       setPaginaItens(totalPaginasItens);
     }
   }, [paginaItens, totalPaginasItens]);
+
+  useEffect(() => {
+    const codigosDisponiveis = new Set(rows.map((row) => row.codigo));
+    setCodigosSelecionados((prev) => prev.filter((codigo) => codigosDisponiveis.has(codigo)));
+  }, [rows]);
 
   const inicioPaginaItens = rowsFiltradas.length === 0 ? 0 : (paginaItens - 1) * ITENS_POR_PAGINA + 1;
   const fimPaginaItens = Math.min(paginaItens * ITENS_POR_PAGINA, rowsFiltradas.length);
@@ -625,6 +648,66 @@ export function ItensTab() {
       { disponivel: 0, emprestado: 0, inativo: 0 },
     );
   }, [rowsFiltradas]);
+
+  function alternarSelecao(codigo: string, checked: boolean) {
+    setCodigosSelecionados((prev) => {
+      if (checked) {
+        if (prev.includes(codigo)) {
+          return prev;
+        }
+        return [...prev, codigo];
+      }
+      return prev.filter((itemCodigo) => itemCodigo !== codigo);
+    });
+  }
+
+  function alternarSelecaoPagina(checked: boolean) {
+    setCodigosSelecionados((prev) => {
+      if (checked) {
+        const next = new Set(prev);
+        for (const codigo of codigosPaginaAtual) {
+          next.add(codigo);
+        }
+        return Array.from(next);
+      }
+      return prev.filter((codigo) => !codigosPaginaAtual.includes(codigo));
+    });
+  }
+
+  async function apagarSelecionados(codigos: string[]) {
+    if (codigos.length === 0) {
+      error("Selecione ao menos um item para apagar");
+      return;
+    }
+
+    setDeletingBulk(true);
+    const codigosComSucesso: string[] = [];
+    const codigosComFalha: string[] = [];
+
+    try {
+      for (const codigo of codigos) {
+        try {
+          await api.del(`${endpointBase}/${encodeURIComponent(codigo)}`);
+          codigosComSucesso.push(codigo);
+        } catch (_err) {
+          codigosComFalha.push(codigo);
+        }
+      }
+
+      if (codigosComSucesso.length > 0) {
+        success(`${codigosComSucesso.length} item(ns) apagado(s)`);
+      }
+      if (codigosComFalha.length > 0) {
+        error(`Falha ao apagar ${codigosComFalha.length} item(ns): ${resumirCodigos(codigosComFalha, 4)}`);
+      }
+
+      const codigosSucessoSet = new Set(codigosComSucesso);
+      setCodigosSelecionados((prev) => prev.filter((codigo) => !codigosSucessoSet.has(codigo)));
+      await carregar();
+    } finally {
+      setDeletingBulk(false);
+    }
+  }
 
   return (
     <div className="space-y-3">
@@ -698,6 +781,24 @@ export function ItensTab() {
               </SelectContent>
             </Select>
             <Button
+              type="button"
+              variant="outline"
+              className="h-8 whitespace-nowrap rounded-lg border-border/70 px-2.5 text-[11px]"
+              onClick={() => alternarSelecaoPagina(!todosSelecionadosNaPagina)}
+              disabled={rowsPaginadas.length === 0}
+            >
+              {todosSelecionadosNaPagina ? "Desmarcar pagina" : "Selecionar pagina"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-8 whitespace-nowrap rounded-lg border-border/70 px-2.5 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setExcluirSelecionadosAberto(true)}
+              disabled={codigosSelecionadosFiltrados.length === 0 || deletingBulk}
+            >
+              Apagar selecionados ({codigosSelecionadosFiltrados.length})
+            </Button>
+            <Button
               size="icon"
               className="h-8 w-8 shrink-0 rounded-lg border-0 bg-primary text-primary-foreground shadow-[var(--shadow-soft)] transition-all duration-200 hover:bg-sky-500 hover:animate-pulse"
               onClick={abrirModalCriacao}
@@ -713,18 +814,33 @@ export function ItensTab() {
           <DataTable
             columns={[
               {
+                key: "selecionar",
+                title: (
+                  <div className="flex justify-center">
+                    <Checkbox
+                      checked={todosSelecionadosNaPagina || (algunsSelecionadosNaPagina && "indeterminate")}
+                      onCheckedChange={(checked) => alternarSelecaoPagina(Boolean(checked))}
+                      aria-label="Selecionar itens da pagina"
+                    />
+                  </div>
+                ),
+                align: "center",
+                width: "6%",
+                sortable: false,
+              },
+              {
                 key: "codigo",
                 title: "Codigo",
-                width: "14%",
+                width: "12%",
                 className: "font-mono font-semibold",
                 sortValue: (row) => row.codigo,
               },
-              { key: "tipo", title: "Tipo", width: "16%", sortValue: (row) => row.tipo },
-              { key: "descricao", title: "Descricao", width: "26%", sortValue: (row) => descricaoItemLabel(row.descricao) },
-              { key: "tamanho", title: "Tamanho", align: "center", width: "12%", sortValue: (row) => row.tamanho },
-              { key: "status", title: "Status", align: "center", width: "12%", sortValue: (row) => row.status },
-              { key: "ativo", title: "Ativo", align: "center", width: "10%", sortValue: (row) => row.statusAtivo },
-              { key: "acoes", title: "Acoes", align: "center", width: "10%" },
+              { key: "tipo", title: "Tipo", width: "15%", sortValue: (row) => row.tipo },
+              { key: "descricao", title: "Descricao", width: "24%", sortValue: (row) => descricaoItemLabel(row.descricao) },
+              { key: "tamanho", title: "Tamanho", align: "center", width: "11%", sortValue: (row) => row.tamanho },
+              { key: "status", title: "Status", align: "center", width: "11%", sortValue: (row) => row.status },
+              { key: "ativo", title: "Ativo", align: "center", width: "9%", sortValue: (row) => row.statusAtivo },
+              { key: "acoes", title: "Acoes", align: "center", width: "12%" },
             ]}
             rows={rowsPaginadas}
             getRowKey={(row) => row.codigo}
@@ -733,10 +849,19 @@ export function ItensTab() {
             }}
             loading={loading}
             emptyMessage="Nenhum item encontrado."
-            minWidthClassName="min-w-[980px]"
+            minWidthClassName="min-w-[1040px]"
             containerClassName={TABELA_DENSE_CLASS}
             renderRow={(row) => (
               <>
+                <td>
+                  <div className="flex justify-center">
+                    <Checkbox
+                      checked={codigosSelecionadosSet.has(row.codigo)}
+                      onCheckedChange={(checked) => alternarSelecao(row.codigo, Boolean(checked))}
+                      aria-label={`Selecionar item ${row.codigo}`}
+                    />
+                  </div>
+                </td>
                 <td>{row.codigo}</td>
                 <td>{row.tipo}</td>
                 <td className="max-w-0 truncate" title={descricaoItemLabel(row.descricao)}>{descricaoItemLabel(row.descricao)}</td>
@@ -808,15 +933,22 @@ export function ItensTab() {
                 className="rounded-xl border border-border/70 bg-surface-2/85 p-3 shadow-[var(--shadow-soft)]"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <button
-                    type="button"
-                    className="font-mono text-sm font-semibold text-primary underline-offset-2 hover:underline"
-                    onClick={() => {
-                      void openKit(row.codigo);
-                    }}
-                  >
-                    {row.codigo}
-                  </button>
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      checked={codigosSelecionadosSet.has(row.codigo)}
+                      onCheckedChange={(checked) => alternarSelecao(row.codigo, Boolean(checked))}
+                      aria-label={`Selecionar item ${row.codigo}`}
+                    />
+                    <button
+                      type="button"
+                      className="font-mono text-sm font-semibold text-primary underline-offset-2 hover:underline"
+                      onClick={() => {
+                        void openKit(row.codigo);
+                      }}
+                    >
+                      {row.codigo}
+                    </button>
+                  </div>
                   <StatusPill tone={row.statusAtivo ? "success" : "danger"} className="text-[10px]">
                     {row.statusAtivo ? "ativo" : "inativo"}
                   </StatusPill>
@@ -855,9 +987,10 @@ export function ItensTab() {
         </div>
 
         <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[10px] text-muted-foreground">
-            {inicioPaginaItens}-{fimPaginaItens} de {rowsFiltradas.length} | Pagina {paginaItens} de {totalPaginasItens}
-          </p>
+          <div className="text-[10px] text-muted-foreground">
+            <p>{inicioPaginaItens}-{fimPaginaItens} de {rowsFiltradas.length} | Pagina {paginaItens} de {totalPaginasItens}</p>
+            <p>Selecionados nos filtros: {codigosSelecionadosFiltrados.length}</p>
+          </div>
           <div className="flex min-w-[220px] justify-end gap-2">
             <Button
               type="button"
@@ -1165,6 +1298,22 @@ export function ItensTab() {
           if (!itemParaExcluir) return;
           await apagar(itemParaExcluir);
           setItemParaExcluir(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={excluirSelecionadosAberto}
+        onClose={() => setExcluirSelecionadosAberto(false)}
+        title="Apagar itens selecionados"
+        description={
+          codigosSelecionadosFiltrados.length > 0
+            ? `Tem certeza que deseja apagar ${codigosSelecionadosFiltrados.length} item(ns) selecionado(s)?`
+            : "Nenhum item selecionado."
+        }
+        confirmLabel="Apagar selecionados"
+        onConfirm={async () => {
+          await apagarSelecionados(codigosSelecionadosFiltrados);
+          setExcluirSelecionadosAberto(false);
         }}
       />
     </div>

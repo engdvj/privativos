@@ -1,4 +1,4 @@
-import { type ComponentType, type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { type ComponentType, type ReactNode, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,8 +23,6 @@ const FOCUSABLE_SELECTOR = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 
-const EXIT_ANIMATION_MS = 210;
-
 export function Modal({
   open,
   title,
@@ -39,56 +37,13 @@ export function Modal({
   const descriptionId = useId();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const onCloseRef = useRef(onClose);
-  const closeTimerRef = useRef<number | null>(null);
-  const [mounted, setMounted] = useState(open);
-  const [visible, setVisible] = useState(open);
 
   useEffect(() => {
     onCloseRef.current = onClose;
   }, [onClose]);
 
   useEffect(() => {
-    if (closeTimerRef.current !== null) {
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-
-    if (open) {
-      let visibleFrameId = 0;
-      const mountFrameId = window.requestAnimationFrame(() => {
-        setMounted(true);
-        visibleFrameId = window.requestAnimationFrame(() => {
-          setVisible(true);
-        });
-      });
-      return () => {
-        window.cancelAnimationFrame(mountFrameId);
-        window.cancelAnimationFrame(visibleFrameId);
-      };
-    }
-
-    if (!mounted) return;
-
-    const closeFrameId = window.requestAnimationFrame(() => {
-      setVisible(false);
-    });
-
-    closeTimerRef.current = window.setTimeout(() => {
-      setMounted(false);
-      closeTimerRef.current = null;
-    }, EXIT_ANIMATION_MS);
-
-    return () => {
-      window.cancelAnimationFrame(closeFrameId);
-      if (closeTimerRef.current !== null) {
-        window.clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = null;
-      }
-    };
-  }, [open, mounted]);
-
-  useEffect(() => {
-    if (!mounted) return;
+    if (!open) return;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -96,7 +51,7 @@ export function Modal({
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [mounted]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -161,20 +116,19 @@ export function Modal({
     };
   }, [open]);
 
-  if (!mounted) return null;
+  if (!open) return null;
 
   return createPortal(
     <div
       className={cn(
         "fixed inset-0 z-50 grid place-items-center p-4 sm:p-6",
-        open ? "pointer-events-auto" : "pointer-events-none",
+        "pointer-events-auto",
       )}
     >
       <button
         type="button"
         className={cn(
-          "absolute inset-0 bg-slate-950/46 backdrop-blur-[2px] transition-opacity duration-200 ease-out dark:bg-black/60",
-          visible ? "opacity-100" : "opacity-0",
+          "absolute inset-0 bg-slate-950/46 backdrop-blur-[2px] dark:bg-black/60",
         )}
         aria-label="Fechar modal"
         onClick={onClose}
@@ -188,8 +142,7 @@ export function Modal({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          "relative flex w-full flex-col overflow-hidden rounded-[1.1rem] border border-border/75 bg-popover/98 text-popover-foreground shadow-[0_28px_58px_-30px_hsl(210_45%_18%_/_0.82)] transition-[opacity,transform] duration-200 ease-out will-change-[opacity,transform] sm:max-h-[84vh] dark:border-border/85 dark:bg-popover/94",
-          visible ? "translate-y-0 scale-100 opacity-100" : "translate-y-2 scale-[0.985] opacity-0",
+          "relative flex w-full flex-col overflow-hidden rounded-[1.1rem] border border-border/75 bg-popover/98 text-popover-foreground shadow-[0_28px_58px_-30px_hsl(210_45%_18%_/_0.82)] sm:max-h-[84vh] dark:border-border/85 dark:bg-popover/94",
           maxWidthClassName,
         )}
       >
