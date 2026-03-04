@@ -5,6 +5,7 @@ import { redis } from "../lib/redis.js";
 const DASHBOARD_DATA_CACHE_VERSION = "v7";
 const DASHBOARD_DATA_CACHE_TTL_SECONDS = 300;
 const DASHBOARD_FILTERS_CACHE_KEY = "dashboard:filters:v2";
+const DASHBOARD_DEFAULT_ROW_LIMIT = 1000;
 type OrigemDashboard = "colaborador" | "setor";
 
 export interface DashboardFiltros {
@@ -58,10 +59,15 @@ interface DashboardResponse {
   gerado_em: string;
 }
 
+interface DashboardDataOptions {
+  maxRows?: number | null;
+}
+
 export class DashboardService {
-  async getData(filtros: DashboardFiltros): Promise<DashboardResponse> {
+  async getData(filtros: DashboardFiltros, options: DashboardDataOptions = {}): Promise<DashboardResponse> {
     const normalized = this.normalizeFilters(filtros);
-    const cacheKey = this.cacheKey(normalized);
+    const maxRows = this.normalizeMaxRows(options.maxRows);
+    const cacheKey = this.cacheKey(normalized, maxRows);
     const startDate = this.parseStartDate(normalized.data_inicio);
     const endDate = this.parseEndDate(normalized.data_fim);
 
@@ -101,12 +107,12 @@ export class DashboardService {
         prisma.solicitacao.findMany({
           where: whereSolicitacoes,
           orderBy: [{ timestamp: "desc" }],
-          take: 1000,
+          ...(maxRows === null ? {} : { take: maxRows }),
         }),
         prisma.devolucao.findMany({
           where: whereDevolucoes,
           orderBy: [{ timestamp: "desc" }],
-          take: 1000,
+          ...(maxRows === null ? {} : { take: maxRows }),
         }),
         prisma.item.count({ where: { statusAtivo: true, status: "disponivel" } }),
         prisma.item.count({ where: { statusAtivo: true, status: "emprestado" } }),
@@ -145,7 +151,7 @@ export class DashboardService {
         atualizadoEm: true,
       },
       orderBy: [{ dataEmprestimo: "desc" }, { atualizadoEm: "desc" }],
-      take: 1000,
+      ...(maxRows === null ? {} : { take: maxRows }),
     });
     const unidadesAtivas = new Set(
       unidadesAtivasRaw.map((row) => row.nome.trim()).filter(Boolean),
@@ -500,10 +506,27 @@ export class DashboardService {
     return unidades.join(", ");
   }
 
-  private cacheKey(filters: DashboardFiltrosNormalizados) {
-    const payload = JSON.stringify(filters);
+  private cacheKey(filters: DashboardFiltrosNormalizados, maxRows: number | null) {
+    const payload = JSON.stringify({
+      filters,
+      maxRows: maxRows === null ? "all" : maxRows,
+    });
     const hash = createHash("sha256").update(payload).digest("hex");
     return `dashboard:data:${DASHBOARD_DATA_CACHE_VERSION}:${hash}`;
+  }
+
+  private normalizeMaxRows(value: number | null | undefined) {
+    if (value === null) {
+      return null;
+    }
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return DASHBOARD_DEFAULT_ROW_LIMIT;
+    }
+    const normalized = Math.floor(value);
+    if (normalized <= 0) {
+      return DASHBOARD_DEFAULT_ROW_LIMIT;
+    }
+    return normalized;
   }
 
   private normalizeFilters(input: DashboardFiltros): DashboardFiltrosNormalizados {

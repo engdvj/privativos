@@ -8,11 +8,13 @@ import { LoanService } from "../services/loan-service.js";
 import { ReturnService } from "../services/return-service.js";
 import { SectorOperationService } from "../services/sector-operation-service.js";
 import { ValidationQueueService } from "../services/validation-queue-service.js";
+import { AdminService } from "../services/admin-service.js";
 
 const queueService = new ValidationQueueService();
 const loanService = new LoanService();
 const returnService = new ReturnService();
 const sectorOperationService = new SectorOperationService();
+const adminService = new AdminService();
 const tamanhoSchema = z
   .string()
   .min(1)
@@ -23,6 +25,11 @@ const tipoItemSchema = z
   .max(100)
   .transform((value) => value.trim().replace(/\s+/g, " "))
   .refine((value) => value.length > 0, "Tipo do item invalido");
+const codigoItemSchema = z
+  .string()
+  .max(50)
+  .transform((value) => value.trim())
+  .refine((value) => value.length > 0, "Codigo do item invalido");
 
 const gerarCodigoSchema = z.object({
   matricula: z.string().min(1).max(20),
@@ -223,6 +230,13 @@ function formatarFuncaoLabel(funcoes: string[]) {
 function formatarDescricaoItem(descricao: string | null | undefined) {
   const normalizada = (descricao ?? "").trim();
   return normalizada;
+}
+
+function parseBool(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "sim";
 }
 
 export const opsRoutes: FastifyPluginAsync = async (app) => {
@@ -575,6 +589,124 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       });
 
       return reply.status(200).send(result);
+    },
+  );
+
+  app.get(
+    "/ops/itens",
+    {
+      preHandler: [authenticate, authorize(["setor", "admin", "superadmin"])],
+    },
+    async (request, reply) => {
+      const includeInactive = parseBool((request.query as Record<string, unknown>)?.include_inactive);
+      const itens = await adminService.listItens(includeInactive);
+
+      return reply.status(200).send(
+        itens.map((item) => ({
+          ...item,
+          descricao: formatarDescricaoItem(item.descricao),
+        })),
+      );
+    },
+  );
+
+  app.post(
+    "/ops/itens",
+    {
+      preHandler: [authenticate, authorize(["setor", "admin", "superadmin"])],
+    },
+    async (request, reply) => {
+      const schema = z.object({
+        codigo: codigoItemSchema,
+        descricao: z.string().max(200).nullable().optional(),
+        tipo: tipoItemSchema,
+        tamanho: tamanhoSchema,
+        status: z.enum(["disponivel", "emprestado", "inativo"]).optional(),
+      });
+
+      const parsed = schema.safeParse(request.body);
+      if (!parsed.success) {
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      }
+
+      const operador = request.user?.nomeCompleto;
+      if (!operador) {
+        throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
+      }
+
+      const row = await adminService.createItem({
+        codigo: parsed.data.codigo,
+        descricao: parsed.data.descricao,
+        tipo: parsed.data.tipo,
+        tamanho: parsed.data.tamanho,
+        status: parsed.data.status,
+        operador,
+      });
+
+      return reply.status(201).send({
+        ...row,
+        descricao: formatarDescricaoItem(row.descricao),
+      });
+    },
+  );
+
+  app.put(
+    "/ops/itens/:codigo",
+    {
+      preHandler: [authenticate, authorize(["setor", "admin", "superadmin"])],
+    },
+    async (request, reply) => {
+      const params = z.object({ codigo: codigoItemSchema }).parse(request.params);
+      const schema = z.object({
+        codigo: codigoItemSchema.optional(),
+        descricao: z.string().max(200).nullable().optional(),
+        tipo: tipoItemSchema.optional(),
+        tamanho: tamanhoSchema.optional(),
+        status: z.enum(["disponivel", "emprestado", "inativo"]).optional(),
+        status_ativo: z.boolean().optional(),
+      });
+
+      const parsed = schema.safeParse(request.body);
+      if (!parsed.success) {
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      }
+
+      const operador = request.user?.nomeCompleto;
+      if (!operador) {
+        throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
+      }
+
+      const row = await adminService.updateItem(params.codigo, {
+        codigo: parsed.data.codigo,
+        descricao: parsed.data.descricao,
+        tipo: parsed.data.tipo,
+        tamanho: parsed.data.tamanho,
+        status: parsed.data.status,
+        statusAtivo: parsed.data.status_ativo,
+        operador,
+      });
+
+      return reply.status(200).send({
+        ...row,
+        descricao: formatarDescricaoItem(row.descricao),
+      });
+    },
+  );
+
+  app.delete(
+    "/ops/itens/:codigo",
+    {
+      preHandler: [authenticate, authorize(["setor", "admin", "superadmin"])],
+    },
+    async (request, reply) => {
+      const params = z.object({ codigo: codigoItemSchema }).parse(request.params);
+      const operador = request.user?.nomeCompleto;
+      if (!operador) {
+        throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
+      }
+
+      await adminService.deleteItem(params.codigo, operador);
+      return reply.status(204).send();
     },
   );
 
