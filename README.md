@@ -14,9 +14,9 @@ docker compose up -d --build
 ```
 
 Servicos que sobem:
-- `app`: backend + build do frontend (porta `3000`).
-- `postgres`: banco PostgreSQL 16 (porta `5432`).
-- `redis`: cache Redis 7 (porta `6379`).
+- `app`: backend + build do frontend (porta `80`).
+- `postgres`: banco PostgreSQL 16 (somente rede interna do Docker).
+- `redis`: cache Redis 7 (somente rede interna do Docker).
 
 Comandos uteis:
 
@@ -29,7 +29,7 @@ docker compose down
 No primeiro startup, o `app` roda `prisma migrate deploy` automaticamente antes de iniciar a API.
 
 Healthcheck:
-- `http://localhost:3000/health`
+- `http://localhost/health`
 
 ## Variaveis de ambiente (Docker)
 
