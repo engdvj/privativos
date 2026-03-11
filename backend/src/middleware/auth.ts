@@ -16,7 +16,7 @@ export async function authenticate(request: FastifyRequest, _reply: FastifyReply
   const session = await authService.validarSessao(token);
 
   if (!session) {
-    throw new AppError(401, "INVALID_SESSION", "Sessao invalida");
+    throw new AppError(401, "INVALID_SESSION", "Sessão inválida");
   }
 
   if (session.tipo === "setor_admin") {
@@ -43,7 +43,7 @@ export function authorize(perfis: Array<PerfilAcesso | "solicitante">) {
     const user = request.user;
 
     if (!user) {
-      throw new AppError(401, "UNAUTHENTICATED", "Nao autenticado");
+      throw new AppError(401, "UNAUTHENTICATED", "Não autenticado");
     }
 
     if (user.kind === "solicitante") {

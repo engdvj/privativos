@@ -14,7 +14,7 @@ export class ReturnService {
     const normalizedCodes = [...new Set(input.itemCodigos)];
 
     if (normalizedCodes.length === 0) {
-      throw new AppError(400, "EMPTY_ITEMS", "Nenhum item informado para devolucao");
+      throw new AppError(400, "EMPTY_ITEMS", "Nenhum item informado para devolução");
     }
 
     const funcionario = await prisma.funcionario.findFirst({
@@ -28,7 +28,7 @@ export class ReturnService {
     });
 
     if (!funcionario) {
-      throw new AppError(404, "FUNCIONARIO_NOT_FOUND", "Funcionario nao encontrado");
+      throw new AppError(404, "FUNCIONARIO_NOT_FOUND", "Funcionário não encontrado");
     }
 
     const itensDevolvidos = await prisma.$transaction(async (tx) => {
@@ -42,7 +42,7 @@ export class ReturnService {
       `;
 
       if (itens.length !== normalizedCodes.length) {
-        throw new AppError(409, "INVALID_RETURN_ITEMS", "Um ou mais itens nao pertencem ao funcionario");
+        throw new AppError(409, "INVALID_RETURN_ITEMS", "Um ou mais itens não pertencem ao funcionário");
       }
 
       const now = new Date();

@@ -24,12 +24,12 @@ const tipoItemSchema = z
   .string()
   .max(100)
   .transform((value) => value.trim().replace(/\s+/g, " "))
-  .refine((value) => value.length > 0, "Tipo do item invalido");
+  .refine((value) => value.length > 0, "Tipo do item inválido");
 const codigoItemSchema = z
   .string()
   .max(50)
   .transform((value) => value.trim())
-  .refine((value) => value.length > 0, "Codigo do item invalido");
+  .refine((value) => value.length > 0, "Código do item inválido");
 
 const gerarCodigoSchema = z.object({
   matricula: z.string().min(1).max(20),
@@ -249,7 +249,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       const matricula = request.user?.matricula;
 
       if (!matricula) {
-        throw new AppError(401, "UNAUTHENTICATED", "Sessao do solicitante invalida");
+        throw new AppError(401, "UNAUTHENTICATED", "Sessão do solicitante inválida");
       }
 
       reply.raw.writeHead(200, {
@@ -298,7 +298,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       const userMatricula = request.user?.matricula;
 
       if (!userMatricula || userMatricula !== params.matricula) {
-        throw new AppError(403, "FORBIDDEN", "Matricula nao autorizada");
+        throw new AppError(403, "FORBIDDEN", "Matrícula não autorizada");
       }
 
       const pending = await queueService.getPendingByMatricula(params.matricula);
@@ -340,23 +340,23 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       const parsed = gerarCodigoSchema.safeParse(request.body);
 
       if (!parsed.success) {
-        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
       }
 
       const operador = request.user?.nomeCompleto;
 
       if (!operador) {
-        throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
+        throw new AppError(401, "UNAUTHENTICATED", "Sessão de operador inválida");
       }
 
       if (parsed.data.tipo === "emprestimo" && (!parsed.data.tipo_item || !parsed.data.tamanho)) {
-        throw new AppError(400, "INVALID_ITEM_FILTERS", "Emprestimo exige tipo de item e tamanho");
+        throw new AppError(400, "INVALID_ITEM_FILTERS", "Empréstimo exige tipo de item e tamanho");
       }
 
       if (parsed.data.tipo === "devolucao") {
         const itemCodigos = [...new Set(parsed.data.item_codigos ?? [])];
         if (itemCodigos.length === 0) {
-          throw new AppError(400, "INVALID_RETURN_ITEMS", "Devolucao exige item_codigos");
+          throw new AppError(400, "INVALID_RETURN_ITEMS", "Devolução exige item_codigos");
         }
         if (itemCodigos.length !== parsed.data.quantidade) {
           throw new AppError(
@@ -400,7 +400,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       const parsed = cancelarSchema.safeParse(request.body);
 
       if (!parsed.success) {
-        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
       }
 
       const result = await queueService.cancelar(parsed.data);
@@ -427,7 +427,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       const parsed = schema.safeParse(request.body);
 
       if (!parsed.success) {
-        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
       }
 
       await Promise.all([
@@ -454,14 +454,14 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       const parsed = confirmarSchema.safeParse(request.body);
 
       if (!parsed.success) {
-        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
       }
 
       const payload = await queueService.consumirCodigo(parsed.data);
 
       if (parsed.data.tipo === "emprestimo") {
         if (!payload.tamanho) {
-          throw new AppError(409, "INVALID_ITEM_SIZE", "Codigo pendente sem tamanho informado");
+          throw new AppError(409, "INVALID_ITEM_SIZE", "Código pendente sem tamanho informado");
         }
         const tipoItem = payload.tipo_item?.trim() || "Sem tipo";
 
@@ -474,7 +474,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
         });
 
         await queueService.limparOperacao(parsed.data.matricula, parsed.data.tipo);
-        await queueService.registrarResultado(parsed.data.matricula, true, "Emprestimo registrado");
+        await queueService.registrarResultado(parsed.data.matricula, true, "Empréstimo registrado");
         app.log.info({
           evento: "loan.created",
           matricula: parsed.data.matricula,
@@ -493,7 +493,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       });
 
       await queueService.limparOperacao(parsed.data.matricula, parsed.data.tipo);
-      await queueService.registrarResultado(parsed.data.matricula, true, "Devolucao registrada");
+      await queueService.registrarResultado(parsed.data.matricula, true, "Devolução registrada");
       app.log.info({
         evento: "return.created",
         matricula: parsed.data.matricula,
@@ -520,13 +520,13 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       const parsed = schema.safeParse(request.body);
 
       if (!parsed.success) {
-        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
       }
 
       const operador = request.user?.nomeCompleto;
 
       if (!operador) {
-        throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
+        throw new AppError(401, "UNAUTHENTICATED", "Sessão de operador inválida");
       }
 
       const result = await loanService.registrarEmprestimo({
@@ -564,13 +564,13 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       const parsed = schema.safeParse(request.body);
 
       if (!parsed.success) {
-        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
       }
 
       const operador = request.user?.nomeCompleto;
 
       if (!operador) {
-        throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
+        throw new AppError(401, "UNAUTHENTICATED", "Sessão de operador inválida");
       }
 
       const itemCodigos = [...new Set(parsed.data.item_codigos)];
@@ -626,12 +626,12 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
 
       const parsed = schema.safeParse(request.body);
       if (!parsed.success) {
-        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
       }
 
       const operador = request.user?.nomeCompleto;
       if (!operador) {
-        throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
+        throw new AppError(401, "UNAUTHENTICATED", "Sessão de operador inválida");
       }
 
       const row = await adminService.createItem({
@@ -668,12 +668,12 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
 
       const parsed = schema.safeParse(request.body);
       if (!parsed.success) {
-        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
       }
 
       const operador = request.user?.nomeCompleto;
       if (!operador) {
-        throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
+        throw new AppError(401, "UNAUTHENTICATED", "Sessão de operador inválida");
       }
 
       const row = await adminService.updateItem(params.codigo, {
@@ -702,7 +702,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       const params = z.object({ codigo: codigoItemSchema }).parse(request.params);
       const operador = request.user?.nomeCompleto;
       if (!operador) {
-        throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
+        throw new AppError(401, "UNAUTHENTICATED", "Sessão de operador inválida");
       }
 
       await adminService.deleteItem(params.codigo, operador);
@@ -765,13 +765,13 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       const parsed = schema.safeParse(request.body);
 
       if (!parsed.success) {
-        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
       }
 
       const operador = request.user?.nomeCompleto;
 
       if (!operador) {
-        throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
+        throw new AppError(401, "UNAUTHENTICATED", "Sessão de operador inválida");
       }
 
       const result = await sectorOperationService.registrarSaidaSetor({
@@ -812,13 +812,13 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       const parsed = schema.safeParse(request.body);
 
       if (!parsed.success) {
-        throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+        throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
       }
 
       const operador = request.user?.nomeCompleto;
 
       if (!operador) {
-        throw new AppError(401, "UNAUTHENTICATED", "Sessao de operador invalida");
+        throw new AppError(401, "UNAUTHENTICATED", "Sessão de operador inválida");
       }
 
       const result = await sectorOperationService.registrarDevolucaoSetor({
@@ -940,7 +940,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
       });
 
       if (!funcionario) {
-        throw new AppError(404, "FUNCIONARIO_NOT_FOUND", "Funcionario nao encontrado");
+        throw new AppError(404, "FUNCIONARIO_NOT_FOUND", "Funcionário não encontrado");
       }
 
       const kitsEmUso = await prisma.item.count({
@@ -1135,7 +1135,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
               tipo: "funcionario" as const,
               chave: funcionario.matricula,
               titulo: funcionario.nome,
-              subtitulo: `Funcionario | Matricula ${funcionario.matricula} | ${formatarUnidadeLabel(unidadesFuncionario)} | ${formatarSetorLabel(setoresFuncionario)} | ${formatarFuncaoLabel(funcoesFuncionario)} | ${funcionario.statusAtivo ? "Ativo" : "Inativo"}`,
+              subtitulo: `Funcionário | Matrícula ${funcionario.matricula} | ${formatarUnidadeLabel(unidadesFuncionario)} | ${formatarSetorLabel(setoresFuncionario)} | ${formatarFuncaoLabel(funcoesFuncionario)} | ${funcionario.statusAtivo ? "Ativo" : "Inativo"}`,
             };
           }),
           ...kits.map((kit) => ({
@@ -1148,7 +1148,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
               formatarDescricaoItem(kit.descricao),
               `Tam: ${kit.tamanho}`,
               `Status: ${kit.status}`,
-              kit.solicitanteMatricula ? `Matricula atual: ${kit.solicitanteMatricula}` : "",
+              kit.solicitanteMatricula ? `Matrícula atual: ${kit.solicitanteMatricula}` : "",
               kit.setorSolicitante ? `Setor atual: ${kit.setorSolicitante}` : "",
               kit.statusAtivo ? "" : "Inativo",
             ].filter(Boolean).join(" | "),
@@ -1157,19 +1157,19 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
             tipo: "setor" as const,
             chave: setor.nome,
             titulo: setor.nome,
-            subtitulo: `Setor | ${setor.statusAtivo ? "Ativo" : "Inativo"} | ${setor._count.unidades} unidades | ${setor._count.funcionarios} funcionarios`,
+            subtitulo: `Setor | ${setor.statusAtivo ? "Ativo" : "Inativo"} | ${setor._count.unidades} unidades | ${setor._count.funcionarios} funcionários`,
           })),
           ...unidades.map((unidade) => ({
             tipo: "unidade" as const,
             chave: unidade.nome,
             titulo: unidade.nome,
-            subtitulo: `Unidade | ${unidade.statusAtivo ? "Ativa" : "Inativa"} | ${unidade._count.setores} setores | ${unidade._count.funcionarios} funcionarios`,
+            subtitulo: `Unidade | ${unidade.statusAtivo ? "Ativa" : "Inativa"} | ${unidade._count.setores} setores | ${unidade._count.funcionarios} funcionários`,
           })),
           ...funcoes.map((funcao) => ({
             tipo: "funcao" as const,
             chave: funcao.nome,
             titulo: funcao.nome,
-            subtitulo: `Funcao | ${funcao.statusAtivo ? "Ativa" : "Inativa"} | ${funcao._count.funcionarios} funcionarios`,
+            subtitulo: `Função | ${funcao.statusAtivo ? "Ativa" : "Inativa"} | ${funcao._count.funcionarios} funcionários`,
           })),
         ];
 
@@ -1267,7 +1267,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
             tipo: "funcionario" as const,
             chave: funcionario.matricula,
             titulo: funcionario.nome,
-            subtitulo: `Matricula ${funcionario.matricula} | ${formatarUnidadeLabel(unidadesFuncionario)} | ${formatarSetorLabel(setoresFuncionario)} | ${formatarFuncaoLabel(funcoesFuncionario)}`,
+            subtitulo: `Matrícula ${funcionario.matricula} | ${formatarUnidadeLabel(unidadesFuncionario)} | ${formatarSetorLabel(setoresFuncionario)} | ${formatarFuncaoLabel(funcoesFuncionario)}`,
           };
         }),
         ...kits.map((kit) => ({
@@ -1279,7 +1279,7 @@ export const opsRoutes: FastifyPluginAsync = async (app) => {
             formatarDescricaoItem(kit.descricao),
             `Tam: ${kit.tamanho}`,
             `Status: ${kit.status}`,
-            kit.solicitanteMatricula ? `Matricula atual: ${kit.solicitanteMatricula}` : "",
+            kit.solicitanteMatricula ? `Matrícula atual: ${kit.solicitanteMatricula}` : "",
             kit.setorSolicitante ? `Setor atual: ${kit.setorSolicitante}` : "",
           ].filter(Boolean).join(" | "),
         })),

@@ -6,7 +6,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { DataTable } from "@/components/ui/data-table";
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableSortState,
+  sortDataTableRows,
+} from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { FormField } from "@/components/ui/form-field";
@@ -39,6 +44,10 @@ const FILTRO_BAR_CLASS = "gap-1.5 md:flex-nowrap md:items-end";
 const SECTION_HEADER_CLASS = "gap-2 px-3 pb-2 pt-3 sm:px-4 sm:pb-2 sm:pt-4";
 const SECTION_CONTENT_CLASS = "space-y-2.5 px-3 pb-3 pt-0 sm:px-4 sm:pb-4";
 
+function notificarAtualizacaoGlobal(entidade: "kit" | "funcionario" | "setor" | "unidade" | "funcao") {
+  window.dispatchEvent(new CustomEvent("global-detail-updated", { detail: { entidade } }));
+}
+
 export function UnidadesTab() {
   const [rows, setRows] = useState<CatalogoRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,6 +58,7 @@ export function UnidadesTab() {
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "inativo">("todos");
   const [paginaUnidades, setPaginaUnidades] = useState(1);
+  const [sortUnidades, setSortUnidades] = useState<DataTableSortState>(null);
   const [nomeNovo, setNomeNovo] = useState("");
   const [edicao, setEdicao] = useState({ nome: "", status_ativo: true });
   const [unidadeParaExcluir, setUnidadeParaExcluir] = useState<CatalogoRow | null>(null);
@@ -84,19 +94,35 @@ export function UnidadesTab() {
       return matchTexto && matchStatus;
     });
   }, [rows, busca, filtroStatus]);
+  const colunasUnidades = useMemo<DataTableColumn<CatalogoRow>[]>(() => [
+    { key: "nome", title: "Nome", width: "45%", sortValue: (row) => row.nome },
+    {
+      key: "total",
+      title: "Total funcionários",
+      align: "center",
+      width: "17%",
+      sortValue: (row) => row.totalFuncionarios ?? 0,
+    },
+    { key: "status", title: "Status", align: "center", width: "18%", sortValue: (row) => row.statusAtivo },
+    { key: "acoes", title: "Acoes", align: "center", width: "20%" },
+  ], []);
+  const rowsOrdenadas = useMemo(
+    () => sortDataTableRows(rowsFiltradas, colunasUnidades, sortUnidades),
+    [rowsFiltradas, colunasUnidades, sortUnidades],
+  );
 
   const ativosFiltrados = useMemo(
     () => rowsFiltradas.filter((row) => row.statusAtivo).length,
     [rowsFiltradas],
   );
   const inativosFiltrados = rowsFiltradas.length - ativosFiltrados;
-  const totalPaginasUnidades = Math.max(1, Math.ceil(rowsFiltradas.length / UNIDADES_POR_PAGINA));
+  const totalPaginasUnidades = Math.max(1, Math.ceil(rowsOrdenadas.length / UNIDADES_POR_PAGINA));
   const rowsPaginadas = useMemo(() => {
     const inicio = (paginaUnidades - 1) * UNIDADES_POR_PAGINA;
-    return rowsFiltradas.slice(inicio, inicio + UNIDADES_POR_PAGINA);
-  }, [rowsFiltradas, paginaUnidades]);
-  const inicioPaginaUnidades = rowsFiltradas.length === 0 ? 0 : (paginaUnidades - 1) * UNIDADES_POR_PAGINA + 1;
-  const fimPaginaUnidades = Math.min(paginaUnidades * UNIDADES_POR_PAGINA, rowsFiltradas.length);
+    return rowsOrdenadas.slice(inicio, inicio + UNIDADES_POR_PAGINA);
+  }, [rowsOrdenadas, paginaUnidades]);
+  const inicioPaginaUnidades = rowsOrdenadas.length === 0 ? 0 : (paginaUnidades - 1) * UNIDADES_POR_PAGINA + 1;
+  const fimPaginaUnidades = Math.min(paginaUnidades * UNIDADES_POR_PAGINA, rowsOrdenadas.length);
 
   useEffect(() => {
     setPaginaUnidades(1);
@@ -126,7 +152,7 @@ export function UnidadesTab() {
       setFuncionariosUnidade(data.rows);
       setTotalFuncionariosUnidade(data.total);
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao carregar funcionarios da unidade");
+      error(err instanceof Error ? err.message : "Erro ao carregar funcionários da unidade");
     } finally {
       setLoadingFuncionariosUnidade(false);
     }
@@ -176,6 +202,7 @@ export function UnidadesTab() {
       setOpenCreateModal(false);
       success("Unidade criada com sucesso");
       await carregar();
+      notificarAtualizacaoGlobal("unidade");
     } catch (err) {
       error(err instanceof Error ? err.message : "Erro ao criar unidade");
     } finally {
@@ -209,6 +236,7 @@ export function UnidadesTab() {
       success("Unidade atualizada");
       fecharEdicao();
       await carregar();
+      notificarAtualizacaoGlobal("unidade");
     } catch (err) {
       error(err instanceof Error ? err.message : "Erro ao atualizar unidade");
     } finally {
@@ -221,6 +249,7 @@ export function UnidadesTab() {
       await api.del(`/admin/unidades/${row.id}`);
       success("Unidade apagada");
       await carregar();
+      notificarAtualizacaoGlobal("unidade");
     } catch (err) {
       error(err instanceof Error ? err.message : "Erro ao apagar unidade");
     }
@@ -273,19 +302,10 @@ export function UnidadesTab() {
       >
         <div className="hidden md:block">
           <DataTable
-            columns={[
-              { key: "nome", title: "Nome", width: "45%", sortValue: (row) => row.nome },
-              {
-                key: "total",
-                title: "Total funcionarios",
-                align: "center",
-                width: "17%",
-                sortValue: (row) => row.totalFuncionarios ?? 0,
-              },
-              { key: "status", title: "Status", align: "center", width: "18%", sortValue: (row) => row.statusAtivo },
-              { key: "acoes", title: "Acoes", align: "center", width: "20%" },
-            ]}
+            columns={colunasUnidades}
             rows={rowsPaginadas}
+            sortState={sortUnidades}
+            onSortStateChange={setSortUnidades}
             getRowKey={(row) => row.id}
             onRowClick={(row) => abrirFuncionariosUnidade(row)}
             loading={loading}
@@ -366,7 +386,7 @@ export function UnidadesTab() {
                   </StatusPill>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Funcionarios vinculados: <span className="font-semibold text-foreground">{row.totalFuncionarios ?? 0}</span>
+                  Funcionários vinculados: <span className="font-semibold text-foreground">{row.totalFuncionarios ?? 0}</span>
                 </p>
                 <div className="mt-2 flex justify-end gap-1.5">
                   <Button
@@ -403,7 +423,7 @@ export function UnidadesTab() {
 
         <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[10px] text-muted-foreground">
-            {inicioPaginaUnidades}-{fimPaginaUnidades} de {rowsFiltradas.length} | Pagina {paginaUnidades} de {totalPaginasUnidades}
+            {inicioPaginaUnidades}-{fimPaginaUnidades} de {rowsFiltradas.length} | Página {paginaUnidades} de {totalPaginasUnidades}
           </p>
           <div className="flex min-w-[220px] justify-end gap-2">
             <Button
@@ -424,7 +444,7 @@ export function UnidadesTab() {
               onClick={() => setPaginaUnidades((paginaAtual) => Math.min(totalPaginasUnidades, paginaAtual + 1))}
               disabled={paginaUnidades === totalPaginasUnidades}
             >
-              Proxima
+              Próxima
             </Button>
           </div>
         </div>
@@ -433,14 +453,14 @@ export function UnidadesTab() {
       <Modal
         open={Boolean(unidadeSelecionada)}
         onClose={() => setUnidadeSelecionada(null)}
-        title={unidadeSelecionada ? `Funcionarios vinculados - ${unidadeSelecionada.nome}` : "Funcionarios vinculados"}
-        description="Lista de funcionarios atualmente associados a esta unidade."
+        title={unidadeSelecionada ? `Funcionários vinculados - ${unidadeSelecionada.nome}` : "Funcionários vinculados"}
+        description="Lista de funcionários atualmente associados a esta unidade."
         maxWidthClassName="max-w-5xl"
       >
         <div className="space-y-4">
-          <h4 className="text-sm font-semibold text-foreground">Funcionarios vinculados</h4>
+          <h4 className="text-sm font-semibold text-foreground">Funcionários vinculados</h4>
           <div className="text-[11px] text-muted-foreground">
-            {inicioFuncionariosUnidade}-{fimFuncionariosUnidade} de {totalFuncionariosUnidade} | Pagina{" "}
+            {inicioFuncionariosUnidade}-{fimFuncionariosUnidade} de {totalFuncionariosUnidade} | Página{" "}
             {paginaFuncionariosUnidade} de {totalPaginasFuncionariosUnidade}
           </div>
 
@@ -457,7 +477,7 @@ export function UnidadesTab() {
               </div>
             ) : funcionariosUnidade.length === 0 ? (
               <div className="rounded-xl border border-border/70 bg-surface-2/80 px-3 py-5">
-                <EmptyState compact title="Nenhum funcionario vinculado." />
+                <EmptyState compact title="Nenhum funcionário vinculado." />
               </div>
             ) : (
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -508,7 +528,7 @@ export function UnidadesTab() {
               }
               disabled={paginaFuncionariosUnidade >= totalPaginasFuncionariosUnidade || loadingFuncionariosUnidade}
             >
-              Proxima
+              Próxima
             </Button>
           </div>
         </div>
@@ -518,7 +538,7 @@ export function UnidadesTab() {
         open={openCreateModal}
         onClose={() => setOpenCreateModal(false)}
         title="Nova Unidade"
-        description="Crie uma unidade para organizar setores e funcionarios."
+        description="Crie uma unidade para organizar setores e funcionários."
         maxWidthClassName="max-w-xl"
       >
         <div className="space-y-3">
@@ -597,3 +617,4 @@ export function UnidadesTab() {
     </div>
   );
 }
+

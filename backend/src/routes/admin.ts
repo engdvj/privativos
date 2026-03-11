@@ -19,12 +19,12 @@ const tipoItemSchema = z
   .string()
   .max(100)
   .transform((value) => value.trim().replace(/\s+/g, " "))
-  .refine((value) => value.length > 0, "Tipo do item invalido");
+  .refine((value) => value.length > 0, "Tipo do item inválido");
 const codigoItemSchema = z
   .string()
   .max(50)
   .transform((value) => value.trim())
-  .refine((value) => value.length > 0, "Codigo do item invalido");
+  .refine((value) => value.length > 0, "Código do item inválido");
 const unidadesSchema = z.array(z.string().min(1).max(100)).min(1);
 const setoresSchema = z.array(z.string().min(1).max(100)).min(1);
 const funcoesSchema = z.array(z.string().min(1).max(100)).min(1);
@@ -50,7 +50,7 @@ const funcionarioCreateSchema = z
     message: "Informe ao menos um setor",
   })
   .refine((data) => Boolean(data.funcao_principal || data.funcao || data.funcoes?.length), {
-    message: "Informe ao menos uma funcao",
+    message: "Informe ao menos uma função",
   });
 
 const funcionarioUpdateSchema = z.object({
@@ -313,12 +313,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.post("/admin/funcionarios", async (request, reply) => {
     const parsed = funcionarioCreateSchema.safeParse(request.body);
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const row = await adminService.createFuncionario({
@@ -340,12 +340,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const parsed = funcionarioUpdateSchema.safeParse(request.body);
 
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const row = await adminService.updateFuncionario(params.matricula, {
@@ -367,7 +367,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const params = z.object({ matricula: z.string().min(1).max(20) }).parse(request.params);
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
     await adminService.deleteFuncionario(params.matricula, operador);
     return reply.status(204).send();
@@ -402,12 +402,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.post("/admin/unidades", async (request, reply) => {
     const parsed = catalogoCreateSchema.safeParse(request.body);
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const row = await adminService.createUnidade({ nome: parsed.data.nome, operador });
@@ -418,12 +418,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const params = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
     const parsed = catalogoUpdateSchema.safeParse(request.body);
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const row = await adminService.updateUnidade(params.id, {
@@ -438,7 +438,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const params = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
     await adminService.deleteUnidade(params.id, operador);
     return reply.status(204).send();
@@ -461,12 +461,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.post("/admin/setores", async (request, reply) => {
     const parsed = setorCreateSchema.safeParse(request.body);
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const row = await adminService.createSetor({
@@ -481,12 +481,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const params = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
     const parsed = setorUpdateSchema.safeParse(request.body);
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const row = await adminService.updateSetor(params.id, {
@@ -502,7 +502,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const params = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
     await adminService.deleteSetor(params.id, operador);
     return reply.status(204).send();
@@ -531,12 +531,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.post("/admin/funcoes", async (request, reply) => {
     const parsed = catalogoCreateSchema.safeParse(request.body);
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const row = await adminService.createFuncao({ nome: parsed.data.nome, operador });
@@ -547,12 +547,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const params = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
     const parsed = catalogoUpdateSchema.safeParse(request.body);
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const row = await adminService.updateFuncao(params.id, {
@@ -567,7 +567,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const params = z.object({ id: z.coerce.number().int().positive() }).parse(request.params);
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
     await adminService.deleteFuncao(params.id, operador);
     return reply.status(204).send();
@@ -582,12 +582,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.post("/admin/itens", async (request, reply) => {
     const parsed = itemCreateSchema.safeParse(request.body);
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const row = await adminService.createItem({
@@ -606,12 +606,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const parsed = itemUpdateSchema.safeParse(request.body);
 
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const row = await adminService.updateItem(params.codigo, {
@@ -633,7 +633,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const params = z.object({ codigo: codigoItemSchema }).parse(request.params);
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
     await adminService.deleteItem(params.codigo, operador);
     return reply.status(204).send();
@@ -649,12 +649,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     ensureSuperadmin(request);
     const parsed = credencialCreateSchema.safeParse(request.body);
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const row = await adminService.createCredencial({
@@ -674,12 +674,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const parsed = credencialUpdateSchema.safeParse(request.body);
 
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const row = await adminService.updateCredencial(params.usuario, {
@@ -699,12 +699,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     const params = z.object({ usuario: z.string().min(1).max(100) }).parse(request.params);
 
     if (request.user?.usuario === params.usuario) {
-      throw new AppError(400, "INVALID_OPERATION", "Nao e permitido apagar a propria credencial");
+      throw new AppError(400, "INVALID_OPERATION", "Não é permitido apagar a própria credencial");
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     await adminService.deleteCredencial(params.usuario, operador);
@@ -721,12 +721,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     ensureSuperadmin(request);
     const parsed = configUpdateSchema.safeParse(request.body);
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const row = await adminService.setMaxKitsPorFuncionario(parsed.data.max_kits_por_funcionario, operador);
@@ -737,12 +737,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     ensureSuperadmin(request);
     const parsed = configResetSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const rows = await adminService.resetConfiguracoes(parsed.data.chaves, operador);
@@ -753,7 +753,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     ensureSuperadmin(request);
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const backup = await adminService.gerarBackupBanco(operador);
@@ -764,12 +764,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     ensureSuperadmin(request);
     const parsed = maintenanceResetSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const result = await adminService.resetBanco({
@@ -786,20 +786,20 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     ensureSuperadmin(request);
     const parsed = maintenanceRestoreSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     if (parsed.data.backup.versao_formato !== BACKUP_FORMAT_VERSION) {
       throw new AppError(
         400,
         "INVALID_PAYLOAD",
-        `Versao de backup invalida. Esperado ${BACKUP_FORMAT_VERSION}.`,
+        `Versão de backup inválida. Esperado ${BACKUP_FORMAT_VERSION}.`,
       );
     }
 
     const operador = request.user?.nomeCompleto;
     if (!operador) {
-      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+      throw new AppError(401, "UNAUTHENTICATED", "Sessão inválida");
     }
 
     const result = await adminService.restaurarBanco({
@@ -822,7 +822,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.post("/admin/dashboard", async (request, reply) => {
     const parsed = dashboardFiltrosSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const data = await dashboardService.getData(parsed.data);
@@ -837,7 +837,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   app.post("/admin/export", async (request, reply) => {
     const parsed = dashboardFiltrosSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const xlsx = await exportService.gerarXlsx(parsed.data);

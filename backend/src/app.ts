@@ -72,7 +72,7 @@ export function buildApp() {
     }
 
     if (error instanceof ZodError) {
-      return reply.status(400).send({ erro: "Payload invalido", detalhes: error.flatten() });
+      return reply.status(400).send({ erro: "Payload inválido", detalhes: error.flatten() });
     }
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -82,13 +82,13 @@ export function buildApp() {
 
       if (error.code === "P2003") {
         return reply.status(409).send({
-          erro: "Registro possui dependencias e nao pode ser removido",
+          erro: "Registro possui dependências e não pode ser removido",
           codigo: "FOREIGN_KEY_CONFLICT",
         });
       }
 
       if (error.code === "P2025") {
-        return reply.status(404).send({ erro: "Registro nao encontrado", codigo: "NOT_FOUND" });
+        return reply.status(404).send({ erro: "Registro não encontrado", codigo: "NOT_FOUND" });
       }
     }
 
@@ -101,7 +101,7 @@ export function buildApp() {
     app.setNotFoundHandler(async (request, reply) => {
       const apiPrefixes = ["/auth/", "/ops/", "/admin/", "/health"];
       if (apiPrefixes.some((p) => request.url.startsWith(p))) {
-        return reply.status(404).send({ erro: "Rota nao encontrada" });
+        return reply.status(404).send({ erro: "Rota não encontrada" });
       }
       return reply.sendFile("index.html");
     });

@@ -6,7 +6,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { DataTable } from "@/components/ui/data-table";
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableSortState,
+  sortDataTableRows,
+} from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { FormField } from "@/components/ui/form-field";
@@ -31,6 +36,10 @@ const SECTION_CONTENT_CLASS = "space-y-2.5 px-3 pb-3 pt-0 sm:px-4 sm:pb-4";
 const FUNCOES_POR_PAGINA = 10;
 const FUNCIONARIOS_POR_PAGINA = 10;
 
+function notificarAtualizacaoGlobal(entidade: "kit" | "funcionario" | "setor" | "unidade" | "funcao") {
+  window.dispatchEvent(new CustomEvent("global-detail-updated", { detail: { entidade } }));
+}
+
 interface FuncaoFuncionariosResponse {
   pagina: number;
   limite: number;
@@ -48,6 +57,7 @@ export function FuncoesTab() {
   const [busca, setBusca] = useState("");
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "inativo">("todos");
   const [paginaFuncoes, setPaginaFuncoes] = useState(1);
+  const [sortFuncoes, setSortFuncoes] = useState<DataTableSortState>(null);
   const [nomeNovo, setNomeNovo] = useState("");
   const [edicao, setEdicao] = useState({ nome: "", status_ativo: true });
   const [funcaoParaExcluir, setFuncaoParaExcluir] = useState<CatalogoRow | null>(null);
@@ -65,7 +75,7 @@ export function FuncoesTab() {
       const data = await api.get<CatalogoRow[]>("/admin/funcoes?include_inactive=true");
       setRows(data);
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao carregar funcoes");
+      error(err instanceof Error ? err.message : "Erro ao carregar funções");
     } finally {
       setLoading(false);
     }
@@ -83,19 +93,35 @@ export function FuncoesTab() {
       return matchTexto && matchStatus;
     });
   }, [rows, busca, filtroStatus]);
+  const colunasFuncoes = useMemo<DataTableColumn<CatalogoRow>[]>(() => [
+    { key: "nome", title: "Nome", width: "44%", sortValue: (row) => row.nome },
+    {
+      key: "total",
+      title: "Total funcionários",
+      align: "center",
+      width: "18%",
+      sortValue: (row) => row.totalFuncionarios ?? 0,
+    },
+    { key: "status", title: "Status", align: "center", width: "18%", sortValue: (row) => row.statusAtivo },
+    { key: "acoes", title: "Acoes", align: "center", width: "20%" },
+  ], []);
+  const rowsOrdenadas = useMemo(
+    () => sortDataTableRows(rowsFiltradas, colunasFuncoes, sortFuncoes),
+    [rowsFiltradas, colunasFuncoes, sortFuncoes],
+  );
 
   const ativosFiltrados = useMemo(
     () => rowsFiltradas.filter((row) => row.statusAtivo).length,
     [rowsFiltradas],
   );
   const inativosFiltrados = rowsFiltradas.length - ativosFiltrados;
-  const totalPaginasFuncoes = Math.max(1, Math.ceil(rowsFiltradas.length / FUNCOES_POR_PAGINA));
+  const totalPaginasFuncoes = Math.max(1, Math.ceil(rowsOrdenadas.length / FUNCOES_POR_PAGINA));
   const rowsPaginadas = useMemo(() => {
     const inicio = (paginaFuncoes - 1) * FUNCOES_POR_PAGINA;
-    return rowsFiltradas.slice(inicio, inicio + FUNCOES_POR_PAGINA);
-  }, [rowsFiltradas, paginaFuncoes]);
-  const inicioPaginaFuncoes = rowsFiltradas.length === 0 ? 0 : (paginaFuncoes - 1) * FUNCOES_POR_PAGINA + 1;
-  const fimPaginaFuncoes = Math.min(paginaFuncoes * FUNCOES_POR_PAGINA, rowsFiltradas.length);
+    return rowsOrdenadas.slice(inicio, inicio + FUNCOES_POR_PAGINA);
+  }, [rowsOrdenadas, paginaFuncoes]);
+  const inicioPaginaFuncoes = rowsOrdenadas.length === 0 ? 0 : (paginaFuncoes - 1) * FUNCOES_POR_PAGINA + 1;
+  const fimPaginaFuncoes = Math.min(paginaFuncoes * FUNCOES_POR_PAGINA, rowsOrdenadas.length);
 
   useEffect(() => {
     setPaginaFuncoes(1);
@@ -125,7 +151,7 @@ export function FuncoesTab() {
       setFuncionariosFuncao(data.rows);
       setTotalFuncionariosFuncao(data.total);
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao carregar funcionarios da funcao");
+      error(err instanceof Error ? err.message : "Erro ao carregar funcionários da função");
     } finally {
       setLoadingFuncionariosFuncao(false);
     }
@@ -164,7 +190,7 @@ export function FuncoesTab() {
 
   async function criar() {
     if (!nomeNovo.trim()) {
-      error("Informe o nome da funcao");
+      error("Informe o nome da função");
       return;
     }
 
@@ -173,10 +199,11 @@ export function FuncoesTab() {
       await api.post("/admin/funcoes", { nome: nomeNovo.trim() });
       setNomeNovo("");
       setOpenCreateModal(false);
-      success("Funcao criada com sucesso");
+      success("Função criada com sucesso");
       await carregar();
+      notificarAtualizacaoGlobal("funcao");
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao criar funcao");
+      error(err instanceof Error ? err.message : "Erro ao criar função");
     } finally {
       setCreating(false);
     }
@@ -195,7 +222,7 @@ export function FuncoesTab() {
   async function salvarEdicao() {
     if (!editandoId) return;
     if (!edicao.nome.trim()) {
-      error("Informe o nome da funcao");
+      error("Informe o nome da função");
       return;
     }
 
@@ -205,11 +232,12 @@ export function FuncoesTab() {
         nome: edicao.nome.trim(),
         status_ativo: edicao.status_ativo,
       });
-      success("Funcao atualizada");
+      success("Função atualizada");
       fecharEdicao();
       await carregar();
+      notificarAtualizacaoGlobal("funcao");
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao atualizar funcao");
+      error(err instanceof Error ? err.message : "Erro ao atualizar função");
     } finally {
       setSavingId(null);
     }
@@ -218,17 +246,18 @@ export function FuncoesTab() {
   async function apagar(row: CatalogoRow) {
     try {
       await api.del(`/admin/funcoes/${row.id}`);
-      success("Funcao apagada");
+      success("Função apagada");
       await carregar();
+      notificarAtualizacaoGlobal("funcao");
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao apagar funcao");
+      error(err instanceof Error ? err.message : "Erro ao apagar função");
     }
   }
 
   return (
     <div className="space-y-3">
       <SectionCard
-        title={<span className="text-sm font-semibold">Funcoes</span>}
+        title={<span className="text-sm font-semibold">Funções</span>}
         icon={UserCog}
         description={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
@@ -245,7 +274,7 @@ export function FuncoesTab() {
             <Input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar funcao"
+              placeholder="Buscar função"
               className={`${FILTRO_INPUT_CLASS} w-full sm:w-56`}
             />
             <Select value={filtroStatus} onValueChange={(value) => setFiltroStatus(value as "todos" | "ativo" | "inativo")}>
@@ -262,8 +291,8 @@ export function FuncoesTab() {
               size="icon"
               className="h-8 w-8 shrink-0 rounded-lg border-0 bg-primary text-primary-foreground shadow-[var(--shadow-soft)] transition-all duration-200 hover:bg-sky-500 hover:animate-pulse"
               onClick={() => setOpenCreateModal(true)}
-              aria-label="Nova funcao"
-              title="Nova funcao"
+              aria-label="Nova função"
+              title="Nova função"
             >
               <Plus className="h-4 w-4" />
             </Button>
@@ -272,23 +301,14 @@ export function FuncoesTab() {
       >
         <div className="hidden md:block">
           <DataTable
-            columns={[
-              { key: "nome", title: "Nome", width: "44%", sortValue: (row) => row.nome },
-              {
-                key: "total",
-                title: "Total funcionarios",
-                align: "center",
-                width: "18%",
-                sortValue: (row) => row.totalFuncionarios ?? 0,
-              },
-              { key: "status", title: "Status", align: "center", width: "18%", sortValue: (row) => row.statusAtivo },
-              { key: "acoes", title: "Acoes", align: "center", width: "20%" },
-            ]}
+            columns={colunasFuncoes}
             rows={rowsPaginadas}
+            sortState={sortFuncoes}
+            onSortStateChange={setSortFuncoes}
             getRowKey={(row) => row.id}
             onRowClick={(row) => abrirFuncionariosFuncao(row)}
             loading={loading}
-            emptyMessage="Nenhuma funcao encontrada."
+            emptyMessage="Nenhuma função encontrada."
             minWidthClassName="min-w-[760px]"
             containerClassName={TABELA_DENSE_CLASS}
             renderRow={(row) => (
@@ -311,7 +331,7 @@ export function FuncoesTab() {
                       variant="ghost"
                       className="h-8 w-8 rounded-lg"
                       onClick={() => abrirEdicao(row)}
-                      aria-label={`Editar funcao ${row.nome}`}
+                      aria-label={`Editar função ${row.nome}`}
                       title="Editar"
                     >
                       <Pencil className="h-4 w-4" />
@@ -321,7 +341,7 @@ export function FuncoesTab() {
                       variant="ghost"
                       className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/12 hover:text-destructive"
                       onClick={() => setFuncaoParaExcluir(row)}
-                      aria-label={`Apagar funcao ${row.nome}`}
+                      aria-label={`Apagar função ${row.nome}`}
                       title="Apagar"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -344,7 +364,7 @@ export function FuncoesTab() {
             ))
           ) : rowsFiltradas.length === 0 ? (
             <div className="rounded-xl border border-border/70 bg-surface-2/80 px-3 py-5">
-              <EmptyState compact title="Nenhuma funcao encontrada." />
+              <EmptyState compact title="Nenhuma função encontrada." />
             </div>
           ) : (
             rowsPaginadas.map((row) => (
@@ -365,7 +385,7 @@ export function FuncoesTab() {
                   </StatusPill>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Funcionarios vinculados: <span className="font-semibold text-foreground">{row.totalFuncionarios ?? 0}</span>
+                  Funcionários vinculados: <span className="font-semibold text-foreground">{row.totalFuncionarios ?? 0}</span>
                 </p>
                 <div className="mt-2 flex justify-end gap-1.5">
                   <Button
@@ -381,7 +401,7 @@ export function FuncoesTab() {
                     variant="ghost"
                     className="h-8 w-8 rounded-lg"
                     onClick={() => abrirEdicao(row)}
-                    aria-label={`Editar funcao ${row.nome}`}
+                    aria-label={`Editar função ${row.nome}`}
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
@@ -390,7 +410,7 @@ export function FuncoesTab() {
                     variant="ghost"
                     className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/12 hover:text-destructive"
                     onClick={() => setFuncaoParaExcluir(row)}
-                    aria-label={`Apagar funcao ${row.nome}`}
+                    aria-label={`Apagar função ${row.nome}`}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -402,7 +422,7 @@ export function FuncoesTab() {
 
         <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[10px] text-muted-foreground">
-            {inicioPaginaFuncoes}-{fimPaginaFuncoes} de {rowsFiltradas.length} | Pagina {paginaFuncoes} de {totalPaginasFuncoes}
+            {inicioPaginaFuncoes}-{fimPaginaFuncoes} de {rowsFiltradas.length} | Página {paginaFuncoes} de {totalPaginasFuncoes}
           </p>
           <div className="flex min-w-[220px] justify-end gap-2">
             <Button
@@ -423,7 +443,7 @@ export function FuncoesTab() {
               onClick={() => setPaginaFuncoes((paginaAtual) => Math.min(totalPaginasFuncoes, paginaAtual + 1))}
               disabled={paginaFuncoes === totalPaginasFuncoes}
             >
-              Proxima
+              Próxima
             </Button>
           </div>
         </div>
@@ -432,14 +452,14 @@ export function FuncoesTab() {
       <Modal
         open={Boolean(funcaoSelecionada)}
         onClose={() => setFuncaoSelecionada(null)}
-        title={funcaoSelecionada ? `Funcionarios vinculados - ${funcaoSelecionada.nome}` : "Funcionarios vinculados"}
-        description="Lista de funcionarios atualmente associados a esta funcao."
+        title={funcaoSelecionada ? `Funcionários vinculados - ${funcaoSelecionada.nome}` : "Funcionários vinculados"}
+        description="Lista de funcionários atualmente associados a esta função."
         maxWidthClassName="max-w-5xl"
       >
         <div className="space-y-4">
-          <h4 className="text-sm font-semibold text-foreground">Funcionarios vinculados</h4>
+          <h4 className="text-sm font-semibold text-foreground">Funcionários vinculados</h4>
           <div className="text-[11px] text-muted-foreground">
-            {inicioFuncionariosFuncao}-{fimFuncionariosFuncao} de {totalFuncionariosFuncao} | Pagina{" "}
+            {inicioFuncionariosFuncao}-{fimFuncionariosFuncao} de {totalFuncionariosFuncao} | Página{" "}
             {paginaFuncionariosFuncao} de {totalPaginasFuncionariosFuncao}
           </div>
 
@@ -456,7 +476,7 @@ export function FuncoesTab() {
               </div>
             ) : funcionariosFuncao.length === 0 ? (
               <div className="rounded-xl border border-border/70 bg-surface-2/80 px-3 py-5">
-                <EmptyState compact title="Nenhum funcionario vinculado." />
+                <EmptyState compact title="Nenhum funcionário vinculado." />
               </div>
             ) : (
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -507,7 +527,7 @@ export function FuncoesTab() {
               }
               disabled={paginaFuncionariosFuncao >= totalPaginasFuncionariosFuncao || loadingFuncionariosFuncao}
             >
-              Proxima
+              Próxima
             </Button>
           </div>
         </div>
@@ -516,17 +536,17 @@ export function FuncoesTab() {
       <Modal
         open={openCreateModal}
         onClose={() => setOpenCreateModal(false)}
-        title="Nova Funcao"
-        description="Crie uma funcao para associacao de colaboradores."
+        title="Nova Função"
+        description="Crie uma função para associação de colaboradores."
         maxWidthClassName="max-w-xl"
       >
         <div className="space-y-3">
-          <FormField label="Nome da funcao" htmlFor="nova-funcao-nome">
+          <FormField label="Nome da função" htmlFor="nova-funcao-nome">
             <Input
               id="nova-funcao-nome"
               value={nomeNovo}
               onChange={(e) => setNomeNovo(e.target.value)}
-              placeholder="Nome da funcao"
+              placeholder="Nome da função"
               className="h-9 text-xs"
             />
           </FormField>
@@ -545,8 +565,8 @@ export function FuncoesTab() {
       <Modal
         open={Boolean(editandoId)}
         onClose={fecharEdicao}
-        title="Editar Funcao"
-        description="Atualize o nome e o status da funcao."
+        title="Editar Função"
+        description="Atualize o nome e o status da função."
         maxWidthClassName="max-w-xl"
       >
         <div className="space-y-3">
@@ -580,10 +600,10 @@ export function FuncoesTab() {
       <ConfirmDialog
         open={Boolean(funcaoParaExcluir)}
         onClose={() => setFuncaoParaExcluir(null)}
-        title="Apagar funcao"
+        title="Apagar função"
         description={
           funcaoParaExcluir
-            ? `Tem certeza que deseja apagar a funcao ${funcaoParaExcluir.nome}?`
+            ? `Tem certeza que deseja apagar a função ${funcaoParaExcluir.nome}?`
             : undefined
         }
         confirmLabel="Apagar"

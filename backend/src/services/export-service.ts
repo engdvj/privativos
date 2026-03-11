@@ -27,7 +27,7 @@ function origemLabel(origem: string) {
 }
 
 function tipoLabel(tipo: TipoMovimentacao) {
-  return tipo === "emprestimo" ? "Emprestimo" : "Devolucao";
+  return tipo === "emprestimo" ? "Empréstimo" : "Devolução";
 }
 
 function texto(value: string | null | undefined) {
@@ -60,15 +60,15 @@ function formatPeriodo(filtros: DashboardFiltros) {
   const inicio = filtros.data_inicio?.trim() ?? "";
   const fim = filtros.data_fim?.trim() ?? "";
   if (inicio && fim) {
-    return `${inicio} ate ${fim}`;
+    return `${inicio} até ${fim}`;
   }
   if (inicio) {
     return `a partir de ${inicio}`;
   }
   if (fim) {
-    return `ate ${fim}`;
+    return `até ${fim}`;
   }
-  return "Periodo completo";
+  return "Período completo";
 }
 
 export class ExportService {
@@ -139,7 +139,7 @@ export class ExportService {
 
     worksheet.mergeCells("A1:H1");
     const title = worksheet.getCell("A1");
-    title.value = "Relatorio do Dashboard - Privativos";
+    title.value = "Relatório do Dashboard - Privativos";
     title.font = { size: 16, bold: true, color: { argb: "FFFFFFFF" } };
     title.fill = {
       type: "pattern",
@@ -150,7 +150,7 @@ export class ExportService {
     worksheet.getRow(1).height = 30;
 
     this.renderInfoRow(worksheet, 3, "Entidade foco", `${focus.entidade}: ${focus.valor}`);
-    this.renderInfoRow(worksheet, 4, "Periodo", formatPeriodo(filtros));
+    this.renderInfoRow(worksheet, 4, "Período", formatPeriodo(filtros));
     this.renderInfoRow(worksheet, 5, "Gerado em (UTC)", formatDateTimePtBr(dateFromIso(data.gerado_em)));
     this.renderInfoRow(
       worksheet,
@@ -159,9 +159,9 @@ export class ExportService {
       focus.filtrosAtivos.length > 0 ? focus.filtrosAtivos.join(" | ") : "Nenhum",
     );
 
-    this.renderCard(worksheet, "A8:B10", "Total movimentacoes", totalMovimentacoes, "FF12324F");
-    this.renderCard(worksheet, "C8:D10", "Emprestimos", data.kpis.total_emprestimos, "FF1B5E20");
-    this.renderCard(worksheet, "E8:F10", "Devolucoes", data.kpis.total_devolucoes, "FF004D40");
+    this.renderCard(worksheet, "A8:B10", "Total movimentações", totalMovimentacoes, "FF12324F");
+    this.renderCard(worksheet, "C8:D10", "Empréstimos", data.kpis.total_emprestimos, "FF1B5E20");
+    this.renderCard(worksheet, "E8:F10", "Devoluções", data.kpis.total_devolucoes, "FF004D40");
     this.renderCard(worksheet, "G8:H10", "Itens emprestados", data.kpis.itens_emprestados, "FF4A148C");
   }
 
@@ -213,8 +213,8 @@ export class ExportService {
       { header: "Tipo", key: "tipo", width: 14 },
       { header: "Status", key: "status", width: 14 },
       { header: "Origem", key: "origem", width: 14 },
-      { header: "Matricula", key: "matricula", width: 14 },
-      { header: "Funcionario", key: "funcionario", width: 32 },
+      { header: "Matrícula", key: "matricula", width: 14 },
+      { header: "Funcionário", key: "funcionario", width: 32 },
       { header: "Unidade", key: "unidade", width: 24 },
       { header: "Setor", key: "setor", width: 24 },
       { header: "Item", key: "item", width: 18 },
@@ -232,7 +232,7 @@ export class ExportService {
       const matricula = filtros.matricula.trim();
       const funcionario = movimentacoes.find((row) => row.matricula === matricula)?.funcionario;
       return {
-        entidade: "Funcionario",
+        entidade: "Funcionário",
         valor: funcionario ? `${matricula} - ${funcionario}` : matricula,
         filtrosAtivos,
       };
@@ -251,12 +251,12 @@ export class ExportService {
     }
 
     if (filtros.data_inicio || filtros.data_fim) {
-      return { entidade: "Periodo", valor: formatPeriodo(filtros), filtrosAtivos };
+      return { entidade: "Período", valor: formatPeriodo(filtros), filtrosAtivos };
     }
 
     return {
-      entidade: "Visao geral",
-      valor: "Sem recorte especifico",
+      entidade: "Visão geral",
+      valor: "Sem recorte específico",
       filtrosAtivos,
     };
   }
@@ -264,7 +264,7 @@ export class ExportService {
   private activeFilterLabels(filtros: DashboardFiltros) {
     const labels: string[] = [];
     if (filtros.data_inicio) {
-      labels.push(`Data inicio: ${filtros.data_inicio}`);
+      labels.push(`Data início: ${filtros.data_inicio}`);
     }
     if (filtros.data_fim) {
       labels.push(`Data fim: ${filtros.data_fim}`);
@@ -276,7 +276,7 @@ export class ExportService {
       labels.push(`Setor: ${filtros.setor}`);
     }
     if (filtros.matricula) {
-      labels.push(`Matricula: ${filtros.matricula}`);
+      labels.push(`Matrícula: ${filtros.matricula}`);
     }
     if (filtros.origem) {
       labels.push(`Origem: ${origemLabel(filtros.origem)}`);

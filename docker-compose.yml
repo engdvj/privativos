@@ -4,23 +4,43 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     image: reunir-v2:latest
+    restart: unless-stopped
     ports:
       - "3000:3000"
-    env_file:
-      - .env
+    environment:
+      DATABASE_URL: postgresql://reunir:reunir@postgres:5432/reunir
+      REDIS_URL: redis://redis:6379
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-43200}
+      VALIDATION_TTL_SECONDS: ${VALIDATION_TTL_SECONDS:-3600}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD:-ReunirAdmin@2026}
+      BOOTSTRAP_SUPERADMIN_USER: ${BOOTSTRAP_SUPERADMIN_USER:-superadmin}
+      BOOTSTRAP_SUPERADMIN_PASSWORD: ${BOOTSTRAP_SUPERADMIN_PASSWORD:-superadmin}
+      BOOTSTRAP_SUPERADMIN_NAME: ${BOOTSTRAP_SUPERADMIN_NAME:-Superadmin}
+      PORT: 3000
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/health"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 20s
 
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: reunir
       POSTGRES_USER: reunir
@@ -37,6 +57,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     command: redis-server --save 60 1 --appendonly yes
     ports:
       - "6379:6379"

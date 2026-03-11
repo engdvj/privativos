@@ -1,26 +1,26 @@
-﻿# Mapeamento Completo de Animacoes (Frontend)
+﻿# Mapeamento Completo de Animações (Frontend)
 
 ## Objetivo
-Definir um plano completo de motion para todo o site (login, logout, sidebar, navbar, menus, modais, tabelas e feedbacks), com padrao unico, performance e acessibilidade.
+Definir um plano completo de motion para todo o site (login, logout, sidebar, navbar, menus, modais, tabelas e feedbacks), com padrão único, performance e acessibilidade.
 
 ## Escopo coberto
 - Rotas: `frontend/src/App.tsx` (`/`, `/setor`, `/admin`)
-- Paginas: `LoginPage`, `SetorPage`, `AdminPage`
+- Páginas: `LoginPage`, `SetorPage`, `AdminPage`
 - Shell: `Header`, `Footer`, `ProtectedRoute`
 - Overlays: `Modal`, `ConfirmDialog`, `DropdownMenu`, `Select`, modais de `GlobalDetailProvider`
 - CRUD/Admin: todas as tabs em `frontend/src/pages/admin/tabs/*`
 - Feedback: `ToastProvider`, estados de loading, empty state
 
-## Diagnostico atual (gaps)
-- Ja existem microanimacoes pontuais (`animate-fade-up`, `transition-*`, `hover:*`, `animate-spin`), mas sem padrao global.
-- As duracoes/easing variam por componente e por tela, sem tokens unificados de motion.
-- Existem varias classes utilitarias do tipo `animate-in`, `fade-in-50`, `zoom-in-95`, `slide-in-from-*` em arquivos como `SetorPage`, `DropdownMenu` e `Select`.
-- Nao foi encontrada configuracao/plugin para essas utilities no frontend (`frontend/package.json` e `frontend/src/globals.css`), entao parte dessas animacoes pode estar sem efeito.
+## Diagnóstico atual (gaps)
+- Já existem microanimações pontuais (`animate-fade-up`, `transition-*`, `hover:*`, `animate-spin`), mas sem padrão global.
+- As durações/easing variam por componente e por tela, sem tokens unificados de motion.
+- Existem várias classes utilitárias do tipo `animate-in`, `fade-in-50`, `zoom-in-95`, `slide-in-from-*` em arquivos como `SetorPage`, `DropdownMenu` e `Select`.
+- Não foi encontrada configuração/plugin para essas utilities no frontend (`frontend/package.json` e `frontend/src/globals.css`), então parte dessas animações pode estar sem efeito.
 
-## Sistema de motion proposto (padrao)
+## Sistema de motion proposto (padrão)
 Criar tokens globais no `frontend/src/globals.css`:
 
-- Duracao:
+- Duração:
   - `--motion-duration-fast: 120ms`
   - `--motion-duration-base: 180ms`
   - `--motion-duration-slow: 280ms`
@@ -29,33 +29,33 @@ Criar tokens globais no `frontend/src/globals.css`:
   - `--motion-ease-standard: cubic-bezier(0.2, 0, 0, 1)`
   - `--motion-ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1)`
   - `--motion-ease-exit: cubic-bezier(0.4, 0, 1, 1)`
-- Distancias:
+- Distâncias:
   - `--motion-distance-sm: 6px`
   - `--motion-distance-md: 12px`
   - `--motion-distance-lg: 20px`
 
 Regras:
 - Entradas: fade + translateY pequeno.
-- Saidas: fade + scale leve (sem deslocamento grande).
-- Hover/focus: maximo 120-180ms.
+- Saídas: fade + scale leve (sem deslocamento grande).
+- Hover/focus: máximo 120-180ms.
 - Nada de animar propriedades caras (preferir `opacity` e `transform`).
-- `prefers-reduced-motion`: reduzir para fade curto ou desabilitar transicoes nao essenciais.
+- `prefers-reduced-motion`: reduzir para fade curto ou desabilitar transições não essenciais.
 
-## Mapeamento por superficie (completo)
+## Mapeamento por superfície (completo)
 
-### 1) Autenticacao (`LoginPage`, `ProtectedRoute`, logout em `Header`)
-- Entrada da pagina de login:
+### 1) Autenticação (`LoginPage`, `ProtectedRoute`, logout em `Header`)
+- Entrada da página de login:
   - Hero/background blobs: fade progressivo (sem loop agressivo).
   - Card de login: slide-up + fade (`280ms`).
-  - Campos/botao: stagger curto (`40ms` entre elementos).
+  - Campos/botão: stagger curto (`40ms` entre elementos).
 - Submit login:
-  - Botao faz transicao para loading sem salto de layout.
-  - Em sucesso: transicao de pagina com fade/slide horizontal curto.
+  - Botão faz transição para loading sem salto de layout.
+  - Em sucesso: transição de página com fade/slide horizontal curto.
   - Em erro: shake sutil no card (apenas se `prefers-reduced-motion` permitir).
-- Validacao silenciosa (`ProtectedRoute`):
+- Validação silenciosa (`ProtectedRoute`):
   - Trocar tela vazia por skeleton fade-in.
 - Logout (`Header`):
-  - Ao clicar em sair: estado de saida global (overlay leve + fade da view) antes de navegar para `/`.
+  - Ao clicar em sair: estado de saída global (overlay leve + fade da view) antes de navegar para `/`.
 
 Prioridade: Alta
 
@@ -63,25 +63,25 @@ Prioridade: Alta
 - Header:
   - Entrada inicial: slide-down + fade (`180ms`).
   - Busca global: dropdown com fade/scale e highlight animado por item.
-  - Avatar/menu usuario: trigger com press animation, menu com spring leve.
-  - Toggle tema: cross-fade icone Sol/Lua + rotacao curta.
+  - Avatar/menu usuário: trigger com press animation, menu com spring leve.
+  - Toggle tema: cross-fade ícone Sol/Lua + rotação curta.
 - Sidebar (`AdminPage`):
-  - Colapsar/expandir largura com transicao suave (`240ms`).
-  - Itens: indicador ativo com motion de posicao (layout transition).
+  - Colapsar/expandir largura com transição suave (`240ms`).
+  - Itens: indicador ativo com motion de posição (layout transition).
   - Labels no modo expandido: fade/clip em vez de aparecer seco.
-  - Resize drag: manter sem animacao durante drag e animar apenas no release.
+  - Resize drag: manter sem animação durante drag e animar apenas no release.
 - Footer:
-  - Botao suporte: hover com elevacao pequena.
-  - Modal de suporte: padrao unico de overlay + panel.
+  - Botão suporte: hover com elevação pequena.
+  - Modal de suporte: padrão único de overlay + panel.
 
 Prioridade: Alta
 
-### 3) Navegacao entre telas/areas
-- Transicao entre rotas (`/`, `/setor`, `/admin`):
-  - Container com page transition unica.
+### 3) Navegação entre telas/áreas
+- Transição entre rotas (`/`, `/setor`, `/admin`):
+  - Container com page transition única.
   - Entrada: `opacity 0 -> 1` + `translateY(8px -> 0)`.
-  - Saida: `opacity 1 -> 0` + `translateY(0 -> 6px)`.
-- Transicao entre tabs de `SetorPage` e tabs do Admin:
+  - Saída: `opacity 1 -> 0` + `translateY(0 -> 6px)`.
+- Transição entre tabs de `SetorPage` e tabs do Admin:
   - `TabsContent` com fade + slide lateral curto.
   - Preservar altura para evitar jump de layout em troca de aba.
 
@@ -92,10 +92,10 @@ Prioridade: Alta
   - Open: fade + zoom-in 96->100 + deslocamento da origem.
   - Close: fade-out + zoom-out 100->98.
 - Itens:
-  - Hover/focus com transicao curta (120-150ms).
-  - Estado ativo selecionado com transicao de background.
+  - Hover/focus com transição curta (120-150ms).
+  - Estado ativo selecionado com transição de background.
 - Mobile:
-  - Limitar overshoot e manter transicao curta para responsividade.
+  - Limitar overshoot e manter transição curta para responsividade.
 
 Prioridade: Alta
 
@@ -104,26 +104,26 @@ Prioridade: Alta
   - Fade de opacidade (`120-180ms`), sem blur pesado em dispositivos fracos.
 - Panel:
   - Entrada com fade + y/scale leve (`220-280ms`).
-  - Saida com fade + scale-down curto (`150-200ms`).
-- Conteudo interno:
-  - Secoes com stagger leve quando modal abre.
-  - Transicao entre modo visualizacao/edicao no modal global.
+  - Saída com fade + scale-down curto (`150-200ms`).
+- Conteúdo interno:
+  - Seções com stagger leve quando modal abre.
+  - Transição entre modo visualização/edição no modal global.
 - ConfirmDialog:
-  - Icone de alerta com pop-in suave (sem bounce exagerado).
+  - Ícone de alerta com pop-in suave (sem bounce exagerado).
 
 Prioridade: Alta
 
-### 6) Pagina Setor (`SetorPage`)
-- Etapas (`busca`, `resumo`, `resultado`) de Emprestimo e Devolucao:
+### 6) Página Setor (`SetorPage`)
+- Etapas (`busca`, `resumo`, `resultado`) de Empréstimo e Devolução:
   - Tratar como stepper animado com `AnimatePresence`/equivalente.
-  - Direcao da animacao baseada no fluxo (avancar/voltar).
+  - Direção da animação baseada no fluxo (avançar/voltar).
 - Cards de resultado:
   - Entrada com fade/slide vertical.
-  - Badges de status com transicao de cor.
-- Lista de itens (devolucao):
+  - Badges de status com transição de cor.
+- Lista de itens (devolução):
   - Stagger por linha com limite de 6 itens animados por vez (performance).
 - Barra de progresso:
-  - Interpolar largura com easing padrao.
+  - Interpolar largura com easing padrão.
 
 Prioridade: Alta
 
@@ -133,12 +133,12 @@ Prioridade: Alta
 - Tabelas:
   - Skeleton/placeholder ao carregar (evitar flicker de texto).
   - Entrada de linhas: fade-up curto.
-  - Remocao de linha: fade-out + collapse de altura.
-  - Paginacao (Dashboard): transicao lateral curta entre paginas.
-- Acoes de linha (`TableActions`):
-  - Hover e press consistentes em todos botoes de editar/apagar.
+  - Remoção de linha: fade-out + collapse de altura.
+  - Paginação (Dashboard): transição lateral curta entre páginas.
+- Ações de linha (`TableActions`):
+  - Hover e press consistentes em todos botões de editar/apagar.
 - KPIs (Dashboard):
-  - Contadores com number tween curto em atualizacao de filtro.
+  - Contadores com number tween curto em atualização de filtro.
 
 Prioridade: Media-Alta
 
@@ -146,19 +146,19 @@ Prioridade: Media-Alta
 - Toast (`ToastProvider`):
   - Entrada pela direita + fade.
   - Saida com fade + leve deslocamento vertical.
-  - Stack com layout animation para reordenacao suave.
+  - Stack com layout animation para reordenação suave.
 - Spinners:
-  - Normalizar tamanho/velocidade e evitar spin em excesso simultaneo.
+  - Normalizar tamanho/velocidade e evitar spin em excesso simultâneo.
 - Empty states:
   - Entrada fade-up unica por estado.
 
 Prioridade: Media
 
 ### 9) Componentes base (primitives)
-- `Button`: manter microinteracoes e padronizar curvas/duracao por variante.
-- `Input`/`SelectTrigger`: focus ring com transicao curta consistente.
+- `Button`: manter microinterações e padronizar curvas/duração por variante.
+- `Input`/`SelectTrigger`: focus ring com transição curta consistente.
 - `Card`/`SectionCard`: hover e entrada com mesma assinatura visual.
-- `Badge`/`StatusPill`: transicao de cor/opacidade em mudanca de status.
+- `Badge`/`StatusPill`: transição de cor/opacidade em mudança de status.
 
 Prioridade: Media
 
@@ -176,34 +176,34 @@ Prioridade: Media
 - `frontend/src/components/ui/data-table.tsx`
 - `frontend/src/components/global-detail/GlobalDetailProvider.tsx`
 
-## Fases de implementacao recomendadas
+## Fases de implementação recomendadas
 
-### Fase 0 - Fundacao (1 PR)
-- Corrigir base de utilitarios de animacao (`animate-in` etc.) com uma abordagem unica:
-  - Opcao A: adotar plugin/css utilitario equivalente.
-  - Opcao B: remover classes dependentes e usar keyframes proprios padronizados.
+### Fase 0 - Fundação (1 PR)
+- Corrigir base de utilitários de animação (`animate-in` etc.) com uma abordagem única:
+  - Opção A: adotar plugin/css utilitário equivalente.
+  - Opção B: remover classes dependentes e usar keyframes próprios padronizados.
 - Criar tokens de motion no `globals.css`.
-- Criar utilitarios comuns (`motion-enter`, `motion-exit`, `motion-stagger-*`).
+- Criar utilitários comuns (`motion-enter`, `motion-exit`, `motion-stagger-*`).
 
-### Fase 1 - Shell e autenticacao (1 PR)
-- Login, logout, transicao de rotas, header e sidebar.
+### Fase 1 - Shell e autenticação (1 PR)
+- Login, logout, transição de rotas, header e sidebar.
 
 ### Fase 2 - Overlays e menus (1 PR)
 - Modal, confirm dialog, dropdown, select, modal global de detalhes.
 
 ### Fase 3 - Fluxos funcionais (1 PR)
-- Setor (etapas emprestimo/devolucao), tabs, feedbacks de operacao.
+- Setor (etapas empréstimo/devolução), tabs, feedbacks de operação.
 
 ### Fase 4 - Admin dados (1 PR)
-- Tabelas, filtros, paginacao, KPIs e toasts.
+- Tabelas, filtros, paginação, KPIs e toasts.
 
-## Criterios de pronto (motion)
-- Todas as superficies principais possuem transicoes consistentes e previsiveis.
-- `prefers-reduced-motion` respeitado em 100% das animacoes nao essenciais.
-- Nenhuma animacao bloqueia acao do usuario ou gera atraso perceptivel.
+## Critérios de pronto (motion)
+- Todas as superfícies principais possuem transições consistentes e previsíveis.
+- `prefers-reduced-motion` respeitado em 100% das animações não essenciais.
+- Nenhuma animação bloqueia ação do usuário ou gera atraso perceptível.
 - Sem flicker em trocas de rota/tab/modal.
-- Performance estavel em desktop e mobile (sem jank perceptivel).
+- Performance estável em desktop e mobile (sem jank perceptível).
 
-## Observacao final
-Este mapeamento ja cobre o frontend inteiro do repositorio atual. O proximo passo natural e executar a Fase 0 para consolidar a base tecnica de animacao e evitar retrabalho nas fases seguintes.
+## Observação final
+Este mapeamento já cobre o frontend inteiro do repositório atual. O próximo passo natural é executar a Fase 0 para consolidar a base técnica de animação e evitar retrabalho nas fases seguintes.
 

@@ -47,25 +47,25 @@ function ResumoState({ data }: { data: MonitorResumoData }) {
           <Icon className="h-5 w-5 text-primary" />
         </div>
         <h3 className="text-lg font-semibold text-foreground">
-          {isEmprestimo ? "Confirmar Solicitacao" : "Confirmar Devolucao"}
+          {isEmprestimo ? "Confirmar Solicitação" : "Confirmar Devolução"}
         </h3>
         <p className="text-sm text-muted-foreground">
-          Revise os dados antes da confirmacao na tela principal.
+          Revise os dados antes da confirmação na tela principal.
         </p>
       </div>
 
       <div className="space-y-4">
         <section className="overflow-hidden rounded-xl border border-border/70 bg-surface-2/60">
           <div className="border-b border-border px-4 py-2.5">
-            <h4 className="text-sm font-semibold text-foreground">Dados do usuario</h4>
+            <h4 className="text-sm font-semibold text-foreground">Dados do usuário</h4>
           </div>
           <div className="divide-y divide-border">
             <div className="flex items-center justify-between gap-4 px-4 py-2.5">
-              <span className="text-sm text-muted-foreground">Funcionario</span>
+              <span className="text-sm text-muted-foreground">Funcionário</span>
               <span className="truncate text-sm font-semibold text-foreground">{data.funcionarioNome}</span>
             </div>
             <div className="flex items-center justify-between gap-4 px-4 py-2.5">
-              <span className="text-sm text-muted-foreground">Matricula</span>
+              <span className="text-sm text-muted-foreground">Matrícula</span>
               <span className="font-mono text-sm font-semibold text-foreground">{data.matricula}</span>
             </div>
             <div className="flex items-center justify-between gap-4 px-4 py-2.5">
@@ -82,7 +82,7 @@ function ResumoState({ data }: { data: MonitorResumoData }) {
         <section className="rounded-xl border border-border/70 bg-surface-2/60 p-3">
           <div className="mb-2 flex items-center justify-between">
             <h4 className="text-sm font-semibold text-foreground">
-              {isEmprestimo ? "Pedido" : "Itens para devolucao"}
+              {isEmprestimo ? "Pedido" : "Itens para devolução"}
             </h4>
             <StatusPill tone="info">
               {data.quantidade} {data.quantidade === 1 ? "item" : "itens"}
@@ -169,16 +169,16 @@ function ResultadoState({
         <h3 className="text-xl font-semibold text-foreground">
           {event.data.sucesso
             ? isEmprestimo
-              ? "Solicitacao realizada"
-              : "Devolucao realizada"
-            : "Operacao cancelada"}
+              ? "Solicitação realizada"
+              : "Devolução realizada"
+            : "Operação cancelada"}
         </h3>
         <p className="mt-1 text-sm text-muted-foreground">
           {event.data.sucesso
             ? isEmprestimo
-              ? "A solicitacao foi confirmada com sucesso."
-              : "A devolucao foi confirmada com sucesso."
-            : "A operacao foi cancelada e nenhuma alteracao foi realizada."}
+              ? "A solicitação foi confirmada com sucesso."
+              : "A devolução foi confirmada com sucesso."
+            : "A operação foi cancelada e nenhuma alteração foi realizada."}
         </p>
       </div>
     </div>
@@ -192,7 +192,7 @@ export function OperacaoMonitorPage() {
     return {
       kind: "waiting",
       timestamp: new Date().toISOString(),
-      mensagem: "Aguardando uma operacao na tela principal.",
+      mensagem: "Aguardando uma operação na tela principal.",
     };
   });
   const lastEventRef = useRef<string>(JSON.stringify(event));
@@ -222,12 +222,12 @@ export function OperacaoMonitorPage() {
 
   const status = useMemo(() => {
     if (event.kind === "resumo") {
-      return { tone: "info" as const, label: "Aguardando confirmacao" };
+      return { tone: "info" as const, label: "Aguardando confirmação" };
     }
     if (event.kind === "resultado") {
       return event.data.sucesso
-        ? { tone: "success" as const, label: "Operacao concluida" }
-        : { tone: "danger" as const, label: "Falha na operacao" };
+        ? { tone: "success" as const, label: "Operação concluída" }
+        : { tone: "danger" as const, label: "Falha na operação" };
     }
     return { tone: "info" as const, label: "Tela de espera" };
   }, [event]);
@@ -261,7 +261,7 @@ export function OperacaoMonitorPage() {
             <section className="grid grid-cols-12 gap-6">
               <div className="col-span-12 flex flex-wrap items-start justify-between gap-6">
                 <div className="space-y-2">
-                  <h1 className="text-3xl font-bold text-foreground">Acompanhamento da operacao</h1>
+                  <h1 className="text-3xl font-bold text-foreground">Acompanhamento da operação</h1>
                   <p className="text-sm text-muted-foreground">
                     Monitoramento em tempo real da triagem operacional.
                   </p>
@@ -277,7 +277,7 @@ export function OperacaoMonitorPage() {
                     <div className="space-y-2">
                       <h2 className="text-lg font-semibold text-foreground">Painel em tempo real</h2>
                       <p className="text-sm text-muted-foreground">
-                        O painel reflete automaticamente os eventos da tela de operacoes.
+                        O painel reflete automaticamente os eventos da tela de operações.
                       </p>
                     </div>
 

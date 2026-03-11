@@ -18,8 +18,8 @@ const alignJustifyClassName: Record<DataTableAlign, string> = {
 };
 
 const TABLE_CELL_PADDING_Y = "py-2.5";
-type DataTableSortDirection = "asc" | "desc";
-type DataTableSortState = { key: string; direction: DataTableSortDirection } | null;
+export type DataTableSortDirection = "asc" | "desc";
+export type DataTableSortState = { key: string; direction: DataTableSortDirection } | null;
 
 export interface DataTableColumn<T = unknown> {
   key: string;
@@ -52,6 +52,8 @@ interface DataTableProps<T> {
   emptyAction?: ReactNode;
   emptyCellClassName?: string;
   defaultSort?: { key: string; direction?: DataTableSortDirection } | null;
+  sortState?: DataTableSortState;
+  onSortStateChange?: (next: DataTableSortState) => void;
 }
 
 function flattenRowNodes(nodes: ReactNode): ReactNode[] {
@@ -143,6 +145,41 @@ function isDefaultNonSortableKey(key: string) {
   return normalized === "acoes" || normalized === "status" || normalized === "ativo";
 }
 
+export function sortDataTableRows<T>(
+  rows: T[],
+  columns: DataTableColumn<T>[],
+  sortState: DataTableSortState,
+) {
+  if (!sortState) {
+    return rows;
+  }
+
+  const column = columns.find((item) => item.key === sortState.key);
+  if (!column) {
+    return rows;
+  }
+
+  const directionFactor = sortState.direction === "asc" ? 1 : -1;
+  const wrapped = rows.map((row, index) => ({ row, index }));
+
+  wrapped.sort((a, b) => {
+    const baseResult = column.sortComparator
+      ? column.sortComparator(a.row, b.row)
+      : compareSortValues(
+          column.sortValue ? column.sortValue(a.row, a.index) : (a.row as Record<string, unknown>)[column.key],
+          column.sortValue ? column.sortValue(b.row, b.index) : (b.row as Record<string, unknown>)[column.key],
+        );
+
+    if (baseResult !== 0) {
+      return baseResult * directionFactor;
+    }
+
+    return a.index - b.index;
+  });
+
+  return wrapped.map((item) => item.row);
+}
+
 export function DataTable<T>({
   columns,
   rows,
@@ -162,8 +199,10 @@ export function DataTable<T>({
   emptyAction,
   emptyCellClassName,
   defaultSort = null,
+  sortState,
+  onSortStateChange,
 }: DataTableProps<T>) {
-  const [sortState, setSortState] = useState<DataTableSortState>(
+  const [internalSortState, setInternalSortState] = useState<DataTableSortState>(
     defaultSort
       ? {
           key: defaultSort.key,
@@ -171,46 +210,31 @@ export function DataTable<T>({
         }
       : null,
   );
+  const currentSortState = sortState !== undefined ? sortState : internalSortState;
 
   const effectiveSortState = useMemo<DataTableSortState>(() => {
-    if (!sortState) {
+    if (!currentSortState) {
       return null;
     }
-    if (columns.some((column) => column.key === sortState.key)) {
-      return sortState;
+    if (columns.some((column) => column.key === currentSortState.key)) {
+      return currentSortState;
     }
     return null;
-  }, [columns, sortState]);
+  }, [columns, currentSortState]);
 
   const hasWidthConfig = columns.some((column) => Boolean(column.width));
   const shouldUseEqualColumns = equalColumns && !hasWidthConfig;
   const equalColWidth = columns.length > 0 ? `${(100 / columns.length).toFixed(4)}%` : undefined;
   const sortedRows = useMemo(() => {
-    if (!effectiveSortState) return rows;
-
-    const column = columns.find((item) => item.key === effectiveSortState.key);
-    if (!column) return rows;
-
-    const directionFactor = effectiveSortState.direction === "asc" ? 1 : -1;
-    const wrapped = rows.map((row, index) => ({ row, index }));
-
-    wrapped.sort((a, b) => {
-      const baseResult = column.sortComparator
-        ? column.sortComparator(a.row, b.row)
-        : compareSortValues(
-            column.sortValue ? column.sortValue(a.row, a.index) : (a.row as Record<string, unknown>)[column.key],
-            column.sortValue ? column.sortValue(b.row, b.index) : (b.row as Record<string, unknown>)[column.key],
-          );
-
-      if (baseResult !== 0) {
-        return baseResult * directionFactor;
-      }
-
-      return a.index - b.index;
-    });
-
-    return wrapped.map((item) => item.row);
+    return sortDataTableRows(rows, columns, effectiveSortState);
   }, [columns, rows, effectiveSortState]);
+
+  function updateSortState(next: DataTableSortState) {
+    if (sortState === undefined) {
+      setInternalSortState(next);
+    }
+    onSortStateChange?.(next);
+  }
 
   function shouldIgnoreRowClick(target: EventTarget | null) {
     if (!(target instanceof Element)) return false;
@@ -264,12 +288,7 @@ export function DataTable<T>({
                             effectiveSortState?.key === column.key && effectiveSortState?.direction === "asc",
                           ),
                         )}
-                        onClick={() =>
-                          setSortState({
-                            key: column.key,
-                            direction: "asc",
-                          })
-                        }
+                        onClick={() => updateSortState({ key: column.key, direction: "asc" })}
                       >
                         <ChevronUp className="mx-auto h-3.5 w-3.5" />
                       </button>
@@ -282,12 +301,7 @@ export function DataTable<T>({
                             effectiveSortState?.key === column.key && effectiveSortState?.direction === "desc",
                           ),
                         )}
-                        onClick={() =>
-                          setSortState({
-                            key: column.key,
-                            direction: "desc",
-                          })
-                        }
+                        onClick={() => updateSortState({ key: column.key, direction: "desc" })}
                       >
                         <ChevronDown className="mx-auto h-3.5 w-3.5" />
                       </button>

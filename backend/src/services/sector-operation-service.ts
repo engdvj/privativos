@@ -91,15 +91,15 @@ export class SectorOperationService {
     const tamanho = normalizeTamanho(input.tamanho);
 
     if (!setor) {
-      throw new AppError(400, "INVALID_SECTOR", "Setor invalido");
+      throw new AppError(400, "INVALID_SECTOR", "Setor inválido");
     }
 
     if (!tipo) {
-      throw new AppError(400, "INVALID_ITEM_TYPE", "Tipo do item invalido");
+      throw new AppError(400, "INVALID_ITEM_TYPE", "Tipo do item inválido");
     }
 
     if (!tamanho) {
-      throw new AppError(400, "INVALID_ITEM_SIZE", "Tamanho do item invalido");
+      throw new AppError(400, "INVALID_ITEM_SIZE", "Tamanho do item inválido");
     }
 
     const setorExistente = await prisma.setor.findFirst({
@@ -116,7 +116,7 @@ export class SectorOperationService {
     });
 
     if (!setorExistente) {
-      throw new AppError(404, "SETOR_NOT_FOUND", "Setor nao encontrado");
+      throw new AppError(404, "SETOR_NOT_FOUND", "Setor não encontrado");
     }
 
     const itensEmprestados = await prisma.$transaction(async (tx) => {
@@ -136,7 +136,7 @@ export class SectorOperationService {
         throw new AppError(
           409,
           "INSUFFICIENT_ITEMS",
-          "Nao ha itens suficientes disponiveis para o tipo e tamanho informados",
+          "Não há itens suficientes disponíveis para o tipo e tamanho informados",
         );
       }
 
@@ -193,15 +193,15 @@ export class SectorOperationService {
     const tamanho = normalizeTamanho(input.tamanho);
 
     if (!setor) {
-      throw new AppError(400, "INVALID_SECTOR", "Setor invalido");
+      throw new AppError(400, "INVALID_SECTOR", "Setor inválido");
     }
 
     if (!tipo) {
-      throw new AppError(400, "INVALID_ITEM_TYPE", "Tipo do item invalido");
+      throw new AppError(400, "INVALID_ITEM_TYPE", "Tipo do item inválido");
     }
 
     if (!tamanho) {
-      throw new AppError(400, "INVALID_ITEM_SIZE", "Tamanho do item invalido");
+      throw new AppError(400, "INVALID_ITEM_SIZE", "Tamanho do item inválido");
     }
 
     const setorExistente = await prisma.setor.findFirst({
@@ -218,7 +218,7 @@ export class SectorOperationService {
     });
 
     if (!setorExistente) {
-      throw new AppError(404, "SETOR_NOT_FOUND", "Setor nao encontrado");
+      throw new AppError(404, "SETOR_NOT_FOUND", "Setor não encontrado");
     }
 
     const itensDevolvidos = await prisma.$transaction(async (tx) => {
@@ -239,7 +239,7 @@ export class SectorOperationService {
         throw new AppError(
           409,
           "INSUFFICIENT_PENDING_ITEMS",
-          "Nao ha itens pendentes suficientes para devolucao nesse setor",
+          "Não há itens pendentes suficientes para devolução nesse setor",
         );
       }
 

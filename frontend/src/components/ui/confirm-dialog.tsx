@@ -61,7 +61,7 @@ export function ConfirmDialog({
     >
       <div className="flex items-start gap-2.5 rounded-lg border border-destructive/35 bg-destructive/8 px-3 py-2.5 text-[13px] leading-relaxed text-foreground dark:border-destructive/45 dark:bg-destructive/14">
         <AlertTriangle className="mt-0.5 h-4 w-4 text-destructive" />
-        <p>{description ?? "Essa acao nao pode ser desfeita."}</p>
+        <p>{description ?? "Essa ação não pode ser desfeita."}</p>
       </div>
     </Modal>
   );

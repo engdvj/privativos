@@ -17,11 +17,11 @@ export class LoanService {
     const tamanho = input.tamanho.trim().toUpperCase();
 
     if (!tipo) {
-      throw new AppError(400, "INVALID_ITEM_TYPE", "Tipo do item invalido");
+      throw new AppError(400, "INVALID_ITEM_TYPE", "Tipo do item inválido");
     }
 
     if (!tamanho) {
-      throw new AppError(400, "INVALID_ITEM_SIZE", "Tamanho do item invalido");
+      throw new AppError(400, "INVALID_ITEM_SIZE", "Tamanho do item inválido");
     }
 
     const funcionario = await prisma.funcionario.findFirst({
@@ -35,7 +35,7 @@ export class LoanService {
     });
 
     if (!funcionario) {
-      throw new AppError(404, "FUNCIONARIO_NOT_FOUND", "Funcionario nao encontrado");
+      throw new AppError(404, "FUNCIONARIO_NOT_FOUND", "Funcionário não encontrado");
     }
 
     const maxConfig = await prisma.configuracao.findUnique({
@@ -54,7 +54,7 @@ export class LoanService {
     });
 
     if (emprestadosAtuais + input.quantidade > maxKits) {
-      throw new AppError(409, "MAX_KITS_REACHED", "Limite de kits por funcionario excedido");
+      throw new AppError(409, "MAX_KITS_REACHED", "Limite de kits por funcionário excedido");
     }
 
     const itensEmprestados = await prisma.$transaction(async (tx) => {
@@ -74,7 +74,7 @@ export class LoanService {
         throw new AppError(
           409,
           "INSUFFICIENT_ITEMS",
-          "Nao ha itens suficientes disponiveis para o tipo e tamanho informados",
+          "Não há itens suficientes disponíveis para o tipo e tamanho informados",
         );
       }
 

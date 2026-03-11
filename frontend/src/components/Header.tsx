@@ -71,7 +71,7 @@ export function Header() {
 
     // Salva no backend (async, sem bloquear UI)
     api.atualizarTema(tema as "light" | "dark").catch(() => {
-      // Ignora erro silenciosamente para nao atrapalhar UX
+      // Ignora erro silenciosamente para não atrapalhar UX
     });
   }, [darkMode]);
 
@@ -266,7 +266,7 @@ export function Header() {
                   variant="ghost"
                   size="icon"
                   className={circleIconButtonClass}
-                  aria-label="Menu do usuario"
+                  aria-label="Menu do usuário"
                   title={nome}
                 >
                   <span className="text-xs font-medium">{getIniciais(nome)}</span>
@@ -281,7 +281,7 @@ export function Header() {
                       </div>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold leading-none text-foreground">{nome}</p>
-                        <p className="mt-1 text-[11px] leading-none text-muted-foreground">Conta do usuario</p>
+                        <p className="mt-1 text-[11px] leading-none text-muted-foreground">Conta do usuário</p>
                       </div>
                     </div>
                   </div>
@@ -331,7 +331,7 @@ export function Header() {
                       onFocus={() => {
                         if (sugestoes.length > 0) setMostrarSugestoes(true);
                       }}
-                      placeholder="Buscar funcionario, kit, setor, unidade ou funcao"
+                      placeholder="Buscar funcionário, kit, setor, unidade ou função"
                       className="h-full min-w-0 flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/80 outline-none"
                       aria-label="Busca global"
                     />

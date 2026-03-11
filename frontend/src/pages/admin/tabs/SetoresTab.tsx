@@ -6,7 +6,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { DataTable } from "@/components/ui/data-table";
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableSortState,
+  sortDataTableRows,
+} from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { FormField } from "@/components/ui/form-field";
@@ -51,6 +56,10 @@ const FILTRO_BAR_CLASS = "gap-1.5 md:flex-nowrap md:items-end";
 const SECTION_HEADER_CLASS = "gap-2 px-3 pb-2 pt-3 sm:px-4 sm:pb-2 sm:pt-4";
 const SECTION_CONTENT_CLASS = "space-y-2.5 px-3 pb-3 pt-0 sm:px-4 sm:pb-4";
 
+function notificarAtualizacaoGlobal(entidade: "kit" | "funcionario" | "setor" | "unidade" | "funcao") {
+  window.dispatchEvent(new CustomEvent("global-detail-updated", { detail: { entidade } }));
+}
+
 function normalizarTexto(valor: string | null | undefined) {
   return (valor ?? "").trim().toLowerCase();
 }
@@ -67,6 +76,7 @@ export function SetoresTab() {
   const [filtroUnidade, setFiltroUnidade] = useState("todos");
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "inativo">("todos");
   const [paginaSetores, setPaginaSetores] = useState(1);
+  const [sortSetores, setSortSetores] = useState<DataTableSortState>(null);
   const [nomeNovo, setNomeNovo] = useState("");
   const [unidadesNovo, setUnidadesNovo] = useState<string[]>([]);
   const [edicao, setEdicao] = useState({ nome: "", status_ativo: true, unidades: [] as string[] });
@@ -126,19 +136,36 @@ export function SetoresTab() {
       return matchTexto && matchUnidade && matchStatus;
     });
   }, [rows, busca, filtroUnidade, filtroStatus]);
+  const colunasSetores = useMemo<DataTableColumn<CatalogoRow>[]>(() => [
+    { key: "nome", title: "Nome", width: "28%", sortValue: (row) => row.nome },
+    { key: "unidades", title: "Unidades", width: "28%", sortValue: (row) => (row.unidades?.filter(Boolean) ?? []).join(", ") },
+    {
+      key: "total",
+      title: "Total funcionários",
+      align: "center",
+      width: "16%",
+      sortValue: (row) => row.totalFuncionarios ?? 0,
+    },
+    { key: "status", title: "Status", align: "center", width: "14%", sortValue: (row) => row.statusAtivo },
+    { key: "acoes", title: "Acoes", align: "center", width: "14%" },
+  ], []);
+  const rowsOrdenadas = useMemo(
+    () => sortDataTableRows(rowsFiltradas, colunasSetores, sortSetores),
+    [rowsFiltradas, colunasSetores, sortSetores],
+  );
 
   const ativosFiltrados = useMemo(
     () => rowsFiltradas.filter((row) => row.statusAtivo).length,
     [rowsFiltradas],
   );
   const inativosFiltrados = rowsFiltradas.length - ativosFiltrados;
-  const totalPaginasSetores = Math.max(1, Math.ceil(rowsFiltradas.length / SETORES_POR_PAGINA));
+  const totalPaginasSetores = Math.max(1, Math.ceil(rowsOrdenadas.length / SETORES_POR_PAGINA));
   const rowsPaginadas = useMemo(() => {
     const inicio = (paginaSetores - 1) * SETORES_POR_PAGINA;
-    return rowsFiltradas.slice(inicio, inicio + SETORES_POR_PAGINA);
-  }, [rowsFiltradas, paginaSetores]);
-  const inicioPaginaSetores = rowsFiltradas.length === 0 ? 0 : (paginaSetores - 1) * SETORES_POR_PAGINA + 1;
-  const fimPaginaSetores = Math.min(paginaSetores * SETORES_POR_PAGINA, rowsFiltradas.length);
+    return rowsOrdenadas.slice(inicio, inicio + SETORES_POR_PAGINA);
+  }, [rowsOrdenadas, paginaSetores]);
+  const inicioPaginaSetores = rowsOrdenadas.length === 0 ? 0 : (paginaSetores - 1) * SETORES_POR_PAGINA + 1;
+  const fimPaginaSetores = Math.min(paginaSetores * SETORES_POR_PAGINA, rowsOrdenadas.length);
 
   useEffect(() => {
     setPaginaSetores(1);
@@ -168,7 +195,7 @@ export function SetoresTab() {
       setFuncionariosSetor(data.rows);
       setTotalFuncionariosSetor(data.total);
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao carregar funcionarios do setor");
+      error(err instanceof Error ? err.message : "Erro ao carregar funcionários do setor");
     } finally {
       setLoadingFuncionariosSetor(false);
     }
@@ -265,6 +292,7 @@ export function SetoresTab() {
       setOpenCreateModal(false);
       success("Setor criado com sucesso");
       await carregar();
+      notificarAtualizacaoGlobal("setor");
     } catch (err) {
       error(err instanceof Error ? err.message : "Erro ao criar setor");
     } finally {
@@ -311,6 +339,7 @@ export function SetoresTab() {
       success("Setor atualizado");
       fecharEdicao();
       await carregar();
+      notificarAtualizacaoGlobal("setor");
     } catch (err) {
       error(err instanceof Error ? err.message : "Erro ao atualizar setor");
     } finally {
@@ -323,6 +352,7 @@ export function SetoresTab() {
       await api.del(`/admin/setores/${row.id}`);
       success("Setor apagado");
       await carregar();
+      notificarAtualizacaoGlobal("setor");
     } catch (err) {
       error(err instanceof Error ? err.message : "Erro ao apagar setor");
     }
@@ -419,20 +449,10 @@ export function SetoresTab() {
       >
         <div className="hidden md:block">
           <DataTable
-            columns={[
-              { key: "nome", title: "Nome", width: "28%", sortValue: (row) => row.nome },
-              { key: "unidades", title: "Unidades", width: "28%", sortValue: (row) => unidadesSetorLabel(row) },
-              {
-                key: "total",
-                title: "Total funcionarios",
-                align: "center",
-                width: "16%",
-                sortValue: (row) => row.totalFuncionarios ?? 0,
-              },
-              { key: "status", title: "Status", align: "center", width: "14%", sortValue: (row) => row.statusAtivo },
-              { key: "acoes", title: "Acoes", align: "center", width: "14%" },
-            ]}
+            columns={colunasSetores}
             rows={rowsPaginadas}
+            sortState={sortSetores}
+            onSortStateChange={setSortSetores}
             getRowKey={(row) => row.id}
             onRowClick={(row) => abrirFuncionariosSetor(row)}
             loading={loading}
@@ -514,7 +534,7 @@ export function SetoresTab() {
                   </StatusPill>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Funcionarios vinculados: <span className="font-semibold text-foreground">{row.totalFuncionarios ?? 0}</span>
+                  Funcionários vinculados: <span className="font-semibold text-foreground">{row.totalFuncionarios ?? 0}</span>
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Unidades: <span className="font-semibold text-foreground">{unidadesSetorLabel(row)}</span>
@@ -554,7 +574,7 @@ export function SetoresTab() {
 
         <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[10px] text-muted-foreground">
-            {inicioPaginaSetores}-{fimPaginaSetores} de {rowsFiltradas.length} | Pagina {paginaSetores} de {totalPaginasSetores}
+            {inicioPaginaSetores}-{fimPaginaSetores} de {rowsFiltradas.length} | Página {paginaSetores} de {totalPaginasSetores}
           </p>
           <div className="flex min-w-[220px] justify-end gap-2">
             <Button
@@ -575,7 +595,7 @@ export function SetoresTab() {
               onClick={() => setPaginaSetores((paginaAtual) => Math.min(totalPaginasSetores, paginaAtual + 1))}
               disabled={paginaSetores === totalPaginasSetores}
             >
-              Proxima
+              Próxima
             </Button>
           </div>
         </div>
@@ -584,15 +604,15 @@ export function SetoresTab() {
       <Modal
         open={Boolean(setorSelecionado)}
         onClose={() => setSetorSelecionado(null)}
-        title={setorSelecionado ? `Funcionarios vinculados - ${setorSelecionado.nome}` : "Funcionarios vinculados"}
-        description="Lista de funcionarios associados e itens atualmente emprestados para este setor."
+        title={setorSelecionado ? `Funcionários vinculados - ${setorSelecionado.nome}` : "Funcionários vinculados"}
+        description="Lista de funcionários associados e itens atualmente emprestados para este setor."
         maxWidthClassName="max-w-5xl"
       >
         <div className="space-y-4">
           <div className="space-y-2.5">
-            <h4 className="text-sm font-semibold text-foreground">Funcionarios vinculados</h4>
+            <h4 className="text-sm font-semibold text-foreground">Funcionários vinculados</h4>
             <div className="text-[11px] text-muted-foreground">
-              {inicioFuncionariosSetor}-{fimFuncionariosSetor} de {totalFuncionariosSetor} | Pagina{" "}
+              {inicioFuncionariosSetor}-{fimFuncionariosSetor} de {totalFuncionariosSetor} | Página{" "}
               {paginaFuncionariosSetor} de {totalPaginasFuncionariosSetor}
             </div>
 
@@ -609,7 +629,7 @@ export function SetoresTab() {
                 </div>
               ) : funcionariosSetor.length === 0 ? (
                 <div className="rounded-xl border border-border/70 bg-surface-2/80 px-3 py-5">
-                  <EmptyState compact title="Nenhum funcionario vinculado." />
+                  <EmptyState compact title="Nenhum funcionário vinculado." />
                 </div>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -660,7 +680,7 @@ export function SetoresTab() {
                 }
                 disabled={paginaFuncionariosSetor >= totalPaginasFuncionariosSetor || loadingFuncionariosSetor}
               >
-                Proxima
+                Próxima
               </Button>
             </div>
           </div>
@@ -712,7 +732,7 @@ export function SetoresTab() {
           setUnidadesNovo([]);
         }}
         title="Novo Setor"
-        description="Crie um setor para classificar funcionarios e operacoes."
+        description="Crie um setor para classificar funcionários e operações."
         maxWidthClassName="max-w-xl"
       >
         <div className="space-y-3">

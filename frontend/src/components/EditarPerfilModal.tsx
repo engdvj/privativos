@@ -62,7 +62,7 @@ export function EditarPerfilModal({ open, onClose, onPerfilAtualizado }: EditarP
     e.preventDefault();
 
     if (!nomeCompleto.trim()) {
-      error("Nome completo e obrigatorio");
+      error("Nome completo é obrigatório");
       return;
     }
 
@@ -73,12 +73,12 @@ export function EditarPerfilModal({ open, onClose, onPerfilAtualizado }: EditarP
       }
 
       if (senhaNova.length < 6) {
-        error("A nova senha deve ter no minimo 6 caracteres");
+        error("A nova senha deve ter no mínimo 6 caracteres");
         return;
       }
 
       if (senhaNova !== senhaConfirmacao) {
-        error("As senhas nao coincidem");
+        error("As senhas não coincidem");
         return;
       }
     }
@@ -99,7 +99,7 @@ export function EditarPerfilModal({ open, onClose, onPerfilAtualizado }: EditarP
       }
 
       if (Object.keys(payload).length === 0) {
-        error("Nenhuma alteracao foi feita");
+        error("Nenhuma alteração foi feita");
         return;
       }
 
@@ -133,7 +133,7 @@ export function EditarPerfilModal({ open, onClose, onPerfilAtualizado }: EditarP
       open={open}
       onClose={onClose}
       title="Editar Perfil"
-      description="Atualize suas informacoes pessoais e senha"
+      description="Atualize suas informações pessoais e senha"
       maxWidthClassName="max-w-2xl"
     >
       {loading ? (
@@ -145,7 +145,7 @@ export function EditarPerfilModal({ open, onClose, onPerfilAtualizado }: EditarP
           <div className="space-y-3">
             <div className="space-y-2">
               <Label htmlFor="usuario" className="text-foreground">
-                Usuario
+                Usuário
               </Label>
               <div className="relative">
                 <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -156,7 +156,7 @@ export function EditarPerfilModal({ open, onClose, onPerfilAtualizado }: EditarP
                   className="pl-9 bg-muted/55 text-foreground/85"
                 />
               </div>
-              <p className="text-xs text-muted-foreground/90">O nome de usuario nao pode ser alterado</p>
+              <p className="text-xs text-muted-foreground/90">O nome de usuário não pode ser alterado</p>
             </div>
 
             <div className="space-y-2">
@@ -228,7 +228,7 @@ export function EditarPerfilModal({ open, onClose, onPerfilAtualizado }: EditarP
                     </div>
                   </div>
 
-                  <p className="text-xs text-muted-foreground/90">Minimo de 6 caracteres.</p>
+                  <p className="text-xs text-muted-foreground/90">Mínimo de 6 caracteres.</p>
                 </div>
               ) : null}
             </div>
@@ -240,7 +240,7 @@ export function EditarPerfilModal({ open, onClose, onPerfilAtualizado }: EditarP
             </Button>
             <Button type="submit" className="flex-1" loading={salvando}>
               <Save className="h-4 w-4" />
-              {salvando ? "Salvando..." : "Salvar Alteracoes"}
+              {salvando ? "Salvando..." : "Salvar Alterações"}
             </Button>
           </div>
         </form>

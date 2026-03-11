@@ -29,7 +29,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const parsed = loginSchema.safeParse(request.body);
 
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     try {
@@ -57,7 +57,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const parsed = solicitanteSchema.safeParse(request.body);
 
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const data = await authService.criarSessaoSolicitante(parsed.data);
@@ -74,7 +74,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const token = getBearerToken(request.headers.authorization);
 
     if (!token) {
-      throw new AppError(401, "UNAUTHENTICATED", "Nao autenticado");
+      throw new AppError(401, "UNAUTHENTICATED", "Não autenticado");
     }
 
     const session = await authService.validarSessao(token);
@@ -96,13 +96,13 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const token = getBearerToken(request.headers.authorization);
 
     if (!token) {
-      throw new AppError(401, "UNAUTHENTICATED", "Nao autenticado");
+      throw new AppError(401, "UNAUTHENTICATED", "Não autenticado");
     }
 
     const session = await authService.validarSessao(token);
 
     if (!session) {
-      throw new AppError(401, "INVALID_SESSION", "Sessao invalida");
+      throw new AppError(401, "INVALID_SESSION", "Sessão inválida");
     }
 
     return reply.status(200).send(session);
@@ -112,13 +112,13 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const token = getBearerToken(request.headers.authorization);
 
     if (!token) {
-      throw new AppError(401, "UNAUTHENTICATED", "Nao autenticado");
+      throw new AppError(401, "UNAUTHENTICATED", "Não autenticado");
     }
 
     const session = await authService.validarSessao(token);
 
     if (!session || session.tipo !== "setor_admin") {
-      throw new AppError(401, "INVALID_SESSION", "Sessao invalida");
+      throw new AppError(401, "INVALID_SESSION", "Sessão inválida");
     }
 
     const perfil = await authService.obterPerfilUsuario(session.dados.usuario);
@@ -129,19 +129,19 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const token = getBearerToken(request.headers.authorization);
 
     if (!token) {
-      throw new AppError(401, "UNAUTHENTICATED", "Nao autenticado");
+      throw new AppError(401, "UNAUTHENTICATED", "Não autenticado");
     }
 
     const session = await authService.validarSessao(token);
 
     if (!session || session.tipo !== "setor_admin") {
-      throw new AppError(401, "INVALID_SESSION", "Sessao invalida");
+      throw new AppError(401, "INVALID_SESSION", "Sessão inválida");
     }
 
     const parsed = atualizarPerfilSchema.safeParse(request.body);
 
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const perfil = await authService.atualizarPerfil({
@@ -163,19 +163,19 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     const token = getBearerToken(request.headers.authorization);
 
     if (!token) {
-      throw new AppError(401, "UNAUTHENTICATED", "Nao autenticado");
+      throw new AppError(401, "UNAUTHENTICATED", "Não autenticado");
     }
 
     const session = await authService.validarSessao(token);
 
     if (!session || session.tipo !== "setor_admin") {
-      throw new AppError(401, "INVALID_SESSION", "Sessao invalida");
+      throw new AppError(401, "INVALID_SESSION", "Sessão inválida");
     }
 
     const parsed = atualizarTemaSchema.safeParse(request.body);
 
     if (!parsed.success) {
-      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload inválido");
     }
 
     const resultado = await authService.atualizarTema(

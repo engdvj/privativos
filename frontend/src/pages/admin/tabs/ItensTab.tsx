@@ -13,7 +13,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { DataTable } from "@/components/ui/data-table";
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableSortState,
+  sortDataTableRows,
+} from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { FormField } from "@/components/ui/form-field";
@@ -45,6 +50,10 @@ const TABELA_DENSE_CLASS = `${TABELA_CONTAINER_CLASS} [--table-inline-gap:0.95re
 const FILTRO_BAR_CLASS = "gap-1.5 md:flex-nowrap md:items-end";
 const SECTION_HEADER_CLASS = "gap-2 px-3 pb-2 pt-3 sm:px-4 sm:pb-2 sm:pt-4";
 const SECTION_CONTENT_CLASS = "space-y-2.5 px-3 pb-3 pt-0 sm:px-4 sm:pb-4";
+
+function notificarAtualizacaoGlobal(entidade: "kit" | "funcionario" | "setor" | "unidade" | "funcao") {
+  window.dispatchEvent(new CustomEvent("global-detail-updated", { detail: { entidade } }));
+}
 
 function normalizarTamanho(valor: string) {
   return valor.trim().toUpperCase();
@@ -158,6 +167,26 @@ function gerarCodigosLote(params: {
   );
 }
 
+function extrairNumeroCodigo(codigo: string, base: string) {
+  const codigoNormalizado = codigo.trim();
+  const baseNormalizada = base.trim();
+  if (!codigoNormalizado || !baseNormalizada) {
+    return null;
+  }
+
+  if (!codigoNormalizado.toLowerCase().startsWith(baseNormalizada.toLowerCase())) {
+    return null;
+  }
+
+  const sufixo = codigoNormalizado.slice(baseNormalizada.length);
+  if (!/^\d+$/.test(sufixo)) {
+    return null;
+  }
+
+  const numero = Number.parseInt(sufixo, 10);
+  return Number.isFinite(numero) ? numero : null;
+}
+
 function resumirCodigos(codigos: string[], limite = 6) {
   if (codigos.length <= limite) {
     return codigos.join(", ");
@@ -181,9 +210,11 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
   const [filtroTamanho, setFiltroTamanho] = useState("todos");
   const [filtroAtivo, setFiltroAtivo] = useState<"todos" | "ativo" | "inativo">("todos");
   const [paginaItens, setPaginaItens] = useState(1);
+  const [sortItens, setSortItens] = useState<DataTableSortState>(null);
   const [itemParaExcluir, setItemParaExcluir] = useState<ItemRow | null>(null);
   const [codigosSelecionados, setCodigosSelecionados] = useState<string[]>([]);
   const [excluirSelecionadosAberto, setExcluirSelecionadosAberto] = useState(false);
+  const [selecionarLoteAberto, setSelecionarLoteAberto] = useState(false);
   const [deletingBulk, setDeletingBulk] = useState(false);
   const { success, error } = useToast();
   const { openKit } = useGlobalDetail();
@@ -206,6 +237,13 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
     numeroInicial: "1",
     quantidade: "1",
     casasNumero: String(CASAS_CODIGO_PADRAO),
+  });
+  const [loteSelecao, setLoteSelecao] = useState({
+    tipo: "todos",
+    codigoBase: CODIGO_BASE_PADRAO,
+    numeroInicial: "1",
+    numeroFinal: "10",
+    substituirSelecao: true,
   });
 
   const carregar = useCallback(async () => {
@@ -306,6 +344,19 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
     setOpenCreateModal(true);
   }
 
+  function abrirModalSelecaoLote() {
+    const sugestao = sugerirSequenciaCodigo(rows);
+    const tipoInicial = opcoesTipo[0] ?? "todos";
+    setLoteSelecao({
+      tipo: tipoInicial,
+      codigoBase: sugestao.base,
+      numeroInicial: "1",
+      numeroFinal: String(Math.max(10, sugestao.proximoNumero)),
+      substituirSelecao: true,
+    });
+    setSelecionarLoteAberto(true);
+  }
+
   async function criar() {
     const tipoFinal = tipoSelecionado === NOVO_TIPO_OPTION
       ? normalizarTipo(novoTipo)
@@ -322,7 +373,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
     const descricaoFinal = novo.descricao.trim() || null;
 
     if (modoCriacao === "unitario" && !novo.codigo.trim()) {
-      error("Preencha codigo, tipo e tamanho para criar item");
+      error("Preencha código, tipo e tamanho para criar item");
       return;
     }
 
@@ -334,17 +385,17 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
 
     if (isLote) {
       if (!baseLote || !Number.isInteger(numeroInicialLote) || !Number.isInteger(quantidadeLote) || !Number.isInteger(casasNumeroLote)) {
-        error("Preencha codigo base, numero inicial, quantidade e casas do codigo");
+        error("Preencha código base, número inicial, quantidade e casas do código");
         return;
       }
 
       if (numeroInicialLote < 0 || quantidadeLote <= 0 || casasNumeroLote <= 0) {
-        error("Numero inicial deve ser maior ou igual a zero; quantidade e casas do codigo devem ser maiores que zero");
+        error("Número inicial deve ser maior ou igual a zero; quantidade e casas do código devem ser maiores que zero");
         return;
       }
 
       if (quantidadeLote > MAX_ITENS_LOTE) {
-        error(`Quantidade maxima por lote: ${MAX_ITENS_LOTE} itens`);
+        error(`Quantidade máxima por lote: ${MAX_ITENS_LOTE} itens`);
         return;
       }
     }
@@ -373,14 +424,14 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
           (_codigo, index) => codigosNormalizados.indexOf(codigosNormalizados[index]) !== index,
         );
         if (codigosDuplicadosNoLote.length > 0) {
-          error(`Lote invalido: codigos duplicados (${resumirCodigos([...new Set(codigosDuplicadosNoLote)])})`);
+          error(`Lote inválido: códigos duplicados (${resumirCodigos([...new Set(codigosDuplicadosNoLote)])})`);
           return;
         }
 
         const codigosExistentes = new Set(rows.map((row) => row.codigo.toLowerCase()));
         const codigosConflitantes = codigos.filter((codigo) => codigosExistentes.has(codigo.toLowerCase()));
         if (codigosConflitantes.length > 0) {
-          error(`Ja existem codigos cadastrados neste lote: ${resumirCodigos(codigosConflitantes)}`);
+          error(`Já existem códigos cadastrados neste lote: ${resumirCodigos(codigosConflitantes)}`);
           return;
         }
 
@@ -410,6 +461,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
       resetarFormularioCriacao();
       setOpenCreateModal(false);
       await carregar();
+      notificarAtualizacaoGlobal("kit");
     } catch (err) {
       error(err instanceof Error ? err.message : "Erro ao criar item");
       await carregar();
@@ -423,7 +475,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
     const destinoNormalizado = normalizarTipo(tipoDestino);
 
     if (!origemNormalizada || !destinoNormalizado) {
-      error("Tipo invalido");
+      error("Tipo inválido");
       return;
     }
 
@@ -519,7 +571,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
         normalizarTipo(tipo).toLowerCase() !== tipoAtual.toLowerCase(),
     );
     if (conflito) {
-      error("Ja existe um tipo com esse nome");
+      error("Já existe um tipo com esse nome");
       return;
     }
 
@@ -554,7 +606,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
     const possuiItens = rows.some((item) => normalizarTipoChave(item.tipo) === tipoAtualChave);
 
     if (possuiItens && !tipoFallback) {
-      error("Nao existe outro tipo para converter os itens desse grupo");
+      error("Não existe outro tipo para converter os itens desse grupo");
       return;
     }
 
@@ -584,6 +636,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
       await api.del(`${endpointBase}/${encodeURIComponent(row.codigo)}`);
       success(`Item ${row.codigo} apagado`);
       await carregar();
+      notificarAtualizacaoGlobal("kit");
     } catch (err) {
       error(err instanceof Error ? err.message : "Erro ao apagar item");
     }
@@ -602,16 +655,30 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
       return matchTexto && matchStatus && matchTipo && matchTamanho && matchAtivo;
     });
   }, [rows, busca, filtroStatusItem, filtroTipo, filtroTamanho, filtroAtivo]);
+  const colunasOrdenacaoItens = useMemo<DataTableColumn<ItemRow>[]>(() => [
+    { key: "selecionar", title: "Selecionar", sortable: false },
+    { key: "codigo", title: "Código", sortValue: (row) => row.codigo },
+    { key: "tipo", title: "Tipo", sortValue: (row) => row.tipo },
+    { key: "descricao", title: "Descrição", sortValue: (row) => descricaoItemLabel(row.descricao) },
+    { key: "tamanho", title: "Tamanho", sortValue: (row) => row.tamanho },
+    { key: "status", title: "Status", sortValue: (row) => row.status },
+    { key: "ativo", title: "Ativo", sortValue: (row) => row.statusAtivo },
+    { key: "acoes", title: "Acoes", sortable: false },
+  ], []);
+  const rowsOrdenadas = useMemo(
+    () => sortDataTableRows(rowsFiltradas, colunasOrdenacaoItens, sortItens),
+    [rowsFiltradas, colunasOrdenacaoItens, sortItens],
+  );
 
   useEffect(() => {
     setPaginaItens(1);
   }, [busca, filtroStatusItem, filtroTipo, filtroTamanho, filtroAtivo]);
 
-  const totalPaginasItens = Math.max(1, Math.ceil(rowsFiltradas.length / ITENS_POR_PAGINA));
+  const totalPaginasItens = Math.max(1, Math.ceil(rowsOrdenadas.length / ITENS_POR_PAGINA));
   const rowsPaginadas = useMemo(() => {
     const inicio = (paginaItens - 1) * ITENS_POR_PAGINA;
-    return rowsFiltradas.slice(inicio, inicio + ITENS_POR_PAGINA);
-  }, [rowsFiltradas, paginaItens]);
+    return rowsOrdenadas.slice(inicio, inicio + ITENS_POR_PAGINA);
+  }, [rowsOrdenadas, paginaItens]);
   const codigosSelecionadosSet = useMemo(() => new Set(codigosSelecionados), [codigosSelecionados]);
   const codigosFiltradosSet = useMemo(() => new Set(rowsFiltradas.map((row) => row.codigo)), [rowsFiltradas]);
   const codigosSelecionadosFiltrados = useMemo(
@@ -619,6 +686,26 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
     [codigosSelecionados, codigosFiltradosSet],
   );
   const codigosPaginaAtual = useMemo(() => rowsPaginadas.map((row) => row.codigo), [rowsPaginadas]);
+  const codigosLoteSelecaoPreview = useMemo(() => {
+    const base = loteSelecao.codigoBase.trim();
+    const numeroInicial = Number.parseInt(loteSelecao.numeroInicial, 10);
+    const numeroFinal = Number.parseInt(loteSelecao.numeroFinal, 10);
+    const tipoFiltro = loteSelecao.tipo;
+
+    if (!base || !Number.isInteger(numeroInicial) || !Number.isInteger(numeroFinal) || numeroInicial < 0 || numeroFinal < numeroInicial) {
+      return [] as string[];
+    }
+
+    return rowsFiltradas
+      .filter((row) => {
+        if (tipoFiltro !== "todos" && normalizarTipoChave(row.tipo) !== normalizarTipoChave(tipoFiltro)) {
+          return false;
+        }
+        const numero = extrairNumeroCodigo(row.codigo, base);
+        return numero !== null && numero >= numeroInicial && numero <= numeroFinal;
+      })
+      .map((row) => row.codigo);
+  }, [rowsFiltradas, loteSelecao]);
   const todosSelecionadosNaPagina =
     codigosPaginaAtual.length > 0 && codigosPaginaAtual.every((codigo) => codigosSelecionadosSet.has(codigo));
   const algunsSelecionadosNaPagina = codigosPaginaAtual.some((codigo) => codigosSelecionadosSet.has(codigo));
@@ -634,8 +721,8 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
     setCodigosSelecionados((prev) => prev.filter((codigo) => codigosDisponiveis.has(codigo)));
   }, [rows]);
 
-  const inicioPaginaItens = rowsFiltradas.length === 0 ? 0 : (paginaItens - 1) * ITENS_POR_PAGINA + 1;
-  const fimPaginaItens = Math.min(paginaItens * ITENS_POR_PAGINA, rowsFiltradas.length);
+  const inicioPaginaItens = rowsOrdenadas.length === 0 ? 0 : (paginaItens - 1) * ITENS_POR_PAGINA + 1;
+  const fimPaginaItens = Math.min(paginaItens * ITENS_POR_PAGINA, rowsOrdenadas.length);
 
   const resumoStatus = useMemo(() => {
     return rowsFiltradas.reduce(
@@ -704,9 +791,44 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
       const codigosSucessoSet = new Set(codigosComSucesso);
       setCodigosSelecionados((prev) => prev.filter((codigo) => !codigosSucessoSet.has(codigo)));
       await carregar();
+      if (codigosComSucesso.length > 0) {
+        notificarAtualizacaoGlobal("kit");
+      }
     } finally {
       setDeletingBulk(false);
     }
+  }
+
+  function selecionarLote() {
+    const base = loteSelecao.codigoBase.trim();
+    const numeroInicial = Number.parseInt(loteSelecao.numeroInicial, 10);
+    const numeroFinal = Number.parseInt(loteSelecao.numeroFinal, 10);
+
+    if (!base) {
+      error("Informe o código base para selecionar o lote");
+      return;
+    }
+
+    if (!Number.isInteger(numeroInicial) || !Number.isInteger(numeroFinal) || numeroInicial < 0 || numeroFinal < numeroInicial) {
+      error("Informe uma faixa de numeração válida");
+      return;
+    }
+
+    const selecionados = codigosLoteSelecaoPreview;
+    if (selecionados.length === 0) {
+      error("Nenhum item encontrado para os criterios informados");
+      return;
+    }
+
+    setCodigosSelecionados((prev) => {
+      if (loteSelecao.substituirSelecao) {
+        return [...selecionados];
+      }
+      return Array.from(new Set([...prev, ...selecionados]));
+    });
+
+    success(`${selecionados.length} item(ns) selecionado(s) por lote`);
+    setSelecionarLoteAberto(false);
   }
 
   return (
@@ -717,7 +839,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
         description={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
             <span>Total: {rowsFiltradas.length}</span>
-            <span>Disponiveis: {resumoStatus.disponivel}</span>
+            <span>Disponíveis: {resumoStatus.disponivel}</span>
             <span>Emprestados: {resumoStatus.emprestado}</span>
             <span>Inativos: {resumoStatus.inativo}</span>
           </div>
@@ -730,7 +852,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
             <Input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar codigo, tipo, descricao ou tamanho"
+              placeholder="Buscar código, tipo, descrição ou tamanho"
               className={`${FILTRO_INPUT_CLASS} w-full sm:w-64`}
             />
             <Select value={filtroStatusItem} onValueChange={(value) => setFiltroStatusItem(value as "todos" | ItemStatus)}>
@@ -739,7 +861,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos status</SelectItem>
-                <SelectItem value="disponivel">disponivel</SelectItem>
+                <SelectItem value="disponivel">disponível</SelectItem>
                 <SelectItem value="emprestado">emprestado</SelectItem>
                 <SelectItem value="inativo">inativo</SelectItem>
               </SelectContent>
@@ -787,7 +909,16 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
               onClick={() => alternarSelecaoPagina(!todosSelecionadosNaPagina)}
               disabled={rowsPaginadas.length === 0}
             >
-              {todosSelecionadosNaPagina ? "Desmarcar pagina" : "Selecionar pagina"}
+              {todosSelecionadosNaPagina ? "Desmarcar página" : "Selecionar página"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-8 whitespace-nowrap rounded-lg border-border/70 px-2.5 text-[11px]"
+              onClick={abrirModalSelecaoLote}
+              disabled={rowsFiltradas.length === 0}
+            >
+              Selecionar lote
             </Button>
             <Button
               type="button"
@@ -820,7 +951,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
                     <Checkbox
                       checked={todosSelecionadosNaPagina || (algunsSelecionadosNaPagina && "indeterminate")}
                       onCheckedChange={(checked) => alternarSelecaoPagina(Boolean(checked))}
-                      aria-label="Selecionar itens da pagina"
+                      aria-label="Selecionar itens da página"
                     />
                   </div>
                 ),
@@ -830,19 +961,21 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
               },
               {
                 key: "codigo",
-                title: "Codigo",
+                title: "Código",
                 width: "12%",
                 className: "font-mono font-semibold",
                 sortValue: (row) => row.codigo,
               },
               { key: "tipo", title: "Tipo", width: "15%", sortValue: (row) => row.tipo },
-              { key: "descricao", title: "Descricao", width: "24%", sortValue: (row) => descricaoItemLabel(row.descricao) },
+              { key: "descricao", title: "Descrição", width: "24%", sortValue: (row) => descricaoItemLabel(row.descricao) },
               { key: "tamanho", title: "Tamanho", align: "center", width: "11%", sortValue: (row) => row.tamanho },
               { key: "status", title: "Status", align: "center", width: "11%", sortValue: (row) => row.status },
               { key: "ativo", title: "Ativo", align: "center", width: "9%", sortValue: (row) => row.statusAtivo },
               { key: "acoes", title: "Acoes", align: "center", width: "12%" },
             ]}
             rows={rowsPaginadas}
+            sortState={sortItens}
+            onSortStateChange={setSortItens}
             getRowKey={(row) => row.codigo}
             onRowClick={(row) => {
               void openKit(row.codigo);
@@ -988,7 +1121,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
 
         <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-[10px] text-muted-foreground">
-            <p>{inicioPaginaItens}-{fimPaginaItens} de {rowsFiltradas.length} | Pagina {paginaItens} de {totalPaginasItens}</p>
+            <p>{inicioPaginaItens}-{fimPaginaItens} de {rowsFiltradas.length} | Página {paginaItens} de {totalPaginasItens}</p>
             <p>Selecionados nos filtros: {codigosSelecionadosFiltrados.length}</p>
           </div>
           <div className="flex min-w-[220px] justify-end gap-2">
@@ -1010,11 +1143,104 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
               onClick={() => setPaginaItens((paginaAtual) => Math.min(totalPaginasItens, paginaAtual + 1))}
               disabled={paginaItens === totalPaginasItens}
             >
-              Proxima
+              Próxima
             </Button>
           </div>
         </div>
       </SectionCard>
+
+      <Modal
+        open={selecionarLoteAberto}
+        onClose={() => setSelecionarLoteAberto(false)}
+        title="Selecionar Itens por Lote"
+        description="Escolha tipo, código base e faixa de numeração para marcar itens automaticamente."
+        maxWidthClassName="max-w-3xl"
+      >
+        <div className="space-y-3">
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            <FormField label="Tipo" htmlFor="selecionar-lote-tipo">
+              <Select
+                value={loteSelecao.tipo}
+                onValueChange={(value) => setLoteSelecao((prev) => ({ ...prev, tipo: value }))}
+              >
+                <SelectTrigger id="selecionar-lote-tipo" className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos tipos</SelectItem>
+                  {opcoesTipo.map((tipo) => (
+                    <SelectItem key={`lote-selecao-${tipo}`} value={tipo}>
+                      {tipo}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+            <FormField label="Código base" htmlFor="selecionar-lote-base">
+              <Input
+                id="selecionar-lote-base"
+                value={loteSelecao.codigoBase}
+                onChange={(event) => setLoteSelecao((prev) => ({ ...prev, codigoBase: event.target.value }))}
+                placeholder="Ex.: KIT-"
+                className="h-9 text-xs"
+              />
+            </FormField>
+          </div>
+
+          <div className="grid gap-2.5 sm:grid-cols-2">
+            <FormField label="Numero inicial" htmlFor="selecionar-lote-inicial">
+              <Input
+                id="selecionar-lote-inicial"
+                type="number"
+                min={0}
+                value={loteSelecao.numeroInicial}
+                onChange={(event) => setLoteSelecao((prev) => ({ ...prev, numeroInicial: event.target.value }))}
+                className="h-9 text-xs"
+              />
+            </FormField>
+            <FormField label="Numero final" htmlFor="selecionar-lote-final">
+              <Input
+                id="selecionar-lote-final"
+                type="number"
+                min={0}
+                value={loteSelecao.numeroFinal}
+                onChange={(event) => setLoteSelecao((prev) => ({ ...prev, numeroFinal: event.target.value }))}
+                className="h-9 text-xs"
+              />
+            </FormField>
+          </div>
+
+          <label className="flex items-center gap-2 rounded-lg border border-border/70 bg-surface-2/70 px-2.5 py-2 text-xs text-muted-foreground">
+            <Checkbox
+              checked={loteSelecao.substituirSelecao}
+              onCheckedChange={(checked) => {
+                setLoteSelecao((prev) => ({ ...prev, substituirSelecao: Boolean(checked) }));
+              }}
+            />
+            Substituir selecao atual
+          </label>
+
+          <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-2.5 text-xs text-muted-foreground">
+            <p>Encontrados: {codigosLoteSelecaoPreview.length} item(ns)</p>
+            {codigosLoteSelecaoPreview.length > 0 ? (
+              <p>
+                Prévia: <span className="font-mono text-foreground">{resumirCodigos(codigosLoteSelecaoPreview, 8)}</span>
+              </p>
+            ) : (
+              <p>Ajuste os criterios para gerar uma previa.</p>
+            )}
+          </div>
+
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="outline" className="h-9 text-xs" onClick={() => setSelecionarLoteAberto(false)}>
+              Cancelar
+            </Button>
+            <Button className="h-9 text-xs" onClick={selecionarLote}>
+              Selecionar lote
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={openCreateModal}
@@ -1022,15 +1248,15 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
         title={modoCriacao === "lote" ? "Novo Lote de Itens" : "Novo Item"}
         description={
           modoCriacao === "lote"
-            ? "Use um codigo base e uma quantidade para gerar codigos em sequencia."
-            : "Cadastre codigo, tipo, descricao opcional, tamanho e status inicial."
+            ? "Use um código base e uma quantidade para gerar códigos em sequência."
+            : "Cadastre código, tipo, descrição opcional, tamanho e status inicial."
         }
         maxWidthClassName="max-w-4xl"
       >
         <div className="space-y-4">
           <div className="space-y-3 rounded-2xl border border-border/65 bg-surface-2/45 p-3 sm:p-4">
             <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-12">
-              <FormField label="Modo de criacao" htmlFor="novo-item-modo" className="xl:col-span-3">
+              <FormField label="Modo de criação" htmlFor="novo-item-modo" className="xl:col-span-3">
                 <Select value={modoCriacao} onValueChange={(value) => setModoCriacao(value as ModoCriacaoItem)}>
                   <SelectTrigger id="novo-item-modo" className="h-9 text-xs">
                     <SelectValue />
@@ -1043,18 +1269,18 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
               </FormField>
 
               {modoCriacao === "unitario" ? (
-                <FormField label="Codigo" htmlFor="novo-item-codigo" className="xl:col-span-9">
+                <FormField label="Código" htmlFor="novo-item-codigo" className="xl:col-span-9">
                   <Input
                     id="novo-item-codigo"
                     value={novo.codigo}
                     onChange={(e) => setNovo((p) => ({ ...p, codigo: e.target.value }))}
-                    placeholder="Codigo"
+                    placeholder="Código"
                     className="h-9 text-xs"
                   />
                 </FormField>
               ) : (
                 <>
-                  <FormField label="Codigo base" htmlFor="novo-item-lote-base" className="xl:col-span-4">
+                  <FormField label="Código base" htmlFor="novo-item-lote-base" className="xl:col-span-4">
                     <Input
                       id="novo-item-lote-base"
                       value={lote.codigoBase}
@@ -1063,7 +1289,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
                       className="h-9 text-xs"
                     />
                   </FormField>
-                  <FormField label="Numero inicial" htmlFor="novo-item-lote-inicial" className="xl:col-span-3">
+                  <FormField label="Número inicial" htmlFor="novo-item-lote-inicial" className="xl:col-span-3">
                     <Input
                       id="novo-item-lote-inicial"
                       type="number"
@@ -1084,7 +1310,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
                       className="h-9 text-xs"
                     />
                   </FormField>
-                  <FormField label="Casas do codigo" htmlFor="novo-item-lote-casas" className="xl:col-span-2">
+                  <FormField label="Casas do código" htmlFor="novo-item-lote-casas" className="xl:col-span-2">
                     <Input
                       id="novo-item-lote-casas"
                       type="number"
@@ -1103,11 +1329,11 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
               <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-2.5 text-xs text-muted-foreground">
                 {codigosLotePreview.length > 0 ? (
                   <p>
-                    Previa de codigos: <span className="font-mono text-foreground">{resumirCodigos(codigosLotePreview)}</span>
+                    Prévia de códigos: <span className="font-mono text-foreground">{resumirCodigos(codigosLotePreview)}</span>
                     {Number.parseInt(lote.quantidade, 10) > codigosLotePreview.length ? " ..." : ""}
                   </p>
                 ) : (
-                  <p>Preencha o padrao do lote para gerar a previa de codigos.</p>
+                  <p>Preencha o padrão do lote para gerar a prévia de códigos.</p>
                 )}
               </div>
             )}
@@ -1206,12 +1432,12 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </FormField>
-              <FormField label="Descricao (opcional)" htmlFor="novo-item-descricao" className="sm:col-span-2 xl:col-span-4">
+              <FormField label="Descrição (opcional)" htmlFor="novo-item-descricao" className="sm:col-span-2 xl:col-span-4">
                 <Input
                   id="novo-item-descricao"
                   value={novo.descricao}
                   onChange={(e) => setNovo((p) => ({ ...p, descricao: e.target.value }))}
-                  placeholder="Descricao"
+                  placeholder="Descrição"
                   className="h-9 text-xs"
                 />
               </FormField>
@@ -1239,7 +1465,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="disponivel">disponivel</SelectItem>
+                    <SelectItem value="disponivel">disponível</SelectItem>
                     <SelectItem value="emprestado">emprestado</SelectItem>
                     <SelectItem value="inativo">inativo</SelectItem>
                   </SelectContent>

@@ -33,7 +33,7 @@ export class ValidationQueueService {
       throw new AppError(
         409,
         "PENDING_OPERATION_ALREADY_EXISTS",
-        "Ja existe operacao pendente para a matricula e tipo informados",
+        "Já existe operação pendente para a matrícula e tipo informados",
       );
     }
 
@@ -60,13 +60,13 @@ export class ValidationQueueService {
     const raw = await redis.get(key);
 
     if (!raw) {
-      throw new AppError(409, "CODE_EXPIRED", "Codigo expirado ou inexistente");
+      throw new AppError(409, "CODE_EXPIRED", "Código expirado ou inexistente");
     }
 
     const payload = JSON.parse(raw) as QueuePayload;
 
     if (payload.codigo !== input.codigo) {
-      throw new AppError(409, "INVALID_CODE", "Codigo invalido");
+      throw new AppError(409, "INVALID_CODE", "Código inválido");
     }
 
     return payload;
@@ -77,14 +77,14 @@ export class ValidationQueueService {
     const raw = await redis.get(key);
 
     if (!raw) {
-      throw new AppError(404, "NO_PENDING_OPERATION", "Nao existe operacao pendente");
+      throw new AppError(404, "NO_PENDING_OPERATION", "Não existe operação pendente");
     }
 
     await redis.del(key);
 
     const result = {
       sucesso: false,
-      mensagem: "Operacao cancelada",
+      mensagem: "Operação cancelada",
       timestamp: new Date().toISOString(),
     };
 

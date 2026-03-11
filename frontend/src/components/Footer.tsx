@@ -9,7 +9,7 @@ interface FooterProps {
 const SUPPORT_EMAIL = "chvcti@saude.ba.gov.br";
 const SUPPORT_PHONE_DISPLAY = "(77) 3229-2420";
 const SUPPORT_PHONE_LINK = "+557732292420";
-const SUPPORT_HOURS = "Segunda a sexta, 9h as 18h";
+const SUPPORT_HOURS = "Segunda a sexta, 7h as 18h";
 
 export function Footer({ leading }: FooterProps) {
   const [contactOpen, setContactOpen] = useState(false);

@@ -97,7 +97,7 @@ export function subscribeOperacaoMonitor(handler: (event: OperacaoMonitorEvent) 
         handler(parsed.event);
       }
     } catch {
-      // ignora payload invalido
+      // ignora payload inválido
     }
   };
 

@@ -109,7 +109,7 @@ export function AuditoriaTab() {
             <Input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Operador, entidade, operacao ou registro"
+              placeholder="Operador, entidade, operação ou registro"
               className={`${FILTRO_INPUT_CLASS} w-full sm:w-56 lg:w-72`}
             />
             <Button
@@ -138,7 +138,7 @@ export function AuditoriaTab() {
               },
               { key: "operador", title: "Operador", width: "20%", sortValue: (row) => row.operador },
               { key: "entidade", title: "Entidade", width: "20%", sortValue: (row) => row.entidade },
-              { key: "operacao", title: "Operacao", align: "center", width: "20%", sortValue: (row) => row.operacao },
+              { key: "operacao", title: "Operação", align: "center", width: "20%", sortValue: (row) => row.operacao },
               {
                 key: "registro",
                 title: "Registro",

@@ -24,13 +24,13 @@ export class AuthService {
     });
 
     if (!credencial) {
-      throw new AppError(401, "INVALID_CREDENTIALS", "Credenciais invalidas");
+      throw new AppError(401, "INVALID_CREDENTIALS", "Credenciais inválidas");
     }
 
     const senhaOk = await bcrypt.compare(input.senha, credencial.senhaHash);
 
     if (!senhaOk) {
-      throw new AppError(401, "INVALID_CREDENTIALS", "Credenciais invalidas");
+      throw new AppError(401, "INVALID_CREDENTIALS", "Credenciais inválidas");
     }
 
     const token = randomUUID();
@@ -69,7 +69,7 @@ export class AuthService {
     });
 
     if (!funcionario) {
-      throw new AppError(404, "FUNCIONARIO_NOT_FOUND", "Funcionario nao encontrado");
+      throw new AppError(404, "FUNCIONARIO_NOT_FOUND", "Funcionário não encontrado");
     }
 
     const token = randomUUID();
@@ -133,7 +133,7 @@ export class AuthService {
     });
 
     if (!credencial) {
-      throw new AppError(404, "USER_NOT_FOUND", "Usuario nao encontrado");
+      throw new AppError(404, "USER_NOT_FOUND", "Usuário não encontrado");
     }
 
     return credencial;
@@ -152,10 +152,10 @@ export class AuthService {
     });
 
     if (!credencial) {
-      throw new AppError(404, "USER_NOT_FOUND", "Usuario nao encontrado");
+      throw new AppError(404, "USER_NOT_FOUND", "Usuário não encontrado");
     }
     if (input.senhaNova && input.senhaNova.length < 6) {
-      throw new AppError(400, "SENHA_FRACA", "Senha deve ter no minimo 6 caracteres");
+      throw new AppError(400, "SENHA_FRACA", "Senha deve ter no mínimo 6 caracteres");
     }
 
     const dadosAtualizacao: {
@@ -211,7 +211,7 @@ export class AuthService {
 
   async atualizarTema(usuario: string, tema: string) {
     if (tema !== "light" && tema !== "dark") {
-      throw new AppError(400, "INVALID_THEME", "Tema invalido. Use 'light' ou 'dark'");
+      throw new AppError(400, "INVALID_THEME", "Tema inválido. Use 'light' ou 'dark'");
     }
 
     const credencial = await prisma.credencial.findFirst({
@@ -222,7 +222,7 @@ export class AuthService {
     });
 
     if (!credencial) {
-      throw new AppError(404, "USER_NOT_FOUND", "Usuario nao encontrado");
+      throw new AppError(404, "USER_NOT_FOUND", "Usuário não encontrado");
     }
 
     await prisma.credencial.update({
@@ -245,4 +245,3 @@ export class AuthService {
     return `sess:sol:${token}`;
   }
 }
-

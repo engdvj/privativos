@@ -214,7 +214,7 @@ function classificarErroBusca(err: unknown, mensagemNotFound: string) {
   }
 
   if (err instanceof TypeError || /failed to fetch|network|fetch/i.test(mensagem)) {
-    return { estado: "networkError" as const, mensagem: "Erro de rede. Verifique a conexao." };
+    return { estado: "networkError" as const, mensagem: "Erro de rede. Verifique a conexão." };
   }
 
   return { estado: "error" as const, mensagem: mensagem || "Erro ao buscar dados." };
@@ -246,7 +246,7 @@ async function resolverMatriculaPorTermo(termoEntrada: string): Promise<string> 
   }
 
   if (resultado.tipo === "kit") {
-    // Evita colisao quando o codigo do kit e igual a uma matricula numerica.
+    // Evita colisão quando o código do kit é igual a uma matrícula numérica.
     if (termoNumerico) {
       try {
         await api.get<FuncionarioInfo>(`/ops/funcionario/${encodeURIComponent(termo)}`);
@@ -260,7 +260,7 @@ async function resolverMatriculaPorTermo(termoEntrada: string): Promise<string> 
     }
 
     if (!resultado.kit.solicitante_matricula) {
-      throw createBuscaError("empty", "Kit sem emprestimo ativo no momento.");
+      throw createBuscaError("empty", "Kit sem empréstimo ativo no momento.");
     }
     return resultado.kit.solicitante_matricula;
   }
@@ -277,10 +277,10 @@ async function resolverMatriculaPorTermo(termoEntrada: string): Promise<string> 
       return sugestaoExata.matricula;
     }
 
-    throw createBuscaError("idle", "Encontramos mais de um funcionario. Selecione uma sugestao.");
+    throw createBuscaError("idle", "Encontramos mais de um funcionário. Selecione uma sugestão.");
   }
 
-  throw createBuscaError("notFound", "Nenhum funcionario ou kit encontrado.");
+  throw createBuscaError("notFound", "Nenhum funcionário ou kit encontrado.");
 }
 
 function useBuscaSugestoes(termo: string, enabled: boolean) {
@@ -376,7 +376,7 @@ function SearchSection({
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor={id} className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          Identificacao
+          Identificação
         </Label>
 
       </div>
@@ -388,7 +388,7 @@ function SearchSection({
             <Input
               id={id}
               value={matricula}
-              placeholder="Matricula, nome ou codigo do kit"
+              placeholder="Matrícula, nome ou código do kit"
               autoComplete="off"
               aria-invalid={Boolean(matriculaError)}
               aria-describedby={matriculaError ? errorId : hintId}
@@ -409,7 +409,7 @@ function SearchSection({
           {showSugestoes && (sugestoesLoading || sugestoes.length > 0) ? (
             <div className="absolute inset-x-0 top-[calc(100%+8px)] z-50 max-h-64 overflow-y-auto rounded-xl border border-border/70 bg-popover p-2 shadow-[var(--shadow-soft)]">
               {sugestoesLoading ? (
-                <p className="px-2 py-2 text-xs text-muted-foreground">Buscando sugestoes...</p>
+                <p className="px-2 py-2 text-xs text-muted-foreground">Buscando sugestões...</p>
               ) : (
                 sugestoes.map((sugestao) => (
                   <button
@@ -479,7 +479,7 @@ function BuscaEstadoCard({
   const isNotFound = estado === "notFound";
   const isNetworkError = estado === "networkError";
   const Icon = isNotFound ? SearchX : isNetworkError ? WifiOff : CircleAlert;
-  const titulo = isNotFound ? "Funcionario nao encontrado" : isNetworkError ? "Erro de rede" : "Erro na busca";
+  const titulo = isNotFound ? "Funcionário não encontrado" : isNetworkError ? "Erro de rede" : "Erro na busca";
 
   return (
     <div
@@ -627,24 +627,24 @@ function ResumoEtapa({
               <Icon className="h-5 w-5 text-primary" />
             </div>
             <h3 className="text-lg font-semibold text-foreground">
-              {isEmprestimo ? "Confirmar Solicitacao" : "Confirmar Devolucao"}
+              {isEmprestimo ? "Confirmar Solicitação" : "Confirmar Devolução"}
             </h3>
-            <p className="text-sm text-muted-foreground">Revise as informacoes antes de confirmar.</p>
+            <p className="text-sm text-muted-foreground">Revise as informações antes de confirmar.</p>
           </div>
 
           <div className="space-y-4">
             <section className="space-y-4">
               <div className="overflow-hidden rounded-xl border border-border/70 bg-surface-2/60">
                 <div className="border-b border-border px-4 py-2.5">
-                  <h4 className="text-sm font-semibold text-foreground">Dados do usuario</h4>
+                  <h4 className="text-sm font-semibold text-foreground">Dados do usuário</h4>
                 </div>
                 <div className="divide-y divide-border">
                   <div className="flex items-center justify-between gap-4 px-4 py-2.5">
-                    <span className="text-sm text-muted-foreground">Funcionario</span>
+                    <span className="text-sm text-muted-foreground">Funcionário</span>
                     <span className="text-sm font-semibold text-foreground">{funcionario.nome}</span>
                   </div>
                   <div className="flex items-center justify-between gap-4 px-4 py-2.5">
-                    <span className="text-sm text-muted-foreground">Matricula</span>
+                    <span className="text-sm text-muted-foreground">Matrícula</span>
                     <span className="font-mono text-sm font-semibold text-foreground">{matricula}</span>
                   </div>
                   <div className="flex items-center justify-between gap-4 px-4 py-2.5">
@@ -663,7 +663,7 @@ function ResumoEtapa({
               <div className="rounded-xl border border-border/70 bg-surface-2/60 p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-foreground">
-                    {isEmprestimo ? "Pedido" : "Itens para devolucao"}
+                    {isEmprestimo ? "Pedido" : "Itens para devolução"}
                   </h4>
                   <StatusPill tone="info">
                     {totalSelecionado} {totalSelecionado === 1 ? "item" : "itens"}
@@ -690,7 +690,7 @@ function ResumoEtapa({
                     </div>
                   ) : (
                     <div className="rounded-xl border border-border/70 bg-background p-3 text-center">
-                      <p className="text-sm text-muted-foreground">Nenhum item selecionado para solicitacao.</p>
+                      <p className="text-sm text-muted-foreground">Nenhum item selecionado para solicitação.</p>
                     </div>
                   )
                 ) : itens && itens.length > 0 ? (
@@ -708,7 +708,7 @@ function ResumoEtapa({
                   </div>
                 ) : (
                   <div className="rounded-xl border border-border/70 bg-background p-3 text-center">
-                    <p className="text-sm text-muted-foreground">Nenhum item selecionado para devolucao.</p>
+                    <p className="text-sm text-muted-foreground">Nenhum item selecionado para devolução.</p>
                   </div>
                 )}
               </div>
@@ -762,21 +762,21 @@ function ResultadoEtapa({
             </div>
 
             <h3 className="text-xl font-semibold text-foreground">
-              {resultado.sucesso ? (isEmprestimo ? "Solicitacao realizada" : "Devolucao realizada") : "Operacao cancelada"}
+              {resultado.sucesso ? (isEmprestimo ? "Solicitação realizada" : "Devolução realizada") : "Operação cancelada"}
             </h3>
             <p className="text-sm text-muted-foreground">
               {resultado.sucesso
                 ? isEmprestimo
-                  ? "A solicitacao foi confirmada com sucesso."
-                  : "A devolucao foi confirmada com sucesso."
-                : "A operacao foi cancelada e nenhuma alteracao foi realizada."}
+                  ? "A solicitação foi confirmada com sucesso."
+                  : "A devolução foi confirmada com sucesso."
+                : "A operação foi cancelada e nenhuma alteração foi realizada."}
             </p>
           </div>
 
           <div className="flex justify-center">
             <Button onClick={onReset} variant="outline" className="h-11 w-full rounded-xl text-sm sm:w-48">
               <RefreshCw className="h-4 w-4" />
-              Nova Operacao
+              Nova Operação
             </Button>
           </div>
         </div>
@@ -820,7 +820,7 @@ function EmprestimoTab() {
     setBuscaMensagem(null);
     setEtapa("busca");
     ultimoTermoBuscadoRef.current = "";
-    enviarMonitorEmEspera("Aguardando uma nova operacao.");
+    enviarMonitorEmEspera("Aguardando uma nova operação.");
   }
 
   function onMatriculaChange(value: string) {
@@ -842,7 +842,7 @@ function EmprestimoTab() {
   async function buscarFuncionario(entrada?: string) {
     const termo = (entrada ?? matricula).trim();
     if (!termo) {
-      setMatriculaError("Informe matricula, nome ou kit.");
+      setMatriculaError("Informe matrícula, nome ou kit.");
       return;
     }
     setMatriculaError(null);
@@ -876,9 +876,9 @@ function EmprestimoTab() {
       setQuantidadeSelecionada(1);
       setPedido([]);
       setBuscaEstado("success");
-      enviarMonitorEmEspera("Dados localizados. Aguardando resumo para confirmacao.");
+      enviarMonitorEmEspera("Dados localizados. Aguardando resumo para confirmação.");
     } catch (err) {
-      const classificado = classificarErroBusca(err, "Nao encontramos funcionario para esta matricula.");
+      const classificado = classificarErroBusca(err, "Não encontramos funcionário para esta matrícula.");
       setBuscaEstado(classificado.estado);
       setBuscaMensagem(classificado.estado === "idle" ? null : classificado.mensagem);
       setFuncionario(null);
@@ -889,7 +889,7 @@ function EmprestimoTab() {
       enviarMonitorEmEspera(
         classificado.estado === "idle"
           ? "Multiplos resultados localizados. Selecione uma sugestao para continuar."
-          : "Nao foi possivel localizar os dados. Aguardando nova tentativa.",
+          : "Não foi possível localizar os dados. Aguardando nova tentativa.",
       );
     } finally {
       setBuscaLoading(false);
@@ -974,9 +974,9 @@ function EmprestimoTab() {
 
   let motivoAdicionar: string | null = null;
   if (funcionario && !disponivel) {
-    motivoAdicionar = "Sem disponibilidade para nova solicitacao.";
+    motivoAdicionar = "Sem disponibilidade para nova solicitação.";
   } else if (funcionario && tamanhosDisponiveis.length === 0) {
-    motivoAdicionar = "Nao ha kits disponiveis no estoque.";
+    motivoAdicionar = "Não há kits disponíveis no estoque.";
   } else if (funcionario && !tipoSelecionado) {
     motivoAdicionar = "Selecione o tipo do item.";
   } else if (funcionario && !tamanhoSelecionado) {
@@ -984,7 +984,7 @@ function EmprestimoTab() {
   } else if (funcionario && restanteNoEstoque === 0) {
     motivoAdicionar = "Sem estoque disponivel para adicionar este tamanho.";
   } else if (funcionario && restanteLimiteFuncionario === 0) {
-    motivoAdicionar = "Limite maximo do funcionario ja atingido no pedido.";
+    motivoAdicionar = "Limite máximo do funcionário já atingido no pedido.";
   } else if (funcionario && !podeAdicionar) {
     motivoAdicionar = `Selecione de 1 a ${maxSolicitavelAtual}.`;
   }
@@ -1053,15 +1053,15 @@ function EmprestimoTab() {
 
       setResultado({ sucesso: true, itens: itensEmprestados });
       setEtapa("resultado");
-      success(`Solicitacao realizada: ${itensEmprestados.join(", ")}`);
+      success(`Solicitação realizada: ${itensEmprestados.join(", ")}`);
       enviarMonitorResultado({
         tipo: "emprestimo",
         sucesso: true,
-        mensagem: "Solicitacao confirmada com sucesso.",
+        mensagem: "Solicitação confirmada com sucesso.",
         itens: itensEmprestados,
       });
     } catch (err) {
-      const mensagem = err instanceof Error ? err.message : "Erro ao realizar solicitacao";
+      const mensagem = err instanceof Error ? err.message : "Erro ao realizar solicitação";
       error(mensagem);
       enviarMonitorResultado({
         tipo: "emprestimo",
@@ -1076,11 +1076,11 @@ function EmprestimoTab() {
   }
 
   function cancelarResumo() {
-    enviarMonitorEmEspera("Resumo cancelado. Aguardando nova operacao.");
+    enviarMonitorEmEspera("Resumo cancelado. Aguardando nova operação.");
     setEtapa("busca");
   }
 
-  const etapaUsuario = funcionario ? "Concluido" : "--";
+  const etapaUsuario = funcionario ? "Concluído" : "--";
   const etapaItens = usuarioNoLimite ? "Limite atingido" : totalSelecionado;
   const etapaRevisao = usuarioNoLimite ? "Bloqueado" : podeContinuar ? "Pronto" : "Aguardando";
   const animacaoEtapa = useDelicateTransition(`emprestimo-${etapa}-${buscaEstado}`);
@@ -1098,9 +1098,9 @@ function EmprestimoTab() {
             <Card className="relative z-20 border-border/70 bg-card/95 shadow-sm">
               <CardContent className="space-y-6 p-6">
                 <div className="space-y-2">
-                  <h2 className="text-lg font-semibold text-foreground">Identificacao</h2>
+                  <h2 className="text-lg font-semibold text-foreground">Identificação</h2>
                   <p className="text-sm text-muted-foreground">
-                    Busque o usuario para iniciar a solicitacao.
+                    Busque o usuário para iniciar a solicitação.
                   </p>
                 </div>
 
@@ -1141,7 +1141,7 @@ function EmprestimoTab() {
                     }
                   >
                     {buscaEstado === "success"
-                      ? "Usuario localizado"
+                      ? "Usuário localizado"
                       : buscaEstado === "loading"
                         ? "Buscando"
                         : buscaEstado === "idle"
@@ -1165,9 +1165,9 @@ function EmprestimoTab() {
                     {buscaEstado === "idle" && (
                       <div className="rounded-xl border border-border/70 bg-surface-2/65 p-5 text-center">
                         <Package className="mx-auto mb-4 h-8 w-8 text-muted-foreground/60" />
-                        <p className="text-sm font-semibold text-foreground">Nenhum usuario selecionado</p>
+                        <p className="text-sm font-semibold text-foreground">Nenhum usuário selecionado</p>
                         <p className="text-sm text-muted-foreground">
-                          Informe matricula, nome ou codigo do kit para carregar os dados.
+                          Informe matrícula, nome ou código do kit para carregar os dados.
                         </p>
                       </div>
                     )}
@@ -1191,10 +1191,10 @@ function EmprestimoTab() {
 
                         {usuarioNoLimite ? (
                           <div className="rounded-xl border border-destructive/35 bg-destructive/10 p-4">
-                            <p className="text-sm font-semibold text-foreground">Usuario no limite de solicitacoes</p>
+                            <p className="text-sm font-semibold text-foreground">Usuário no limite de solicitações</p>
                             <p className="text-sm text-muted-foreground">
-                              Este usuario ja esta com {funcionario.kits_em_uso}/{funcionario.max_kits} kits em uso.
-                              Realize uma devolucao para liberar novas solicitacoes.
+                              Este usuário já está com {funcionario.kits_em_uso}/{funcionario.max_kits} kits em uso.
+                              Realize uma devolução para liberar novas solicitações.
                             </p>
                           </div>
                         ) : (
@@ -1202,7 +1202,7 @@ function EmprestimoTab() {
                             <Separator />
 
                             <section className="space-y-3">
-                              <h4 className="text-sm font-semibold text-foreground">Configurar solicitacao</h4>
+                              <h4 className="text-sm font-semibold text-foreground">Configurar solicitação</h4>
 
                               <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(220px,0.9fr)_auto] lg:items-end">
                                 <div className="space-y-2">
@@ -1319,7 +1319,7 @@ function EmprestimoTab() {
                                 onClick={abrirResumo}
                                 disabled={!podeContinuar}
                                 className="h-11 w-full rounded-xl text-sm"
-                                aria-label="Continuar para resumo de solicitacao"
+                                aria-label="Continuar para resumo de solicitação"
                               >
                                 Revisar pedido
                                 <ChevronRight className="h-4 w-4" />
@@ -1340,12 +1340,12 @@ function EmprestimoTab() {
               <CardContent className="space-y-6 p-6">
                 <div className="space-y-2">
                   <h3 className="text-lg font-semibold text-foreground">Como funciona</h3>
-                  <p className="text-sm text-muted-foreground">Acompanhe os proximos passos da solicitacao.</p>
+                  <p className="text-sm text-muted-foreground">Acompanhe os próximos passos da solicitação.</p>
                 </div>
 
                 <div className="space-y-4">
                   <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5">
-                    <p className="text-xs text-muted-foreground">1. Usuario</p>
+                    <p className="text-xs text-muted-foreground">1. Usuário</p>
                     <p className="truncate text-sm font-semibold text-foreground">{etapaUsuario}</p>
                   </div>
                   <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5">
@@ -1353,7 +1353,7 @@ function EmprestimoTab() {
                     <p className="text-sm font-semibold text-foreground">{etapaItens}</p>
                   </div>
                   <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5">
-                    <p className="text-xs text-muted-foreground">3. Revisao</p>
+                    <p className="text-xs text-muted-foreground">3. Revisão</p>
                     <p className="text-sm font-semibold text-foreground">{etapaRevisao}</p>
                   </div>
                 </div>
@@ -1418,7 +1418,7 @@ function DevolucaoTab() {
     setBuscaMensagem(null);
     setEtapa("busca");
     ultimoTermoBuscadoRef.current = "";
-    enviarMonitorEmEspera("Aguardando uma nova operacao.");
+    enviarMonitorEmEspera("Aguardando uma nova operação.");
   }
 
   function onMatriculaChange(value: string) {
@@ -1437,7 +1437,7 @@ function DevolucaoTab() {
   async function buscarFuncionario(entrada?: string) {
     const termo = (entrada ?? matricula).trim();
     if (!termo) {
-      setMatriculaError("Informe matricula, nome ou kit.");
+      setMatriculaError("Informe matrícula, nome ou kit.");
       return;
     }
     setMatriculaError(null);
@@ -1461,10 +1461,10 @@ function DevolucaoTab() {
       setFuncionario(func);
       setItens(emprestados);
       setBuscaEstado(emprestados.length === 0 ? "empty" : "success");
-      setBuscaMensagem(emprestados.length === 0 ? "Este funcionario nao possui itens emprestados." : null);
-      enviarMonitorEmEspera("Dados localizados. Aguardando resumo para confirmacao.");
+      setBuscaMensagem(emprestados.length === 0 ? "Este funcionário não possui itens emprestados." : null);
+      enviarMonitorEmEspera("Dados localizados. Aguardando resumo para confirmação.");
     } catch (err) {
-      const classificado = classificarErroBusca(err, "Nao encontramos funcionario para esta matricula.");
+      const classificado = classificarErroBusca(err, "Não encontramos funcionário para esta matrícula.");
       setBuscaEstado(classificado.estado);
       setBuscaMensagem(classificado.estado === "idle" ? null : classificado.mensagem);
       setFuncionario(null);
@@ -1473,7 +1473,7 @@ function DevolucaoTab() {
       enviarMonitorEmEspera(
         classificado.estado === "idle"
           ? "Multiplos resultados localizados. Selecione uma sugestao para continuar."
-          : "Nao foi possivel localizar os dados. Aguardando nova tentativa.",
+          : "Não foi possível localizar os dados. Aguardando nova tentativa.",
       );
     } finally {
       setBuscaLoading(false);
@@ -1555,15 +1555,15 @@ function DevolucaoTab() {
       });
       setResultado({ sucesso: true, itens: data.itens_devolvidos });
       setEtapa("resultado");
-      success(`Devolucao realizada: ${data.itens_devolvidos.join(", ")}`);
+      success(`Devolução realizada: ${data.itens_devolvidos.join(", ")}`);
       enviarMonitorResultado({
         tipo: "devolucao",
         sucesso: true,
-        mensagem: "Devolucao confirmada com sucesso.",
+        mensagem: "Devolução confirmada com sucesso.",
         itens: data.itens_devolvidos,
       });
     } catch (err) {
-      const mensagem = err instanceof Error ? err.message : "Erro ao realizar devolucao";
+      const mensagem = err instanceof Error ? err.message : "Erro ao realizar devolução";
       error(mensagem);
       enviarMonitorResultado({
         tipo: "devolucao",
@@ -1578,7 +1578,7 @@ function DevolucaoTab() {
   }
 
   function cancelarResumo() {
-    enviarMonitorEmEspera("Resumo cancelado. Aguardando nova operacao.");
+    enviarMonitorEmEspera("Resumo cancelado. Aguardando nova operação.");
     setEtapa("busca");
   }
 
@@ -1586,11 +1586,11 @@ function DevolucaoTab() {
   const itensSelecionados = itens.filter((item) => selecionados.has(item.codigo));
   const podeContinuar = buscaEstado === "success" && selecionadosCount > 0;
   const motivoContinuar = buscaEstado === "empty"
-    ? "Nenhum item disponivel para devolucao."
+    ? "Nenhum item disponível para devolução."
     : buscaEstado === "success" && selecionadosCount === 0
       ? "Selecione ao menos um item."
       : null;
-  const etapaUsuario = funcionario ? "Concluido" : "--";
+  const etapaUsuario = funcionario ? "Concluído" : "--";
   const etapaItens = selecionadosCount;
   const etapaRevisao = podeContinuar ? "Pronto" : "Aguardando";
   const animacaoEtapa = useDelicateTransition(`devolucao-${etapa}-${buscaEstado}`);
@@ -1608,9 +1608,9 @@ function DevolucaoTab() {
             <Card className="relative z-20 border-border/70 bg-card/95 shadow-sm">
               <CardContent className="space-y-6 p-6">
                 <div className="space-y-2">
-                  <h2 className="text-lg font-semibold text-foreground">Identificacao</h2>
+                  <h2 className="text-lg font-semibold text-foreground">Identificação</h2>
                   <p className="text-sm text-muted-foreground">
-                    Busque o usuario para iniciar a devolucao.
+                    Busque o usuário para iniciar a devolução.
                   </p>
                 </div>
 
@@ -1651,7 +1651,7 @@ function DevolucaoTab() {
                     }
                   >
                     {buscaEstado === "success" || buscaEstado === "empty"
-                      ? "Usuario localizado"
+                      ? "Usuário localizado"
                       : buscaEstado === "loading"
                         ? "Buscando"
                         : buscaEstado === "idle"
@@ -1675,9 +1675,9 @@ function DevolucaoTab() {
                     {buscaEstado === "idle" && (
                       <div className="rounded-xl border border-border/70 bg-surface-2/65 p-5 text-center">
                         <Package className="mx-auto mb-4 h-8 w-8 text-muted-foreground/60" />
-                        <p className="text-sm font-semibold text-foreground">Nenhum usuario selecionado</p>
+                        <p className="text-sm font-semibold text-foreground">Nenhum usuário selecionado</p>
                         <p className="text-sm text-muted-foreground">
-                          Informe matricula, nome ou codigo do kit para carregar os dados.
+                          Informe matrícula, nome ou código do kit para carregar os dados.
                         </p>
                       </div>
                     )}
@@ -1710,7 +1710,7 @@ function DevolucaoTab() {
                               <Package className="mx-auto mb-3 h-8 w-8 text-muted-foreground/60" />
                               <p className="text-sm font-medium text-foreground">Nenhum item emprestado</p>
                               <p className="text-sm text-muted-foreground">
-                                Este usuario nao possui itens para devolucao.
+                                Este usuário não possui itens para devolução.
                               </p>
                             </div>
                           ) : (
@@ -1771,7 +1771,7 @@ function DevolucaoTab() {
                             <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 text-center">
                               <p className="text-sm font-medium text-foreground">Carrinho vazio</p>
                               <p className="text-sm text-muted-foreground">
-                                Selecione os itens para montar o pedido de devolucao.
+                                Selecione os itens para montar o pedido de devolução.
                               </p>
                             </div>
                           ) : (
@@ -1801,7 +1801,7 @@ function DevolucaoTab() {
                             onClick={abrirResumo}
                             disabled={!podeContinuar}
                             className="h-11 w-full rounded-xl text-sm"
-                            aria-label="Continuar para resumo de devolucao"
+                            aria-label="Continuar para resumo de devolução"
                           >
                             Revisar pedido
                             <ChevronRight className="h-4 w-4" />
@@ -1825,12 +1825,12 @@ function DevolucaoTab() {
               <CardContent className="space-y-6 p-6">
                 <div className="space-y-2">
                   <h3 className="text-lg font-semibold text-foreground">Como funciona</h3>
-                  <p className="text-sm text-muted-foreground">Acompanhe os proximos passos da devolucao.</p>
+                  <p className="text-sm text-muted-foreground">Acompanhe os próximos passos da devolução.</p>
                 </div>
 
                 <div className="space-y-4">
                   <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5">
-                    <p className="text-xs text-muted-foreground">1. Usuario</p>
+                    <p className="text-xs text-muted-foreground">1. Usuário</p>
                     <p className="truncate text-sm font-semibold text-foreground">{etapaUsuario}</p>
                   </div>
                   <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5">
@@ -1838,7 +1838,7 @@ function DevolucaoTab() {
                     <p className="text-sm font-semibold text-foreground">{etapaItens}</p>
                   </div>
                   <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5">
-                    <p className="text-xs text-muted-foreground">3. Revisao</p>
+                    <p className="text-xs text-muted-foreground">3. Revisão</p>
                     <p className="text-sm font-semibold text-foreground">{etapaRevisao}</p>
                   </div>
                 </div>
@@ -1914,7 +1914,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
       setPendencias(data.pendencias);
     } catch (err) {
       setPendencias([]);
-      error(err instanceof Error ? err.message : "Erro ao carregar pendencias do setor");
+      error(err instanceof Error ? err.message : "Erro ao carregar pendências do setor");
     } finally {
       setLoadingPendencias(false);
     }
@@ -1937,7 +1937,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
         setEstoque(estoqueData);
       } catch (err) {
         if (!ativo) return;
-        error(err instanceof Error ? err.message : "Erro ao carregar operacoes por setor");
+      error(err instanceof Error ? err.message : "Erro ao carregar operações por setor");
       } finally {
         if (ativo) {
           setLoadingBase(false);
@@ -2102,7 +2102,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
   if (!setorSelecionado) {
     motivoAdicionarSaida = "Selecione um setor.";
   } else if (estoque.length > 0 && estoqueDisponivel.length === 0) {
-    motivoAdicionarSaida = "Todos os tamanhos disponiveis ja foram adicionados ao pedido.";
+    motivoAdicionarSaida = "Todos os tamanhos disponíveis já foram adicionados ao pedido.";
   } else if (!tipoSaida) {
     motivoAdicionarSaida = "Selecione o tipo.";
   } else if (!tamanhoSaida) {
@@ -2110,7 +2110,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
   } else if (maxSaida === 0) {
     motivoAdicionarSaida = "Sem estoque para este tipo/tamanho.";
   } else if (maxSaidaDisponivel === 0) {
-    motivoAdicionarSaida = "Quantidade maxima deste tamanho ja foi adicionada ao pedido.";
+    motivoAdicionarSaida = "Quantidade máxima deste tamanho já foi adicionada ao pedido.";
   } else if (!podeAdicionarSaida) {
     motivoAdicionarSaida = `Selecione de 1 a ${maxSaidaDisponivel}.`;
   }
@@ -2119,15 +2119,15 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
   if (!setorSelecionado) {
     motivoAdicionarDevolucao = "Selecione um setor.";
   } else if (pendencias.length > 0 && pendenciasDisponiveis.length === 0) {
-    motivoAdicionarDevolucao = "Todas as pendencias ja foram adicionadas ao pedido.";
+    motivoAdicionarDevolucao = "Todas as pendências já foram adicionadas ao pedido.";
   } else if (!tipoDevolucao) {
     motivoAdicionarDevolucao = null;
   } else if (!tamanhoDevolucao) {
     motivoAdicionarDevolucao = "Selecione o tamanho.";
   } else if (maxDevolucao === 0) {
-    motivoAdicionarDevolucao = "Sem pendencia para este tipo/tamanho.";
+    motivoAdicionarDevolucao = "Sem pendência para este tipo/tamanho.";
   } else if (maxDevolucaoDisponivel === 0) {
-    motivoAdicionarDevolucao = "Quantidade maxima deste tamanho ja foi adicionada ao pedido.";
+    motivoAdicionarDevolucao = "Quantidade máxima deste tamanho já foi adicionada ao pedido.";
   } else if (!podeAdicionarDevolucao) {
     motivoAdicionarDevolucao = `Selecione de 1 a ${maxDevolucaoDisponivel}.`;
   }
@@ -2136,8 +2136,8 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
   const tiposAtivos = isSolicitacao ? tiposSaida.length : tiposPendentes.length;
   const variacoesAtivas = isSolicitacao ? estoqueDisponivel.length : pendenciasDisponiveis.length;
   const descricaoFluxo = isSolicitacao
-    ? "Selecione itens no painel lateral para montar a solicitacao deste setor."
-    : "Selecione pendencias no painel lateral para montar a devolucao deste setor.";
+    ? "Selecione itens no painel lateral para montar a solicitação deste setor."
+    : "Selecione pendências no painel lateral para montar a devolução deste setor.";
   const animacaoFluxo = useDelicateTransition(`setor-${tipoOperacao}-${setorSelecionado}`);
 
   async function recarregarDados() {
@@ -2230,12 +2230,12 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
         );
         itensEmprestados.push(...data.itens_emprestados);
       }
-      success(`Solicitacao registrada para ${setorSelecionado}: ${itensEmprestados.length} item(ns).`);
+      success(`Solicitação registrada para ${setorSelecionado}: ${itensEmprestados.length} item(ns).`);
       setPedidoSaida([]);
       setResumoSaidaAberto(false);
       await recarregarDados();
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao registrar solicitacao para setor");
+      error(err instanceof Error ? err.message : "Erro ao registrar solicitação para setor");
     } finally {
       setLoadingSaida(false);
     }
@@ -2259,12 +2259,12 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
         );
         itensDevolvidos.push(...data.itens_devolvidos);
       }
-      success(`Devolucao registrada para ${setorSelecionado}: ${itensDevolvidos.length} item(ns).`);
+      success(`Devolução registrada para ${setorSelecionado}: ${itensDevolvidos.length} item(ns).`);
       setPedidoDevolucao([]);
       setResumoDevolucaoAberto(false);
       await recarregarDados();
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao registrar devolucao para setor");
+      error(err instanceof Error ? err.message : "Erro ao registrar devolução para setor");
     } finally {
       setLoadingDevolucao(false);
     }
@@ -2316,23 +2316,23 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
               <h4 className="text-sm font-semibold text-foreground">Resumo do setor</h4>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5 animate-in fade-in-0 slide-in-from-bottom-2">
-                  <p className="text-xs text-muted-foreground">{isSolicitacao ? "Variacoes disponiveis" : "Variacoes pendentes"}</p>
+                  <p className="text-xs text-muted-foreground">{isSolicitacao ? "Variações disponíveis" : "Variações pendentes"}</p>
                   <p className="text-2xl font-semibold tabular-nums text-foreground">{variacoesAtivas}</p>
                   <p className="text-xs text-muted-foreground">{tiposAtivos} tipo(s) ativo(s)</p>
                 </div>
                 <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5 animate-in fade-in-0 slide-in-from-bottom-2">
-                  <p className="text-xs text-muted-foreground">Pendencias totais</p>
+                  <p className="text-xs text-muted-foreground">Pendências totais</p>
                   <p className="text-2xl font-semibold tabular-nums text-foreground">{totalPendente}</p>
                   <p className="text-xs text-muted-foreground">Atualizado no setor</p>
                 </div>
                 <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5 animate-in fade-in-0 slide-in-from-bottom-2">
                   <p className="text-xs text-muted-foreground">Itens no carrinho</p>
                   <p className="text-2xl font-semibold tabular-nums text-foreground">{totalNoCarrinho}</p>
-                  <p className="text-xs text-muted-foreground">{isSolicitacao ? "Pronto para revisao" : "Pronto para devolucao"}</p>
+                  <p className="text-xs text-muted-foreground">{isSolicitacao ? "Pronto para revisão" : "Pronto para devolução"}</p>
                 </div>
                 <div className="rounded-xl border border-border/70 bg-surface-2/60 p-4 transition-all duration-200 hover:-translate-y-0.5 animate-in fade-in-0 slide-in-from-bottom-2">
                   <p className="text-xs text-muted-foreground">Fluxo atual</p>
-                  <p className="text-lg font-semibold text-foreground">{isSolicitacao ? "Solicitacao" : "Devolucao"}</p>
+                  <p className="text-lg font-semibold text-foreground">{isSolicitacao ? "Solicitação" : "Devolução"}</p>
                   <p className="text-xs text-muted-foreground">{descricaoFluxo}</p>
                 </div>
               </div>
@@ -2348,7 +2348,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
             <CardContent className="flex-1 space-y-6 overflow-y-auto p-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-foreground">
-                  {isSolicitacao ? "Solicitacao" : "Devolucao"}
+                  {isSolicitacao ? "Solicitação" : "Devolução"}
                 </h3>
                 <StatusPill tone="info">Pedido: {totalNoCarrinho}</StatusPill>
               </div>
@@ -2356,7 +2356,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
               {isSolicitacao ? (
                 resumoSaidaAberto ? (
                   <div className="space-y-4 rounded-xl border border-border/70 bg-surface-2/60 p-4 animate-in fade-in-0 slide-in-from-bottom-2">
-                    <p className="text-sm font-semibold text-foreground">Resumo da solicitacao</p>
+                    <p className="text-sm font-semibold text-foreground">Resumo da solicitação</p>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Setor</span>
                       <StatusPill tone="neutral">{setorSelecionado || "-"}</StatusPill>
@@ -2477,12 +2477,12 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
 
                     <div className="space-y-2 rounded-xl border border-border/70 bg-surface-2/60 p-4">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-muted-foreground">Carrinho de solicitacao</p>
+                        <p className="text-sm font-medium text-muted-foreground">Carrinho de solicitação</p>
                         <p className="text-sm font-semibold text-foreground">{pedidoSaida.length} selecao(oes)</p>
                       </div>
                       {pedidoSaida.length === 0 ? (
                         <p className="rounded-xl border border-border/70 bg-background p-6 text-sm text-muted-foreground">
-                          Adicione os tamanhos para montar a solicitacao.
+                          Adicione os tamanhos para montar a solicitação.
                         </p>
                       ) : (
                         <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
@@ -2524,7 +2524,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
               ) : (
                 resumoDevolucaoAberto ? (
                   <div className="space-y-4 rounded-xl border border-border/70 bg-surface-2/60 p-4 animate-in fade-in-0 slide-in-from-bottom-2">
-                    <p className="text-sm font-semibold text-foreground">Resumo da devolucao</p>
+                    <p className="text-sm font-semibold text-foreground">Resumo da devolução</p>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Setor</span>
                       <StatusPill tone="neutral">{setorSelecionado || "-"}</StatusPill>
@@ -2645,12 +2645,12 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
 
                     <div className="space-y-2 rounded-xl border border-border/70 bg-surface-2/60 p-4">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-muted-foreground">Carrinho de devolucao</p>
-                        <p className="text-sm font-semibold text-foreground">{pedidoDevolucao.length} selecao(oes)</p>
+                        <p className="text-sm font-medium text-muted-foreground">Carrinho de devolução</p>
+                        <p className="text-sm font-semibold text-foreground">{pedidoDevolucao.length} seleção(ões)</p>
                       </div>
                       {pedidoDevolucao.length === 0 ? (
                         <p className="rounded-xl border border-border/70 bg-background p-6 text-sm text-muted-foreground">
-                          Adicione os tamanhos para montar a devolucao.
+                          Adicione os tamanhos para montar a devolução.
                         </p>
                       ) : (
                         <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
@@ -2701,7 +2701,7 @@ function SetorOperacoesTab({ tipoOperacao }: { tipoOperacao: OperacaoTipo }) {
 
 export function SetorPage() {
   useEffect(() => {
-    enviarMonitorEmEspera("Aguardando uma operacao na tela principal.");
+    enviarMonitorEmEspera("Aguardando uma operação na tela principal.");
   }, []);
 
   const [menuAtivo, setMenuAtivo] = useState<"operacoes" | "itens">("operacoes");
@@ -2743,7 +2743,7 @@ export function SetorPage() {
                     isIconOnly ? "max-h-0 opacity-0" : "max-h-5 opacity-100",
                   )}
                 >
-                  Operacao
+                  Operação
                 </p>
 
                 <div className="space-y-1">
@@ -2758,7 +2758,7 @@ export function SetorPage() {
                       isIconOnly ? "justify-center px-2" : "justify-start px-2.5",
                     )}
                     onClick={() => setMenuAtivo("operacoes")}
-                    title="Operacoes"
+                    title="Operações"
                   >
                     <Package
                       className={cn(
@@ -2777,7 +2777,7 @@ export function SetorPage() {
                         isIconOnly ? "max-w-0 -translate-x-1 opacity-0" : "max-w-[12rem] translate-x-0 opacity-100",
                       )}
                     >
-                      Operacoes
+                      Operações
                     </span>
                   </Button>
 
@@ -2827,9 +2827,9 @@ export function SetorPage() {
                     <section className="grid grid-cols-12 gap-6">
                       <div className="col-span-12 flex flex-wrap items-start justify-between gap-6">
                         <div className="space-y-2">
-                          <h1 className="text-3xl font-bold text-foreground">Operacoes</h1>
+                          <h1 className="text-3xl font-bold text-foreground">Operações</h1>
                           <p className="text-sm text-muted-foreground">
-                            Gerencie solicitacoes e devolucoes para usuarios e setores.
+                            Gerencie solicitações e devoluções para usuários e setores.
                           </p>
                         </div>
                         <StatusPill tone="info">Fluxo operacional ativo</StatusPill>
@@ -2848,21 +2848,21 @@ export function SetorPage() {
 
                           <div className="relative grid gap-4 lg:grid-cols-2">
                             <Tabs value={tipoOperacao} onValueChange={(value) => setTipoOperacao(value as OperacaoTipo)} className="w-full space-y-2">
-                              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Operacao</p>
+                              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Operação</p>
                               <TabsList className="grid h-10 w-full grid-cols-2 gap-1 rounded-xl border border-border/75 bg-background/70 p-1 shadow-[var(--shadow-soft)]">
                                 <TabsTrigger
                                   value="solicitacao"
                                   className="h-8 gap-2 rounded-lg border border-transparent text-[13px] font-semibold text-muted-foreground transition-all duration-200 hover:bg-accent/35 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/16 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
                                 >
                                   <Package className="h-4 w-4" />
-                                  Solicitacao
+                                  Solicitação
                                 </TabsTrigger>
                                 <TabsTrigger
                                   value="devolucao"
                                   className="h-8 gap-2 rounded-lg border border-transparent text-[13px] font-semibold text-muted-foreground transition-all duration-200 hover:bg-accent/35 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/16 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
                                 >
                                   <Undo2 className="h-4 w-4" />
-                                  Devolucao
+                                  Devolução
                                 </TabsTrigger>
                               </TabsList>
                             </Tabs>
@@ -2875,7 +2875,7 @@ export function SetorPage() {
                                   className="h-8 gap-2 rounded-lg border border-transparent text-[13px] font-semibold text-muted-foreground transition-all duration-200 hover:bg-accent/35 data-[state=active]:border-primary/25 data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary/16 data-[state=active]:to-primary/8 data-[state=active]:text-primary data-[state=active]:shadow-sm"
                                 >
                                   <UserRound className="h-4 w-4" />
-                                  Usuario
+                                  Usuário
                                 </TabsTrigger>
                                 <TabsTrigger
                                   value="setor"

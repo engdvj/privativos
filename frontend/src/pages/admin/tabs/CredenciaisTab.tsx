@@ -39,6 +39,9 @@ export function CredenciaisTab() {
   const [filtroPerfil, setFiltroPerfil] = useState<"todos" | PerfilAcesso>("todos");
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "inativo">("todos");
   const [credencialParaExcluir, setCredencialParaExcluir] = useState<CredencialRow | null>(null);
+  const [usuariosSelecionados, setUsuariosSelecionados] = useState<string[]>([]);
+  const [excluirSelecionadosAberto, setExcluirSelecionadosAberto] = useState(false);
+  const [deletingBulk, setDeletingBulk] = useState(false);
   const [edicao, setEdicao] = useState<CredencialDraft>({
     nome_completo: "",
     perfil: "setor",
@@ -89,10 +92,24 @@ export function CredenciaisTab() {
     [rowsFiltradas],
   );
   const inativosFiltrados = rowsFiltradas.length - ativosFiltrados;
+  const usuariosFiltrados = useMemo(() => rowsFiltradas.map((row) => row.usuario), [rowsFiltradas]);
+  const usuariosSelecionadosSet = useMemo(() => new Set(usuariosSelecionados), [usuariosSelecionados]);
+  const usuariosSelecionadosFiltrados = useMemo(
+    () => usuariosSelecionados.filter((usuario) => usuariosFiltrados.includes(usuario)),
+    [usuariosSelecionados, usuariosFiltrados],
+  );
+  const todosFiltradosSelecionados =
+    usuariosFiltrados.length > 0 && usuariosFiltrados.every((usuario) => usuariosSelecionadosSet.has(usuario));
+  const algunsFiltradosSelecionados = usuariosFiltrados.some((usuario) => usuariosSelecionadosSet.has(usuario));
+
+  useEffect(() => {
+    const usuariosDisponiveis = new Set(rows.map((row) => row.usuario));
+    setUsuariosSelecionados((prev) => prev.filter((usuario) => usuariosDisponiveis.has(usuario)));
+  }, [rows]);
 
   async function criar() {
     if (!novo.usuario || !novo.nome_completo || !novo.senha) {
-      error("Preencha usuario, nome completo e senha");
+      error("Preencha usuário, nome completo e senha");
       return;
     }
 
@@ -189,6 +206,66 @@ export function CredenciaisTab() {
     }
   }
 
+  function alternarSelecaoUsuario(usuario: string, checked: boolean) {
+    setUsuariosSelecionados((prev) => {
+      if (checked) {
+        if (prev.includes(usuario)) {
+          return prev;
+        }
+        return [...prev, usuario];
+      }
+      return prev.filter((itemUsuario) => itemUsuario !== usuario);
+    });
+  }
+
+  function alternarSelecaoFiltrados(checked: boolean) {
+    setUsuariosSelecionados((prev) => {
+      if (checked) {
+        const next = new Set(prev);
+        for (const usuario of usuariosFiltrados) {
+          next.add(usuario);
+        }
+        return Array.from(next);
+      }
+      return prev.filter((usuario) => !usuariosFiltrados.includes(usuario));
+    });
+  }
+
+  async function apagarSelecionados(usuarios: string[]) {
+    if (usuarios.length === 0) {
+      error("Selecione ao menos uma credencial para apagar");
+      return;
+    }
+
+    setDeletingBulk(true);
+    const usuariosComSucesso: string[] = [];
+    const usuariosComFalha: string[] = [];
+
+    try {
+      for (const usuario of usuarios) {
+        try {
+          await api.del(`/admin/credenciais/${usuario}`);
+          usuariosComSucesso.push(usuario);
+        } catch (_err) {
+          usuariosComFalha.push(usuario);
+        }
+      }
+
+      if (usuariosComSucesso.length > 0) {
+        success(`${usuariosComSucesso.length} credencial(is) apagada(s)`);
+      }
+      if (usuariosComFalha.length > 0) {
+        error(`Falha ao apagar ${usuariosComFalha.length} credencial(is)`);
+      }
+
+      const sucessoSet = new Set(usuariosComSucesso);
+      setUsuariosSelecionados((prev) => prev.filter((usuario) => !sucessoSet.has(usuario)));
+      await carregar();
+    } finally {
+      setDeletingBulk(false);
+    }
+  }
+
   return (
     <div className="space-y-3">
       <SectionCard
@@ -199,6 +276,7 @@ export function CredenciaisTab() {
             <span>Total: {rowsFiltradas.length}</span>
             <span>Ativas: {ativosFiltrados}</span>
             <span>Inativas: {inativosFiltrados}</span>
+            <span>Selecionadas: {usuariosSelecionadosFiltrados.length}</span>
           </div>
         )}
         className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)] dark:border-border/85 dark:bg-card/90"
@@ -209,7 +287,7 @@ export function CredenciaisTab() {
             <Input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar usuario, nome ou perfil"
+              placeholder="Buscar usuário, nome ou perfil"
               className={`${FILTRO_INPUT_CLASS} w-full sm:w-52 lg:w-60`}
             />
             <Select value={filtroPerfil} onValueChange={(value) => setFiltroPerfil(value as "todos" | PerfilAcesso)}>
@@ -234,6 +312,24 @@ export function CredenciaisTab() {
               </SelectContent>
             </Select>
             <Button
+              type="button"
+              variant="outline"
+              className="h-8 whitespace-nowrap rounded-lg border-border/70 px-2.5 text-[11px]"
+              onClick={() => alternarSelecaoFiltrados(!todosFiltradosSelecionados)}
+              disabled={rowsFiltradas.length === 0}
+            >
+              {todosFiltradosSelecionados ? "Desmarcar filtradas" : "Selecionar filtradas"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-8 whitespace-nowrap rounded-lg border-border/70 px-2.5 text-[11px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setExcluirSelecionadosAberto(true)}
+              disabled={usuariosSelecionadosFiltrados.length === 0 || deletingBulk}
+            >
+              Apagar selecionadas ({usuariosSelecionadosFiltrados.length})
+            </Button>
+            <Button
               size="icon"
               className="h-8 w-8 shrink-0 rounded-lg border-0 bg-primary text-primary-foreground shadow-[var(--shadow-soft)] transition-all duration-200 hover:bg-sky-500 hover:animate-pulse"
               onClick={() => setOpenCreateModal(true)}
@@ -248,21 +344,45 @@ export function CredenciaisTab() {
         <div className="hidden md:block">
           <DataTable
             columns={[
-              { key: "usuario", title: "Usuario", width: "16%", className: "font-mono font-semibold", sortValue: (row) => row.usuario },
-              { key: "nome", title: "Nome completo", width: "33%", sortValue: (row) => row.nomeCompleto },
+              {
+                key: "selecionar",
+                title: (
+                  <div className="flex justify-center">
+                    <Checkbox
+                      checked={todosFiltradosSelecionados || (algunsFiltradosSelecionados && "indeterminate")}
+                      onCheckedChange={(checked) => alternarSelecaoFiltrados(Boolean(checked))}
+                      aria-label="Selecionar credenciais filtradas"
+                    />
+                  </div>
+                ),
+                align: "center",
+                width: "6%",
+                sortable: false,
+              },
+              { key: "usuario", title: "Usuário", width: "14%", className: "font-mono font-semibold", sortValue: (row) => row.usuario },
+              { key: "nome", title: "Nome completo", width: "30%", sortValue: (row) => row.nomeCompleto },
               { key: "perfil", title: "Perfil", align: "center", width: "16%", sortValue: (row) => row.perfil },
               { key: "status", title: "Status", align: "center", width: "14%", sortValue: (row) => row.ativo },
-              { key: "acoes", title: "Acoes", align: "center", width: "21%", sortable: false },
+              { key: "acoes", title: "Acoes", align: "center", width: "20%", sortable: false },
             ]}
             rows={rowsFiltradas}
             getRowKey={(row) => row.id}
             onRowClick={(row) => abrirEdicao(row)}
             loading={loading}
             emptyMessage="Nenhuma credencial encontrada."
-            minWidthClassName="min-w-[920px]"
+            minWidthClassName="min-w-[980px]"
             containerClassName={TABELA_DENSE_CLASS}
             renderRow={(row) => (
               <>
+                <td>
+                  <div className="flex justify-center">
+                    <Checkbox
+                      checked={usuariosSelecionadosSet.has(row.usuario)}
+                      onCheckedChange={(checked) => alternarSelecaoUsuario(row.usuario, Boolean(checked))}
+                      aria-label={`Selecionar credencial ${row.usuario}`}
+                    />
+                  </div>
+                </td>
                 <td>{row.usuario}</td>
                 <td className="max-w-0 truncate" title={row.nomeCompleto}>{row.nomeCompleto}</td>
                 <td>
@@ -326,13 +446,20 @@ export function CredenciaisTab() {
                 className="rounded-xl border border-border/70 bg-surface-2/85 p-3 shadow-[var(--shadow-soft)]"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <button
-                    type="button"
-                    className="font-mono text-sm font-semibold text-primary underline-offset-2 hover:underline"
-                    onClick={() => abrirEdicao(row)}
-                  >
-                    {row.usuario}
-                  </button>
+                  <div className="flex items-start gap-2">
+                    <Checkbox
+                      checked={usuariosSelecionadosSet.has(row.usuario)}
+                      onCheckedChange={(checked) => alternarSelecaoUsuario(row.usuario, Boolean(checked))}
+                      aria-label={`Selecionar credencial ${row.usuario}`}
+                    />
+                    <button
+                      type="button"
+                      className="font-mono text-sm font-semibold text-primary underline-offset-2 hover:underline"
+                      onClick={() => abrirEdicao(row)}
+                    >
+                      {row.usuario}
+                    </button>
+                  </div>
                   <StatusPill tone={row.ativo ? "success" : "danger"} className="text-[10px]">
                     {row.ativo ? "ativo" : "inativo"}
                   </StatusPill>
@@ -371,12 +498,12 @@ export function CredenciaisTab() {
         open={openCreateModal}
         onClose={() => setOpenCreateModal(false)}
         title="Nova Credencial"
-        description="Cadastre usuario, perfil de acesso e senha inicial."
+        description="Cadastre usuário, perfil de acesso e senha inicial."
         maxWidthClassName="max-w-3xl"
       >
         <div className="space-y-3">
           <div className="grid gap-2.5 sm:grid-cols-2">
-            <FormField label="Usuario" htmlFor="novo-usuario">
+            <FormField label="Usuário" htmlFor="novo-usuario">
               <Input
                 id="novo-usuario"
                 value={novo.usuario}
@@ -515,6 +642,22 @@ export function CredenciaisTab() {
           if (!credencialParaExcluir) return;
           await apagar(credencialParaExcluir);
           setCredencialParaExcluir(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={excluirSelecionadosAberto}
+        onClose={() => setExcluirSelecionadosAberto(false)}
+        title="Apagar credenciais selecionadas"
+        description={
+          usuariosSelecionadosFiltrados.length > 0
+            ? `Tem certeza que deseja apagar ${usuariosSelecionadosFiltrados.length} credencial(is) selecionada(s)?`
+            : "Nenhuma credencial selecionada."
+        }
+        confirmLabel="Apagar selecionadas"
+        onConfirm={async () => {
+          await apagarSelecionados(usuariosSelecionadosFiltrados);
+          setExcluirSelecionadosAberto(false);
         }}
       />
     </div>

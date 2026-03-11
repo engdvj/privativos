@@ -6,7 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import {
+  DataTable,
+  type DataTableColumn,
+  type DataTableSortState,
+  sortDataTableRows,
+} from "@/components/ui/data-table";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { useToast } from "@/components/ui/use-toast";
@@ -27,6 +32,7 @@ import {
 import type { CatalogoRow, DashboardDataResponse, DashboardFiltersResponse } from "../types";
 
 const ITENS_POR_PAGINA = 5;
+const DASHBOARD_AUTO_REFRESH_MS = 15000;
 
 const FILTROS_INICIAIS = {
   data_inicio: "",
@@ -67,7 +73,7 @@ const COLUNAS_EVENTOS: DataTableColumn<EventoDashboardRow>[] = [
   },
   {
     key: "matricula",
-    title: "Matricula",
+    title: "Matrícula",
     align: "center",
     className: "font-mono tabular-nums",
     sortValue: (row) => row.matricula,
@@ -111,17 +117,17 @@ const KPI_META: Record<
 > = {
   emprestimos: {
     label: "Emprestimos",
-    descricao: "Mostrando somente eventos de solicitacao.",
+    descricao: "Mostrando somente eventos de solicitação.",
     tone: "info",
   },
   devolucoes: {
     label: "Devolucoes",
-    descricao: "Mostrando somente eventos de devolucao.",
+    descricao: "Mostrando somente eventos de devolução.",
     tone: "success",
   },
   disponiveis: {
-    label: "Itens disponiveis",
-    descricao: "Mostrando os itens atualmente disponiveis.",
+    label: "Itens disponíveis",
+    descricao: "Mostrando os itens atualmente disponíveis.",
     tone: "neutral",
   },
   emprestados: {
@@ -195,7 +201,7 @@ const COLUNAS_ITENS: DataTableColumn<ItemTabelaRow>[] = [
   },
   {
     key: "matricula",
-    title: "Matricula",
+    title: "Matrícula",
     align: "center",
     className: "font-mono tabular-nums",
     sortValue: (row) => row.solicitanteMatricula ?? "",
@@ -245,7 +251,7 @@ function descricaoItemResumo(descricao: string | null | undefined) {
 }
 
 function statusItemLabel(status: ItemDashboardResumo["status"]) {
-  if (status === "disponivel") return "Disponivel";
+  if (status === "disponivel") return "Disponível";
   if (status === "emprestado") return "Emprestado";
   return "Inativo";
 }
@@ -265,7 +271,7 @@ function origemMovimentacaoTone(origem: OrigemMovimentacao): "info" | "neutral" 
 }
 
 function eventoTipoLabel(tipo: EventoTipo) {
-  return tipo === "solicitacao" ? "Solicitacao" : "Devolucao";
+  return tipo === "solicitacao" ? "Solicitação" : "Devolução";
 }
 
 function eventoTipoTone(tipo: EventoTipo): "info" | "success" {
@@ -356,6 +362,8 @@ export function DashboardTab() {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [paginaEventos, setPaginaEventos] = useState(1);
+  const [sortEventosTabela, setSortEventosTabela] = useState<DataTableSortState>(null);
+  const [sortItensTabela, setSortItensTabela] = useState<DataTableSortState>(null);
   const [buscaFuncionario, setBuscaFuncionario] = useState("");
   const [buscaFuncionarioDebounced, setBuscaFuncionarioDebounced] = useState("");
   const [mostrarSugestoesFuncionario, setMostrarSugestoesFuncionario] = useState(false);
@@ -363,6 +371,7 @@ export function DashboardTab() {
   const { success, error } = useToast();
   const { openFuncionario, openKit } = useGlobalDetail();
   const containerBuscaFuncionarioRef = useRef<HTMLDivElement | null>(null);
+  const atualizacaoSilenciosaRef = useRef(false);
   const unidadesFuncionarioPorMatricula = useMemo(() => {
     const mapa = new Map<string, Set<string>>();
 
@@ -400,7 +409,7 @@ export function DashboardTab() {
     [funcionariosResumo],
   );
 
-  const carregarOpcoes = useCallback(async () => {
+  const carregarOpcoes = useCallback(async (options?: { silencioso?: boolean }) => {
     try {
       const [payload, setoresData] = await Promise.all([
         api.get<DashboardFiltersResponse>("/admin/dashboard/filtros"),
@@ -409,11 +418,13 @@ export function DashboardTab() {
       setOpcoes(payload);
       setSetoresCatalogo(setoresData.filter((row) => row.statusAtivo));
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao carregar filtros");
+      if (!options?.silencioso) {
+        error(err instanceof Error ? err.message : "Erro ao carregar filtros");
+      }
     }
   }, [error]);
 
-  const carregarDadosResumo = useCallback(async () => {
+  const carregarDadosResumo = useCallback(async (options?: { silencioso?: boolean }) => {
     try {
       const [itens, funcionarios] = await Promise.all([
         api.get<ItemDashboardResumo[]>("/admin/itens?include_inactive=true"),
@@ -422,14 +433,18 @@ export function DashboardTab() {
       setItensResumo(itens);
       setFuncionariosResumo(funcionarios);
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao carregar resumo dos cards");
+      if (!options?.silencioso) {
+        error(err instanceof Error ? err.message : "Erro ao carregar resumo dos cards");
+      }
     }
   }, [error]);
 
   const carregarDashboard = useCallback(
-    async (filtrosOverride?: typeof FILTROS_INICIAIS) => {
+    async (filtrosOverride?: typeof FILTROS_INICIAIS, options?: { silencioso?: boolean }) => {
       const filtrosAtuais = filtrosOverride ?? filtros;
-      setLoading(true);
+      if (!options?.silencioso) {
+        setLoading(true);
+      }
       try {
         const payload = await api.post<DashboardDataResponse>("/admin/dashboard", {
           data_inicio: filtrosAtuais.data_inicio || undefined,
@@ -441,13 +456,33 @@ export function DashboardTab() {
         });
         setData(payload);
       } catch (err) {
-        error(err instanceof Error ? err.message : "Erro ao carregar dashboard");
+        if (!options?.silencioso) {
+          error(err instanceof Error ? err.message : "Erro ao carregar dashboard");
+        }
       } finally {
-        setLoading(false);
+        if (!options?.silencioso) {
+          setLoading(false);
+        }
       }
     },
     [error, filtros],
   );
+
+  const atualizarSilenciosamente = useCallback(async () => {
+    if (atualizacaoSilenciosaRef.current) {
+      return;
+    }
+    atualizacaoSilenciosaRef.current = true;
+    try {
+      await Promise.all([
+        carregarDashboard(undefined, { silencioso: true }),
+        carregarDadosResumo({ silencioso: true }),
+        carregarOpcoes({ silencioso: true }),
+      ]);
+    } finally {
+      atualizacaoSilenciosaRef.current = false;
+    }
+  }, [carregarDashboard, carregarDadosResumo, carregarOpcoes]);
 
   async function exportar() {
     setExporting(true);
@@ -513,18 +548,49 @@ export function DashboardTab() {
   useEffect(() => {
     const onUpdated = (event: Event) => {
       const entidade = (event as CustomEvent<{ entidade?: string }>).detail?.entidade;
-      if (entidade === "kit" || entidade === "funcionario") {
-        void carregarDadosResumo();
+      if (
+        entidade === "kit" ||
+        entidade === "funcionario" ||
+        entidade === "setor" ||
+        entidade === "unidade" ||
+        entidade === "funcao"
+      ) {
+        void atualizarSilenciosamente();
       }
     };
 
     window.addEventListener("global-detail-updated", onUpdated);
     return () => window.removeEventListener("global-detail-updated", onUpdated);
-  }, [carregarDadosResumo]);
+  }, [atualizarSilenciosamente]);
 
   useEffect(() => {
     void carregarDashboard();
   }, [carregarDashboard]);
+
+  useEffect(() => {
+    const onFocusOrVisible = () => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+      void atualizarSilenciosamente();
+    };
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "hidden") {
+        return;
+      }
+      void atualizarSilenciosamente();
+    }, DASHBOARD_AUTO_REFRESH_MS);
+
+    window.addEventListener("focus", onFocusOrVisible);
+    document.addEventListener("visibilitychange", onFocusOrVisible);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", onFocusOrVisible);
+      document.removeEventListener("visibilitychange", onFocusOrVisible);
+    };
+  }, [atualizarSilenciosamente]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -831,22 +897,30 @@ export function DashboardTab() {
     setPaginaEventos(1);
   }, [filtros.data_inicio, filtros.data_fim, filtros.unidade, filtros.setor, filtros.origem, filtros.matricula, data, kpiSelecionado]);
 
-  const totalPaginasEventos = Math.max(1, Math.ceil(eventosTabelaFiltrados.length / ITENS_POR_PAGINA));
+  const eventosTabelaOrdenados = useMemo(
+    () => sortDataTableRows(eventosTabelaFiltrados, COLUNAS_EVENTOS, sortEventosTabela),
+    [eventosTabelaFiltrados, sortEventosTabela],
+  );
+  const itensTabelaOrdenados = useMemo(
+    () => sortDataTableRows(itensTabelaFiltrados, COLUNAS_ITENS, sortItensTabela),
+    [itensTabelaFiltrados, sortItensTabela],
+  );
+  const totalPaginasEventos = Math.max(1, Math.ceil(eventosTabelaOrdenados.length / ITENS_POR_PAGINA));
 
   const eventosPaginados = useMemo(() => {
     const inicio = (paginaEventos - 1) * ITENS_POR_PAGINA;
-    return eventosTabelaFiltrados.slice(inicio, inicio + ITENS_POR_PAGINA);
-  }, [eventosTabelaFiltrados, paginaEventos]);
+    return eventosTabelaOrdenados.slice(inicio, inicio + ITENS_POR_PAGINA);
+  }, [eventosTabelaOrdenados, paginaEventos]);
 
-  const totalPaginasItens = Math.max(1, Math.ceil(itensTabelaFiltrados.length / ITENS_POR_PAGINA));
+  const totalPaginasItens = Math.max(1, Math.ceil(itensTabelaOrdenados.length / ITENS_POR_PAGINA));
   const itensPaginados = useMemo(() => {
     const inicio = (paginaEventos - 1) * ITENS_POR_PAGINA;
-    return itensTabelaFiltrados.slice(inicio, inicio + ITENS_POR_PAGINA);
-  }, [itensTabelaFiltrados, paginaEventos]);
+    return itensTabelaOrdenados.slice(inicio, inicio + ITENS_POR_PAGINA);
+  }, [itensTabelaOrdenados, paginaEventos]);
   const totalPaginasTabela = exibindoTabelaItens ? totalPaginasItens : totalPaginasEventos;
   const totalRegistrosTabela = exibindoTabelaItens
-    ? itensTabelaFiltrados.length
-    : eventosTabelaFiltrados.length;
+    ? itensTabelaOrdenados.length
+    : eventosTabelaOrdenados.length;
 
   useEffect(() => {
     if (paginaEventos > totalPaginasTabela) setPaginaEventos(totalPaginasTabela);
@@ -857,7 +931,7 @@ export function DashboardTab() {
   const filtroKpiAtivo = kpiSelecionado ? KPI_META[kpiSelecionado] : null;
   const emptyMessageEventos = useMemo(() => {
     if (kpiSelecionado === "disponiveis") {
-      return "Sem itens disponiveis no momento.";
+      return "Sem itens disponíveis no momento.";
     }
     if (kpiSelecionado === "emprestados") {
       return "Sem itens emprestados no momento.";
@@ -867,7 +941,7 @@ export function DashboardTab() {
 
   const periodoAtivo = filtros.data_inicio || filtros.data_fim
     ? `${formatarDataFiltro(filtros.data_inicio)} - ${formatarDataFiltro(filtros.data_fim)}`
-    : "Periodo completo";
+    : "Período completo";
   const filtroSomenteSetor = filtros.origem === "setor";
   const sugestoesFuncionario = useMemo(() => {
     const termo = normalizarBuscaTexto(buscaFuncionarioDebounced);
@@ -950,7 +1024,7 @@ export function DashboardTab() {
         },
         {
           chave: "devolucoes",
-          label: "Devolucoes",
+          label: "Devoluções",
           valor: devolucoesFiltradas.length,
           detalhes: [
             { label: "Colaborador", valor: resumoMovimentacoesPorOrigem.devolucoesColaborador },
@@ -963,9 +1037,9 @@ export function DashboardTab() {
         },
         {
           chave: "disponiveis",
-          label: "Itens disponiveis",
+          label: "Itens disponíveis",
           valor: itensDisponiveisNoRecorte.length,
-          detalhes: [{ label: "Status", valor: "Disponivel" }],
+          detalhes: [{ label: "Status", valor: "Disponível" }],
           icon: Boxes,
           gradientClass:
             "from-[hsl(197_92%_56%_/_0.2)] via-[hsl(197_92%_56%_/_0.08)] to-transparent",
@@ -1047,16 +1121,16 @@ export function DashboardTab() {
                 Panorama operacional em tempo real
               </h2>
               <p className="max-w-2xl text-pretty text-[11px] leading-snug text-muted-foreground">
-                Visualize movimentacoes, acompanhe os indicadores principais e detalhe operacoes por periodo, setor e funcionario.
+                Visualize movimentações, acompanhe os indicadores principais e detalhe operações por período, setor e funcionário.
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <StatusPill tone="info" className="text-[10px]">
-                Periodo: {periodoAtivo}
+                Período: {periodoAtivo}
               </StatusPill>
               <StatusPill tone="neutral" className="text-[10px]">
-                Visao: {filtroOrigemLabel(filtros.origem)}
+                Visão: {filtroOrigemLabel(filtros.origem)}
               </StatusPill>
               <StatusPill tone="neutral" className="text-[10px]">
                 Gerado em: {data ? formatarTimestamp(data.gerado_em).completo : "--"}
@@ -1170,7 +1244,7 @@ export function DashboardTab() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="f-origem" className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Visao
+                Visão
               </Label>
               <Select
                 value={filtros.origem || "todos"}
@@ -1188,7 +1262,7 @@ export function DashboardTab() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="f-matricula" className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Funcionario
+                Funcionário
               </Label>
               <div ref={containerBuscaFuncionarioRef} className="relative">
                 <div className="flex h-9 items-center gap-1.5 rounded-xl border border-border/80 bg-background/85 px-2 dark:border-border/90 dark:bg-background/70">
@@ -1196,7 +1270,7 @@ export function DashboardTab() {
                   <input
                     id="f-matricula"
                     value={buscaFuncionario}
-                    placeholder={filtroSomenteSetor ? "Disponivel apenas para visao colaborador/todos" : "Buscar por nome ou matricula"}
+                    placeholder={filtroSomenteSetor ? "Disponível apenas para visão colaborador/todos" : "Buscar por nome ou matrícula"}
                     autoComplete="off"
                     disabled={filtroSomenteSetor}
                     className="h-full min-w-0 flex-1 bg-transparent text-[11px] text-foreground placeholder:text-muted-foreground/80 outline-none"
@@ -1249,7 +1323,7 @@ export function DashboardTab() {
                       variant="ghost"
                       size="icon"
                       onClick={limparFiltroFuncionario}
-                      aria-label="Limpar filtro de funcionario"
+                      aria-label="Limpar filtro de funcionário"
                       title="Limpar filtro"
                       className="h-5 w-5 shrink-0 rounded-md text-muted-foreground hover:text-foreground"
                     >
@@ -1262,7 +1336,7 @@ export function DashboardTab() {
                   <div className="absolute inset-x-0 bottom-[calc(100%+6px)] z-[72] rounded-xl border border-border/80 bg-popover/98 p-1 shadow-[var(--shadow-soft)] dark:border-border/90 dark:bg-popover/95">
                     <div className="max-h-56 overflow-y-auto overflow-x-hidden">
                       {loadingBuscaFuncionario && (
-                        <p className="px-2 py-1.5 text-[11px] text-muted-foreground">Buscando funcionarios...</p>
+                        <p className="px-2 py-1.5 text-[11px] text-muted-foreground">Buscando funcionários...</p>
                       )}
                       {!loadingBuscaFuncionario && sugestoesFuncionario.map((funcionario, index) => (
                         <button
@@ -1274,14 +1348,14 @@ export function DashboardTab() {
                           onClick={() => selecionarFuncionario(funcionario)}
                         >
                           <div className="truncate text-[11px] font-semibold text-foreground">{funcionario.nome}</div>
-                          <div className="text-[10px] text-muted-foreground">Matricula {funcionario.matricula}</div>
+                          <div className="text-[10px] text-muted-foreground">Matrícula {funcionario.matricula}</div>
                         </button>
                       ))}
                       {!loadingBuscaFuncionario && sugestoesFuncionario.length === 0 && buscaFuncionarioDebounced.trim().length >= 2 && (
                         <p className="px-2 py-1.5 text-[11px] text-muted-foreground">
                           {filtros.setor || filtros.unidade
-                            ? "Nenhum funcionario encontrado para os filtros de unidade/setor."
-                            : "Nenhum funcionario encontrado."}
+                            ? "Nenhum funcionário encontrado para os filtros de unidade/setor."
+                            : "Nenhum funcionário encontrado."}
                         </p>
                       )}
                     </div>
@@ -1290,7 +1364,7 @@ export function DashboardTab() {
               </div>
               {!filtroSomenteSetor && buscaFuncionario.trim().length >= 2 && !filtros.matricula ? (
                 <p className="mt-1 text-[10px] text-muted-foreground">
-                  Selecione um funcionario da lista para aplicar o filtro no dashboard.
+                  Selecione um funcionário da lista para aplicar o filtro no dashboard.
                 </p>
               ) : null}
             </div>
@@ -1377,7 +1451,7 @@ export function DashboardTab() {
           <Modal
             open={openResumoSolicitacaoModal}
             onClose={() => setOpenResumoSolicitacaoModal(false)}
-            title="Resumo da solicitacao"
+            title="Resumo da solicitação"
             description="Resumo da movimentacao selecionada na tabela de solicitacoes."
             maxWidthClassName="max-w-2xl"
           >
@@ -1400,7 +1474,7 @@ export function DashboardTab() {
                       Origem: {origemMovimentacaoLabel(solicitacaoSelecionada.origem)}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Matricula: {solicitacaoSelecionada.origem === "setor" ? "--" : solicitacaoSelecionada.matricula}
+                      Matrícula: {solicitacaoSelecionada.origem === "setor" ? "--" : solicitacaoSelecionada.matricula}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {solicitacaoSelecionada.unidade ?? "-"} | {solicitacaoSelecionada.setor_solicitante ?? solicitacaoSelecionada.setor ?? "-"}
@@ -1427,7 +1501,7 @@ export function DashboardTab() {
                   </div>
                   {itemSolicitacaoSelecionada && descricaoItemResumo(itemSolicitacaoSelecionada.descricao) ? (
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Descricao: {descricaoItemResumo(itemSolicitacaoSelecionada.descricao)}
+                      Descrição: {descricaoItemResumo(itemSolicitacaoSelecionada.descricao)}
                     </p>
                   ) : null}
                 </div>
@@ -1442,7 +1516,7 @@ export function DashboardTab() {
                         void openFuncionario(solicitacaoSelecionada.matricula);
                       }}
                     >
-                      Ver funcionario
+                      Ver funcionário
                     </Button>
                   ) : null}
                   <Button
@@ -1459,7 +1533,7 @@ export function DashboardTab() {
               </div>
             ) : (
               <p className="rounded-lg bg-muted/30 py-3 text-center text-sm text-muted-foreground">
-                Nenhuma solicitacao selecionada.
+                Nenhuma solicitação selecionada.
               </p>
             )}
           </Modal>
@@ -1467,7 +1541,7 @@ export function DashboardTab() {
           <Modal
             open={openResumoDevolucaoModal}
             onClose={() => setOpenResumoDevolucaoModal(false)}
-            title="Resumo da devolucao"
+            title="Resumo da devolução"
             description="Resumo da movimentacao selecionada na tabela de devolucoes."
             maxWidthClassName="max-w-2xl"
           >
@@ -1490,7 +1564,7 @@ export function DashboardTab() {
                       Origem: {origemMovimentacaoLabel(devolucaoSelecionada.origem)}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      Matricula: {devolucaoSelecionada.origem === "setor" ? "--" : devolucaoSelecionada.matricula}
+                      Matrícula: {devolucaoSelecionada.origem === "setor" ? "--" : devolucaoSelecionada.matricula}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {devolucaoSelecionada.unidade ?? "-"} | {devolucaoSelecionada.setor_solicitante ?? devolucaoSelecionada.setor ?? "-"}
@@ -1517,7 +1591,7 @@ export function DashboardTab() {
                   </div>
                   {itemDevolucaoSelecionada && descricaoItemResumo(itemDevolucaoSelecionada.descricao) ? (
                     <p className="mt-2 text-xs text-muted-foreground">
-                      Descricao: {descricaoItemResumo(itemDevolucaoSelecionada.descricao)}
+                      Descrição: {descricaoItemResumo(itemDevolucaoSelecionada.descricao)}
                     </p>
                   ) : null}
                 </div>
@@ -1532,7 +1606,7 @@ export function DashboardTab() {
                         void openFuncionario(devolucaoSelecionada.matricula);
                       }}
                     >
-                      Ver funcionario
+                      Ver funcionário
                     </Button>
                   ) : null}
                   <Button
@@ -1549,7 +1623,7 @@ export function DashboardTab() {
               </div>
             ) : (
               <p className="rounded-lg bg-muted/30 py-3 text-center text-sm text-muted-foreground">
-                Nenhuma devolucao selecionada.
+                Nenhuma devolução selecionada.
               </p>
             )}
           </Modal>
@@ -1590,6 +1664,8 @@ export function DashboardTab() {
                 <DataTable
                   columns={COLUNAS_ITENS}
                   rows={itensPaginados}
+                  sortState={sortItensTabela}
+                  onSortStateChange={setSortItensTabela}
                   getRowKey={(row) => row.codigo}
                   onRowClick={(row) => {
                     void openKit(row.codigo);
@@ -1665,6 +1741,8 @@ export function DashboardTab() {
                 <DataTable
                   columns={COLUNAS_EVENTOS}
                   rows={eventosPaginados}
+                  sortState={sortEventosTabela}
+                  onSortStateChange={setSortEventosTabela}
                   getRowKey={(row) => row.evento_chave}
                   onRowClick={abrirResumoEvento}
                   loading={loading}
@@ -1726,7 +1804,7 @@ export function DashboardTab() {
 
             <div className="mt-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[10px] text-muted-foreground">
-                {inicioEventos}-{fimEventos} de {totalRegistrosTabela} | Pagina {paginaEventos} de {totalPaginasTabela}
+                {inicioEventos}-{fimEventos} de {totalRegistrosTabela} | Página {paginaEventos} de {totalPaginasTabela}
               </p>
               <div className="flex min-w-[220px] justify-end gap-2">
                 <Button
@@ -1747,7 +1825,7 @@ export function DashboardTab() {
                   onClick={() => setPaginaEventos((paginaAtual) => Math.min(totalPaginasTabela, paginaAtual + 1))}
                   disabled={paginaEventos === totalPaginasTabela}
                 >
-                  Proxima
+                  Próxima
                 </Button>
               </div>
             </div>
@@ -1758,7 +1836,7 @@ export function DashboardTab() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Dados do dashboard</CardTitle>
             <CardDescription>
-              {loading ? "Carregando indicadores..." : "Nao foi possivel carregar os dados. Verifique os filtros e tente novamente."}
+              {loading ? "Carregando indicadores..." : "Não foi possível carregar os dados. Verifique os filtros e tente novamente."}
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-0">

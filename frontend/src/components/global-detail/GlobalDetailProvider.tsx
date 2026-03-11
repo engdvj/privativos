@@ -266,7 +266,7 @@ function formatDateTime(value: string | null): string {
 }
 
 function statusKitLabel(status: ItemStatus) {
-  if (status === "disponivel") return "Disponivel";
+  if (status === "disponivel") return "Disponível";
   if (status === "emprestado") return "Emprestado";
   return "Inativo";
 }
@@ -999,7 +999,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
           draftFuncionario.funcoes.length === 0 ||
           !draftFuncionario.funcaoPrincipal
         ) {
-          error("Preencha nome, unidade principal, setor principal e funcao principal");
+          error("Preencha nome, unidade principal, setor principal e função principal");
           return;
         }
         if (!draftFuncionario.unidades.includes(draftFuncionario.unidadePrincipal)) {
@@ -1011,14 +1011,14 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
           return;
         }
         if (!draftFuncionario.funcoes.includes(draftFuncionario.funcaoPrincipal)) {
-          error("Funcao principal precisa estar na lista de funcoes");
+          error("Função principal precisa estar na lista de funções");
           return;
         }
         const setoresIncompativeis = draftFuncionario.setores.filter(
           (setor) => !setorCompativelPorNomeDraft(setor, draftFuncionario.unidades),
         );
         if (setoresIncompativeis.length > 0) {
-          error(`Setores sem vinculo com as unidades selecionadas: ${setoresIncompativeis.join(", ")}`);
+          error(`Setores sem vínculo com as unidades selecionadas: ${setoresIncompativeis.join(", ")}`);
           return;
         }
         if (!setorCompativelPorNomeDraft(draftFuncionario.setorPrincipal, [draftFuncionario.unidadePrincipal])) {
@@ -1050,7 +1050,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
           status_ativo: draftFuncionario.status_ativo,
         });
         entidadeAtualizada = "funcionario";
-        success("Funcionario atualizado");
+        success("Funcionário atualizado");
       }
 
       if (resultado.tipo === "kit") {
@@ -1065,7 +1065,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
         const descricaoFinal = draftKit.descricao.trim() || null;
 
         if (!codigoFinal || !tipoFinal || !tamanhoFinal) {
-          error("Informe codigo, tipo e tamanho do item");
+          error("Informe código, tipo e tamanho do item");
           return;
         }
         await api.put(`/admin/itens/${encodeURIComponent(resultado.kit.codigo)}`, {
@@ -1153,7 +1153,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
         setHistoricoCiclos(payload.ciclos);
         setHistoricoTotal(payload.total);
       } catch (err) {
-        error(err instanceof Error ? err.message : "Erro ao carregar historico detalhado");
+        error(err instanceof Error ? err.message : "Erro ao carregar histórico detalhado");
       } finally {
         setHistoricoLoading(false);
       }
@@ -1214,13 +1214,13 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
         : resultado?.tipo === "unidade"
           ? `Unidade ${resultado.unidade.nome}`
           : resultado?.tipo === "funcao"
-            ? `Funcao ${resultado.funcao.nome}`
+            ? `Função ${resultado.funcao.nome}`
       : resultado?.tipo === "resultados_globais"
         ? "Resultados globais"
       : "Detalhes";
 
   const modalDescription = resultado?.tipo === "funcionario"
-    ? `Matricula ${resultado.funcionario.matricula}`
+    ? `Matrícula ${resultado.funcionario.matricula}`
     : resultado?.tipo === "kit"
       ? [
         resultado.kit.tipo,
@@ -1228,11 +1228,11 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
         `Tam: ${resultado.kit.tamanho}`,
       ].filter(Boolean).join(" | ")
       : resultado?.tipo === "setor"
-        ? `${resultado.setor.total_unidades} unidades | ${resultado.setor.total_funcionarios} funcionarios`
+        ? `${resultado.setor.total_unidades} unidades | ${resultado.setor.total_funcionarios} funcionários`
         : resultado?.tipo === "unidade"
-          ? `${resultado.unidade.total_setores} setores | ${resultado.unidade.total_funcionarios} funcionarios`
+          ? `${resultado.unidade.total_setores} setores | ${resultado.unidade.total_funcionarios} funcionários`
           : resultado?.tipo === "funcao"
-            ? `${resultado.funcao.total_funcionarios} funcionarios`
+            ? `${resultado.funcao.total_funcionarios} funcionários`
       : resultado?.tipo === "resultados_globais"
         ? `${totalResultadosGlobais} resultados para "${resultado.consulta}"`
       : undefined;
@@ -1297,13 +1297,13 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
   }, [kitUltimaDevolucaoEvento, kitUltimoEmprestimoEvento]);
   const kitTituloVinculo = useMemo(() => {
     if (kitEmprestado) {
-      if (kitUsuarioAssociado) return "Usuario atual";
+      if (kitUsuarioAssociado) return "Usuário atual";
       if (kitSetorAssociado) return "Setor atual";
       return "Vinculo atual";
     }
-    if (kitUltimoUsuarioHistorico) return "Ultimo usuario";
-    if (kitSetorAssociado) return "Ultimo setor";
-    return "Ultimo vinculo";
+    if (kitUltimoUsuarioHistorico) return "Último usuário";
+    if (kitSetorAssociado) return "Último setor";
+    return "Último vínculo";
   }, [kitEmprestado, kitSetorAssociado, kitUltimoUsuarioHistorico, kitUsuarioAssociado]);
   const tipoKitSelecionadoEhCustom = useMemo(() => {
     if (!resultado || resultado.tipo !== "kit" || criandoNovoTipoKit) {
@@ -1386,7 +1386,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
         {loading && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Buscando informacoes...
+            Buscando informações...
           </div>
         )}
 
@@ -1405,7 +1405,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
         {!loading && !erroBusca && resultado?.tipo === "sugestoes_funcionario" && (
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              Foram encontrados varios usuarios para <strong>{resultado.consulta}</strong>. Selecione um:
+              Foram encontrados vários usuários para <strong>{resultado.consulta}</strong>. Selecione um:
             </p>
             <div className="space-y-1.5">
               {resultado.sugestoes.map((sugestao) => (
@@ -1420,7 +1420,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                   <div className="flex-1">
                     <div className="font-medium text-foreground">{sugestao.nome}</div>
                     <div className="text-sm text-muted-foreground">
-                      Matricula {sugestao.matricula} | {formatarUnidadesFuncionario(
+                      Matrícula {sugestao.matricula} | {formatarUnidadesFuncionario(
                         normalizarUnidadesFuncionario(sugestao.unidades, sugestao.unidade),
                       )} | {formatarSetoresFuncionario(
                         normalizarSetoresFuncionario(sugestao.setores, sugestao.setor),
@@ -1446,7 +1446,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
               {resultado.resultados.funcionarios.length > 0 && (
                 <div className="space-y-1.5 rounded-xl border border-border/60 bg-surface-1/80 p-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Funcionarios ({resultado.resultados.funcionarios.length})
+                    Funcionários ({resultado.resultados.funcionarios.length})
                   </p>
                   <div className="space-y-1.5">
                     {resultado.resultados.funcionarios.map((funcionario) => (
@@ -1461,7 +1461,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-foreground">{funcionario.nome}</p>
                           <p className="truncate text-xs text-muted-foreground">
-                            Matricula {funcionario.matricula} | {funcionario.unidade} | {funcionario.setor} | {funcionario.funcao}
+                            Matrícula {funcionario.matricula} | {funcionario.unidade} | {funcionario.setor} | {funcionario.funcao}
                           </p>
                         </div>
                         <StatusPill tone={funcionario.status_ativo ? "success" : "danger"}>
@@ -1495,7 +1495,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                           </p>
                           {(kit.solicitante_matricula || kit.setor_solicitante) && (
                             <p className="truncate text-xs text-muted-foreground">
-                              {kit.solicitante_matricula ? `Matricula: ${kit.solicitante_matricula}` : ""}
+                              {kit.solicitante_matricula ? `Matrícula: ${kit.solicitante_matricula}` : ""}
                               {kit.solicitante_matricula && kit.setor_solicitante ? " | " : ""}
                               {kit.setor_solicitante ? `Setor: ${kit.setor_solicitante}` : ""}
                             </p>
@@ -1529,7 +1529,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-foreground">{setor.nome}</p>
                           <p className="truncate text-xs text-muted-foreground">
-                            {setor.total_unidades} unidades | {setor.total_funcionarios} funcionarios
+                            {setor.total_unidades} unidades | {setor.total_funcionarios} funcionários
                           </p>
                         </div>
                         <StatusPill tone={setor.status_ativo ? "success" : "danger"}>
@@ -1559,7 +1559,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-foreground">{unidade.nome}</p>
                           <p className="truncate text-xs text-muted-foreground">
-                            {unidade.total_setores} setores | {unidade.total_funcionarios} funcionarios
+                            {unidade.total_setores} setores | {unidade.total_funcionarios} funcionários
                           </p>
                         </div>
                         <StatusPill tone={unidade.status_ativo ? "success" : "danger"}>
@@ -1574,7 +1574,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
               {resultado.resultados.funcoes.length > 0 && (
                 <div className="space-y-1.5 rounded-xl border border-border/60 bg-surface-1/80 p-3 lg:col-span-2">
                   <p className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Funcoes ({resultado.resultados.funcoes.length})
+                    Funções ({resultado.resultados.funcoes.length})
                   </p>
                   <div className="grid gap-1.5 sm:grid-cols-2">
                     {resultado.resultados.funcoes.map((funcao) => (
@@ -1589,7 +1589,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-foreground">{funcao.nome}</p>
                           <p className="truncate text-xs text-muted-foreground">
-                            {funcao.total_funcionarios} funcionarios
+                            {funcao.total_funcionarios} funcionários
                           </p>
                         </div>
                         <StatusPill tone={funcao.status_ativo ? "success" : "danger"}>
@@ -1627,7 +1627,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                 </div>
                 <div className="rounded-xl border border-border/60 bg-background/70 p-3 sm:col-span-2">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Funcionarios vinculados
+                    Funcionários vinculados
                   </p>
                   <p className="mt-1 text-sm font-semibold text-foreground">{resultado.setor.total_funcionarios}</p>
                 </div>
@@ -1637,7 +1637,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
             <div className="space-y-2.5 rounded-2xl border border-border/65 bg-surface-1/85 p-4 sm:p-5">
               <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                 <User className="h-4 w-4 text-primary" />
-                Funcionarios relacionados
+                Funcionários relacionados
                 <span className="ml-auto text-xs font-normal text-muted-foreground">
                   {resultado.funcionarios_relacionados.length}{" "}
                   {resultado.funcionarios_relacionados.length === 1 ? "item" : "itens"}
@@ -1645,7 +1645,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
               </div>
               {resultado.funcionarios_relacionados.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-border/60 bg-background/55 py-3 text-center text-sm text-muted-foreground">
-                  Nenhum funcionario relacionado encontrado neste recorte.
+                  Nenhum funcionário relacionado encontrado neste recorte.
                 </p>
               ) : (
                 <div className="space-y-1.5">
@@ -1661,7 +1661,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-semibold text-foreground">{funcionario.nome}</div>
                         <div className="truncate text-xs text-muted-foreground">
-                          Matricula {funcionario.matricula} | {funcionario.unidade} | {funcionario.funcao}
+                          Matrícula {funcionario.matricula} | {funcionario.unidade} | {funcionario.funcao}
                         </div>
                       </div>
                       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
@@ -1696,7 +1696,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                 </div>
                 <div className="rounded-xl border border-border/60 bg-background/70 p-3 sm:col-span-2">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Funcionarios vinculados
+                    Funcionários vinculados
                   </p>
                   <p className="mt-1 text-sm font-semibold text-foreground">{resultado.unidade.total_funcionarios}</p>
                 </div>
@@ -1706,7 +1706,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
             <div className="space-y-2.5 rounded-2xl border border-border/65 bg-surface-1/85 p-4 sm:p-5">
               <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                 <User className="h-4 w-4 text-primary" />
-                Funcionarios relacionados
+                Funcionários relacionados
                 <span className="ml-auto text-xs font-normal text-muted-foreground">
                   {resultado.funcionarios_relacionados.length}{" "}
                   {resultado.funcionarios_relacionados.length === 1 ? "item" : "itens"}
@@ -1714,7 +1714,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
               </div>
               {resultado.funcionarios_relacionados.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-border/60 bg-background/55 py-3 text-center text-sm text-muted-foreground">
-                  Nenhum funcionario relacionado encontrado neste recorte.
+                  Nenhum funcionário relacionado encontrado neste recorte.
                 </p>
               ) : (
                 <div className="space-y-1.5">
@@ -1730,7 +1730,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-semibold text-foreground">{funcionario.nome}</div>
                         <div className="truncate text-xs text-muted-foreground">
-                          Matricula {funcionario.matricula} | {funcionario.setor} | {funcionario.funcao}
+                          Matrícula {funcionario.matricula} | {funcionario.setor} | {funcionario.funcao}
                         </div>
                       </div>
                       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
@@ -1759,7 +1759,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                 </div>
                 <div className="rounded-xl border border-border/60 bg-background/70 p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Funcionarios vinculados
+                    Funcionários vinculados
                   </p>
                   <p className="mt-1 text-sm font-semibold text-foreground">{resultado.funcao.total_funcionarios}</p>
                 </div>
@@ -1769,7 +1769,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
             <div className="space-y-2.5 rounded-2xl border border-border/65 bg-surface-1/85 p-4 sm:p-5">
               <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                 <User className="h-4 w-4 text-primary" />
-                Funcionarios relacionados
+                Funcionários relacionados
                 <span className="ml-auto text-xs font-normal text-muted-foreground">
                   {resultado.funcionarios_relacionados.length}{" "}
                   {resultado.funcionarios_relacionados.length === 1 ? "item" : "itens"}
@@ -1777,7 +1777,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
               </div>
               {resultado.funcionarios_relacionados.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-border/60 bg-background/55 py-3 text-center text-sm text-muted-foreground">
-                  Nenhum funcionario relacionado encontrado neste recorte.
+                  Nenhum funcionário relacionado encontrado neste recorte.
                 </p>
               ) : (
                 <div className="space-y-1.5">
@@ -1793,7 +1793,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-semibold text-foreground">{funcionario.nome}</div>
                         <div className="truncate text-xs text-muted-foreground">
-                          Matricula {funcionario.matricula} | {funcionario.unidade} | {funcionario.setor}
+                          Matrícula {funcionario.matricula} | {funcionario.unidade} | {funcionario.setor}
                         </div>
                       </div>
                       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
@@ -1835,7 +1835,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                   <div className="rounded-xl border border-border/60 bg-background/70 p-3 sm:col-span-2">
                     <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                       <Package className="h-3.5 w-3.5 text-primary/70" />
-                      Descricao
+                      Descrição
                     </div>
                     <p className="mt-1 text-sm font-semibold text-foreground">
                       {descricaoItemLabel(resultado.kit.descricao)}
@@ -1862,7 +1862,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                             </p>
                           ) : null}
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Item em emprestimo ativo.
+                            Item em empréstimo ativo.
                           </p>
                         </>
                       ) : kitSetorAssociado ? (
@@ -1871,14 +1871,14 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                             {kitSetorAssociado}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Item em emprestimo ativo para este setor.
+                            Item em empréstimo ativo para este setor.
                           </p>
                         </>
                       ) : (
                         <>
-                          <p className="mt-1 text-sm font-semibold text-foreground">Sem vinculo identificado</p>
+                          <p className="mt-1 text-sm font-semibold text-foreground">Sem vínculo identificado</p>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Este item esta emprestado, mas sem usuario/setor informado.
+                            Este item está emprestado, mas sem usuário/setor informado.
                           </p>
                         </>
                       )
@@ -1889,7 +1889,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                             {kitUltimoUsuarioHistorico}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Usuario do ultimo ciclo registrado deste item.
+                            Usuário do último ciclo registrado deste item.
                           </p>
                         </>
                       ) : kitSetorAssociado ? (
@@ -1898,14 +1898,14 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                             {kitSetorAssociado}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Ultimo setor associado ao item.
+                            Último setor associado ao item.
                           </p>
                         </>
                       ) : (
                         <>
-                          <p className="mt-1 text-sm font-semibold text-foreground">Sem vinculo no historico</p>
+                          <p className="mt-1 text-sm font-semibold text-foreground">Sem vínculo no histórico</p>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            Este item ainda nao teve usuario ou setor vinculado.
+                            Este item ainda não teve usuário ou setor vinculado.
                           </p>
                         </>
                       )
@@ -1914,7 +1914,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                   <div className="rounded-xl border border-border/60 bg-background/70 p-3">
                     <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                       <CalendarDays className="h-3.5 w-3.5 text-primary/70" />
-                      {kitEmprestado ? "Ultimo emprestimo" : "Ultima devolucao"}
+                      {kitEmprestado ? "Último empréstimo" : "Última devolução"}
                     </div>
                     {kitEmprestado ? (
                       <>
@@ -1922,7 +1922,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                           {formatDateTime(resultado.kit.data_emprestimo ?? kitUltimoEmprestimoEvento?.timestamp ?? null)}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Inicio do emprestimo atual.
+                          Início do empréstimo atual.
                         </p>
                       </>
                     ) : kitUltimaDevolucaoEvento ? (
@@ -1931,21 +1931,21 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                           {formatDateTime(kitUltimaDevolucaoEvento.timestamp)}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Data da ultima devolucao registrada.
+                          Data da última devolução registrada.
                         </p>
                       </>
                     ) : kitTemHistorico ? (
                       <>
-                        <p className="mt-1 text-sm font-semibold text-foreground">Sem devolucao registrada</p>
+                        <p className="mt-1 text-sm font-semibold text-foreground">Sem devolução registrada</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Existe historico de emprestimo, mas sem devolucao registrada.
+                          Existe histórico de empréstimo, mas sem devolução registrada.
                         </p>
                       </>
                     ) : (
                       <>
-                        <p className="mt-1 text-sm font-semibold text-foreground">Sem historico de devolucao</p>
+                        <p className="mt-1 text-sm font-semibold text-foreground">Sem histórico de devolução</p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Este item ainda nao teve devolucao registrada.
+                          Este item ainda não teve devolução registrada.
                         </p>
                       </>
                     )}
@@ -1955,7 +1955,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
             ) : (
               <div className="space-y-3 rounded-2xl border border-border/65 bg-surface-1/85 p-4 sm:p-5">
                 <div className="space-y-1">
-                  <Label htmlFor="detalhe-kit-codigo">Codigo</Label>
+                  <Label htmlFor="detalhe-kit-codigo">Código</Label>
                   <Input
                     id="detalhe-kit-codigo"
                     value={draftKit.codigo}
@@ -1966,7 +1966,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="detalhe-kit-descricao">Descricao (opcional)</Label>
+                  <Label htmlFor="detalhe-kit-descricao">Descrição (opcional)</Label>
                   <Input
                     id="detalhe-kit-descricao"
                     value={draftKit.descricao}
@@ -2097,7 +2097,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="disponivel">disponivel</SelectItem>
+                      <SelectItem value="disponivel">disponível</SelectItem>
                       <SelectItem value="emprestado">emprestado</SelectItem>
                       <SelectItem value="inativo">inativo</SelectItem>
                     </SelectContent>
@@ -2123,7 +2123,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                   void abrirHistoricoDetalhado();
                 }}
               >
-                Ver historico completo
+                Ver histórico completo
               </Button>
             </div>
           </div>
@@ -2142,7 +2142,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                   <div className="rounded-xl border border-border/60 bg-background/70 p-3">
                     <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                       <User className="h-3.5 w-3.5 text-primary/70" />
-                      Matricula
+                      Matrícula
                     </div>
                     <p className="mt-1 font-mono text-sm font-semibold text-foreground">
                       {resultado.funcionario.matricula}
@@ -2160,7 +2160,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                   <div className="rounded-xl border border-border/60 bg-background/70 p-3">
                     <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                       <UserCog className="h-3.5 w-3.5 text-primary/70" />
-                      Funcoes
+                      Funções
                     </div>
                     <p className="mt-1 text-sm font-semibold text-foreground">
                       {formatarFuncoesFuncionario(funcoesFuncionarioResultado)}
@@ -2220,7 +2220,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                           className="h-6 w-6 rounded-md text-muted-foreground/70 hover:text-foreground"
                           onClick={() => setPaginaUnidadesCatalogo((prev) => Math.max(1, prev - 1))}
                           disabled={paginaUnidadesCatalogo === 1}
-                          aria-label="Pagina anterior de unidades"
+                          aria-label="Página anterior de unidades"
                         >
                           <ChevronLeft className="h-3.5 w-3.5" />
                         </Button>
@@ -2238,7 +2238,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                             )
                           }
                           disabled={paginaUnidadesCatalogo >= totalPaginasUnidadesCatalogo}
-                          aria-label="Proxima pagina de unidades"
+                          aria-label="Próxima página de unidades"
                         >
                           <ChevronRight className="h-3.5 w-3.5" />
                         </Button>
@@ -2313,7 +2313,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                           className="h-6 w-6 rounded-md text-muted-foreground/70 hover:text-foreground"
                           onClick={() => setPaginaSetoresCatalogo((prev) => Math.max(1, prev - 1))}
                           disabled={paginaSetoresCatalogo === 1}
-                          aria-label="Pagina anterior de setores"
+                          aria-label="Página anterior de setores"
                         >
                           <ChevronLeft className="h-3.5 w-3.5" />
                         </Button>
@@ -2331,7 +2331,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                             )
                           }
                           disabled={paginaSetoresCatalogo >= totalPaginasSetoresCatalogo}
-                          aria-label="Proxima pagina de setores"
+                          aria-label="Próxima página de setores"
                         >
                           <ChevronRight className="h-3.5 w-3.5" />
                         </Button>
@@ -2371,7 +2371,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                       Selecionados: {draftFuncionario.setores.length}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Disponiveis para as unidades selecionadas: {setoresDisponiveisDraft.length}
+                      Disponíveis para as unidades selecionadas: {setoresDisponiveisDraft.length}
                     </p>
                     <Select
                       value={draftFuncionario.setorPrincipal}
@@ -2395,7 +2395,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1">
-                        <p className="text-sm font-medium text-foreground">Funcoes</p>
+                        <p className="text-sm font-medium text-foreground">Funções</p>
                         <Button
                           type="button"
                           variant="ghost"
@@ -2404,8 +2404,8 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                           onClick={() =>
                             setOrdemFuncoesCatalogo((prev) => (prev === "asc" ? "desc" : "asc"))
                           }
-                          title="Ordenar funcoes"
-                          aria-label="Ordenar funcoes"
+                          title="Ordenar funções"
+                          aria-label="Ordenar funções"
                         >
                           {ordemFuncoesCatalogo === "asc" ? (
                             <ChevronUp className="h-3.5 w-3.5" />
@@ -2422,7 +2422,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                           className="h-6 w-6 rounded-md text-muted-foreground/70 hover:text-foreground"
                           onClick={() => setPaginaFuncoesCatalogo((prev) => Math.max(1, prev - 1))}
                           disabled={paginaFuncoesCatalogo === 1}
-                          aria-label="Pagina anterior de funcoes"
+                          aria-label="Página anterior de funções"
                         >
                           <ChevronLeft className="h-3.5 w-3.5" />
                         </Button>
@@ -2440,7 +2440,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                             )
                           }
                           disabled={paginaFuncoesCatalogo >= totalPaginasFuncoesCatalogo}
-                          aria-label="Proxima pagina de funcoes"
+                          aria-label="Próxima página de funções"
                         >
                           <ChevronRight className="h-3.5 w-3.5" />
                         </Button>
@@ -2448,7 +2448,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                     </div>
                     <div className="min-h-[10.75rem] space-y-2 rounded-lg border border-border/70 bg-background p-3">
                       {funcoesCatalogoPaginadas.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Nenhuma funcao ativa.</p>
+                        <p className="text-sm text-muted-foreground">Nenhuma função ativa.</p>
                       ) : (
                         funcoesCatalogoPaginadas.map((funcao) => (
                           <label key={funcao.id} className="flex items-center gap-2 text-sm">
@@ -2474,7 +2474,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                       disabled={draftFuncionario.funcoes.length === 0}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione a funcao principal" />
+                        <SelectValue placeholder="Selecione a função principal" />
                       </SelectTrigger>
                       <SelectContent>
                         {draftFuncionario.funcoes.map((funcaoNome) => (
@@ -2549,18 +2549,18 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                   void abrirHistoricoDetalhado();
                 }}
               >
-                Ver historico completo
+                Ver histórico completo
               </Button>
             </div>
           </div>
         )}
       </Modal>
 
-      {/* Historico completo modal */}
+      {/* Histórico completo modal */}
       <Modal
         open={historicoModalOpen}
-        title="Historico completo"
-        description="Todos os ciclos de emprestimo e devolucao"
+        title="Histórico completo"
+        description="Todos os ciclos de empréstimo e devolução"
         icon={Clock}
         onClose={() => setHistoricoModalOpen(false)}
         footer={
@@ -2589,7 +2589,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
                 }
                 disabled={historicoPagina * historicoLimite >= historicoTotal || historicoLoading}
               >
-                Proxima
+                Próxima
               </Button>
             </div>
           </div>
@@ -2598,7 +2598,7 @@ export function GlobalDetailProvider({ children }: { children: ReactNode }) {
         {historicoLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Carregando historico...
+            Carregando histórico...
           </div>
         ) : historicoCiclos.length === 0 ? (
           <p className="rounded-lg bg-muted/30 py-3 text-center text-sm text-muted-foreground">
@@ -2657,10 +2657,10 @@ function HistoricoCiclosSection({ ciclos }: { ciclos: HistoricoCiclo[] }) {
                 <div className="rounded-lg border border-border/60 bg-background/65 px-3 py-2">
                   <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                     <ArrowDownLeft className="h-3.5 w-3.5 text-primary/70" />
-                    Devolucao
+                    Devolução
                   </div>
                   <div className="text-sm font-medium text-foreground">
-                    {ciclo.em_aberto ? "Aguardando devolucao" : formatDateTime(ciclo.entrada_em)}
+                    {ciclo.em_aberto ? "Aguardando devolução" : formatDateTime(ciclo.entrada_em)}
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     Operador: {ciclo.entrada_operador ?? "-"}

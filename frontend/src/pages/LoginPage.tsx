@@ -79,7 +79,7 @@ export function LoginPage() {
     );
 
     if (!opened) {
-      error("Nao foi possivel abrir a janela de acompanhamento");
+      error("Não foi possível abrir a janela de acompanhamento");
       return;
     }
 
@@ -111,14 +111,14 @@ export function LoginPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2 animate-in fade-in-0 slide-in-from-bottom-2" style={{ animationDelay: "80ms" }}>
                 <Label htmlFor="usuario" className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                  Usuario
+                  Usuário
                 </Label>
                 <div className="relative">
                   <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="usuario"
                     type="text"
-                    placeholder="Digite seu usuario"
+                    placeholder="Digite seu usuário"
                     value={usuario}
                     onChange={(e) => setUsuario(e.target.value)}
                     autoComplete="username"

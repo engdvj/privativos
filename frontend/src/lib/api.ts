@@ -35,6 +35,87 @@ class ApiClient {
     return `${token}::${path}`;
   }
 
+  private parseResponsePayload(raw: string, contentType: string): unknown {
+    const body = raw.trim();
+    if (!body) {
+      return null;
+    }
+
+    const isJson = contentType.toLowerCase().includes("application/json");
+    if (isJson || body.startsWith("{") || body.startsWith("[")) {
+      try {
+        return JSON.parse(body) as unknown;
+      } catch {
+        if (isJson) {
+          return null;
+        }
+      }
+    }
+
+    return body;
+  }
+
+  private isSafePlainErrorText(value: string): boolean {
+    const text = value.trim();
+    if (!text || text.length > 180) {
+      return false;
+    }
+
+    if (
+      text.startsWith("{") ||
+      text.startsWith("[") ||
+      text.startsWith("<") ||
+      text.toLowerCase().startsWith("doctype")
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  private extractApiError(payload: unknown): { message?: string; codigo?: string } {
+    if (typeof payload === "string") {
+      const message = this.isSafePlainErrorText(payload) ? payload.trim() : undefined;
+      return { message };
+    }
+
+    if (!payload || typeof payload !== "object") {
+      return {};
+    }
+
+    const data = payload as Record<string, unknown>;
+    const messageKeys = ["erro", "error", "message", "mensagem"] as const;
+    let message: string | undefined;
+
+    for (const key of messageKeys) {
+      const value = data[key];
+      if (typeof value === "string" && value.trim()) {
+        message = value.trim();
+        break;
+      }
+    }
+
+    if (!message && typeof data.detail === "string" && data.detail.trim()) {
+      message = data.detail.trim();
+    }
+
+    const codigo = typeof data.codigo === "string" && data.codigo.trim()
+      ? data.codigo.trim()
+      : undefined;
+
+    return { message, codigo };
+  }
+
+  private defaultErrorMessage(status: number): string {
+    if (status >= 500) return "Erro interno";
+    if (status === 404) return "Recurso nao encontrado";
+    if (status === 403) return "Acesso negado";
+    if (status === 401) return "Sessao expirada";
+    if (status === 409) return "Operacao nao permitida";
+    if (status >= 400) return "Requisicao invalida";
+    return "Erro desconhecido";
+  }
+
   clearSession() {
     localStorage.removeItem("token");
     localStorage.removeItem("perfil");
@@ -151,12 +232,11 @@ class ApiClient {
     }
 
     if (!res.ok) {
+      const raw = await res.text();
       const contentType = res.headers.get("content-type") ?? "";
-      if (contentType.includes("application/json")) {
-        const data = await res.json();
-        throw new Error(data.erro || "Erro desconhecido");
-      }
-      throw new Error("Erro ao processar exportacao");
+      const payload = this.parseResponsePayload(raw, contentType);
+      const { message } = this.extractApiError(payload);
+      throw new Error(message || "Erro ao processar exportacao");
     }
 
     return res.blob();
@@ -190,16 +270,23 @@ class ApiClient {
       return {} as T;
     }
 
-    const data = await res.json();
+    const raw = await res.text();
+    const contentType = res.headers.get("content-type") ?? "";
+    const data = this.parseResponsePayload(raw, contentType);
 
     if (!res.ok) {
-      const err = new Error(data.erro || "Erro desconhecido") as Error & {
+      const { message, codigo } = this.extractApiError(data);
+      const err = new Error(message || this.defaultErrorMessage(res.status)) as Error & {
         status: number;
         codigo: string;
       };
       err.status = res.status;
-      err.codigo = data.codigo;
+      err.codigo = codigo ?? "";
       throw err;
+    }
+
+    if (data === null) {
+      return {} as T;
     }
 
     return data as T;

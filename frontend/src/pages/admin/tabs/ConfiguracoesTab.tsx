@@ -57,7 +57,7 @@ export function ConfiguracoesTab() {
         setMaxKits(atual.valor);
       }
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao carregar configuracoes");
+      error(err instanceof Error ? err.message : "Erro ao carregar configurações");
     } finally {
       setLoading(false);
     }
@@ -92,11 +92,11 @@ export function ConfiguracoesTab() {
       await api.put("/admin/configuracoes/max-kits", {
         max_kits_por_funcionario: valor,
       });
-      success("Configuracao atualizada");
+      success("Configuração atualizada");
       setOpenEditModal(false);
       await carregar();
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao salvar configuracao");
+      error(err instanceof Error ? err.message : "Erro ao salvar configuração");
     } finally {
       setSaving(false);
     }
@@ -109,10 +109,10 @@ export function ConfiguracoesTab() {
   async function resetarConfiguracoes(chaves?: string[]) {
     try {
       await api.post<ConfiguracaoRow[]>("/admin/configuracoes/reset", chaves?.length ? { chaves } : undefined);
-      success("Configuracoes resetadas para os valores padrao");
+      success("Configurações resetadas para os valores padrão");
       await carregar();
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao resetar configuracoes");
+      error(err instanceof Error ? err.message : "Erro ao resetar configurações");
     }
   }
 
@@ -129,7 +129,7 @@ export function ConfiguracoesTab() {
   return (
     <div className="space-y-3">
       <SectionCard
-        title={<span className="text-sm font-semibold">Configuracoes</span>}
+        title={<span className="text-sm font-semibold">Configurações</span>}
         icon={Settings2}
         description={(
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
@@ -192,7 +192,7 @@ export function ConfiguracoesTab() {
             getRowKey={(row) => row.chave}
             onRowClick={(row) => abrirEdicao(row)}
             loading={loading}
-            emptyMessage="Nenhuma configuracao encontrada."
+            emptyMessage="Nenhuma configuração encontrada."
             minWidthClassName="min-w-[980px]"
             containerClassName={TABELA_DENSE_CLASS}
             renderRow={(row) => {
@@ -220,7 +220,7 @@ export function ConfiguracoesTab() {
                         className="h-8 w-8 rounded-lg"
                         onClick={() => abrirEdicao(row)}
                         disabled={!isEditavel}
-                        aria-label={`Editar configuracao ${row.chave}`}
+                        aria-label={`Editar configuração ${row.chave}`}
                         title={isEditavel ? "Editar" : "Somente leitura"}
                       >
                         <Pencil className="h-4 w-4" />
@@ -231,11 +231,11 @@ export function ConfiguracoesTab() {
                         className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/12 hover:text-destructive"
                         onClick={() => setConfigParaResetar(row)}
                         disabled={!isResetavel}
-                        aria-label={`Resetar configuracao ${row.chave}`}
+                        aria-label={`Resetar configuração ${row.chave}`}
                         title={
                           isResetavel
-                            ? "Resetar para valor padrao"
-                            : "Configuracao sem valor padrao cadastrado"
+                            ? "Resetar para valor padrão"
+                            : "Configuração sem valor padrão cadastrado"
                         }
                       >
                         <RotateCcw className="h-4 w-4" />
@@ -259,7 +259,7 @@ export function ConfiguracoesTab() {
             ))
           ) : rowsFiltradas.length === 0 ? (
             <div className="rounded-xl border border-border/70 bg-surface-2/80 px-3 py-5">
-              <EmptyState compact title="Nenhuma configuracao encontrada." />
+              <EmptyState compact title="Nenhuma configuração encontrada." />
             </div>
           ) : (
             rowsFiltradas.map((row) => {
@@ -294,7 +294,7 @@ export function ConfiguracoesTab() {
                       className="h-8 w-8 rounded-lg"
                       onClick={() => abrirEdicao(row)}
                       disabled={!isEditavel}
-                      aria-label={`Editar configuracao ${row.chave}`}
+                      aria-label={`Editar configuração ${row.chave}`}
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -304,7 +304,7 @@ export function ConfiguracoesTab() {
                       className="h-8 w-8 rounded-lg text-destructive hover:bg-destructive/12 hover:text-destructive"
                       onClick={() => setConfigParaResetar(row)}
                       disabled={!isResetavel}
-                      aria-label={`Resetar configuracao ${row.chave}`}
+                      aria-label={`Resetar configuração ${row.chave}`}
                     >
                       <RotateCcw className="h-4 w-4" />
                     </Button>
@@ -319,15 +319,15 @@ export function ConfiguracoesTab() {
       <Modal
         open={openEditModal}
         onClose={() => setOpenEditModal(false)}
-        title={`Editar Configuracao: ${MAX_KITS_KEY}`}
-        description="Defina um numero inteiro positivo para limitar kits por funcionario."
+        title={`Editar Configuração: ${MAX_KITS_KEY}`}
+        description="Defina um número inteiro positivo para limitar kits por funcionário."
         maxWidthClassName="max-w-xl"
       >
         <div className="space-y-3">
           <FormField
             label="Valor"
             htmlFor="max-kits"
-            helperText="Esse valor impacta diretamente validacoes de emprestimo."
+            helperText="Esse valor impacta diretamente validações de empréstimo."
           >
             <Input
               id="max-kits"
@@ -353,10 +353,10 @@ export function ConfiguracoesTab() {
       <ConfirmDialog
         open={Boolean(configParaResetar)}
         onClose={() => setConfigParaResetar(null)}
-        title="Resetar configuracao"
+        title="Resetar configuração"
         description={
           configParaResetar
-            ? `Tem certeza que deseja resetar ${configParaResetar.chave} para o valor padrao (${CONFIG_DEFAULTS[configParaResetar.chave] ?? "-"})?`
+            ? `Tem certeza que deseja resetar ${configParaResetar.chave} para o valor padrão (${CONFIG_DEFAULTS[configParaResetar.chave] ?? "-"})?`
             : undefined
         }
         confirmLabel="Resetar"
@@ -370,8 +370,8 @@ export function ConfiguracoesTab() {
       <ConfirmDialog
         open={confirmarResetTotal}
         onClose={() => setConfirmarResetTotal(false)}
-        title="Resetar todas as configuracoes"
-        description="Tem certeza que deseja resetar todas as configuracoes para os valores padrao?"
+        title="Resetar todas as configurações"
+        description="Tem certeza que deseja resetar todas as configurações para os valores padrão?"
         confirmLabel="Resetar tudo"
         onConfirm={async () => {
           await resetarConfiguracoes();

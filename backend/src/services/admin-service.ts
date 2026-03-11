@@ -157,6 +157,7 @@ export class AdminService {
       dadosAntes: null,
       dadosDepois: created,
     });
+    await this.invalidateDashboardCaches();
 
     return created;
   }
@@ -167,7 +168,7 @@ export class AdminService {
   ) {
     const before = await prisma.unidade.findUnique({ where: { id } });
     if (!before) {
-      throw new AppError(404, "UNIDADE_NOT_FOUND", "Unidade nao encontrada");
+      throw new AppError(404, "UNIDADE_NOT_FOUND", "Unidade não encontrada");
     }
 
     if (input.statusAtivo === false && before.statusAtivo) {
@@ -176,7 +177,7 @@ export class AdminService {
         throw new AppError(
           409,
           "UNIDADE_SETOR_CONFLITO",
-          `Unidade nao pode ser inativada porque deixaria setores sem unidade ativa (${setoresSemAlternativa.slice(0, 10).join(", ")})`,
+          `Unidade não pode ser inativada porque deixaria setores sem unidade ativa (${setoresSemAlternativa.slice(0, 10).join(", ")})`,
         );
       }
     }
@@ -211,6 +212,7 @@ export class AdminService {
       dadosAntes: before,
       dadosDepois: updated,
     });
+    await this.invalidateDashboardCaches();
 
     return updated;
   }
@@ -218,7 +220,7 @@ export class AdminService {
   async deleteUnidade(id: number, operador: string) {
     const before = await prisma.unidade.findUnique({ where: { id } });
     if (!before) {
-      throw new AppError(404, "UNIDADE_NOT_FOUND", "Unidade nao encontrada");
+      throw new AppError(404, "UNIDADE_NOT_FOUND", "Unidade não encontrada");
     }
 
     const vinculados = await prisma.funcionarioUnidade.count({
@@ -238,7 +240,7 @@ export class AdminService {
       throw new AppError(
         409,
         "UNIDADE_SETOR_CONFLITO",
-        `Unidade nao pode ser apagada porque deixaria setores sem unidade ativa (${setoresSemAlternativa.slice(0, 10).join(", ")})`,
+        `Unidade não pode ser apagada porque deixaria setores sem unidade ativa (${setoresSemAlternativa.slice(0, 10).join(", ")})`,
       );
     }
 
@@ -252,6 +254,7 @@ export class AdminService {
       dadosAntes: before,
       dadosDepois: null,
     });
+    await this.invalidateDashboardCaches();
   }
 
   async listSetores(includeInactive = false) {
@@ -358,6 +361,7 @@ export class AdminService {
         unidades: created.unidades.map((item) => item.unidade.nome),
       },
     });
+    await this.invalidateDashboardCaches();
 
     return {
       ...created,
@@ -385,7 +389,7 @@ export class AdminService {
       },
     });
     if (!before) {
-      throw new AppError(404, "SETOR_NOT_FOUND", "Setor nao encontrado");
+      throw new AppError(404, "SETOR_NOT_FOUND", "Setor não encontrado");
     }
 
     const atualizarUnidades = input.unidades !== undefined;
@@ -450,7 +454,7 @@ export class AdminService {
         throw new AppError(
           409,
           "SETOR_UNIDADE_CONFLITO",
-          `Setor nao pode perder vinculo com as unidades atuais dos funcionarios (${conflitos.slice(0, 10).join(", ")})`,
+          `Setor não pode perder vínculo com as unidades atuais dos funcionários (${conflitos.slice(0, 10).join(", ")})`,
         );
       }
     }
@@ -525,6 +529,7 @@ export class AdminService {
       dadosAntes: beforeAuditoria,
       dadosDepois: afterAuditoria,
     });
+    await this.invalidateDashboardCaches();
 
     return afterAuditoria;
   }
@@ -532,7 +537,7 @@ export class AdminService {
   async deleteSetor(id: number, operador: string) {
     const before = await prisma.setor.findUnique({ where: { id } });
     if (!before) {
-      throw new AppError(404, "SETOR_NOT_FOUND", "Setor nao encontrado");
+      throw new AppError(404, "SETOR_NOT_FOUND", "Setor não encontrado");
     }
 
     const vinculados = await prisma.funcionarioSetor.count({
@@ -557,6 +562,7 @@ export class AdminService {
       dadosAntes: before,
       dadosDepois: null,
     });
+    await this.invalidateDashboardCaches();
   }
 
   async listFuncionariosPorSetor(
@@ -815,6 +821,7 @@ export class AdminService {
       dadosAntes: null,
       dadosDepois: created,
     });
+    await this.invalidateDashboardCaches();
 
     return created;
   }
@@ -825,7 +832,7 @@ export class AdminService {
   ) {
     const before = await prisma.funcao.findUnique({ where: { id } });
     if (!before) {
-      throw new AppError(404, "FUNCAO_NOT_FOUND", "Funcao nao encontrada");
+      throw new AppError(404, "FUNCAO_NOT_FOUND", "Função não encontrada");
     }
 
     const now = new Date();
@@ -858,6 +865,7 @@ export class AdminService {
       dadosAntes: before,
       dadosDepois: updated,
     });
+    await this.invalidateDashboardCaches();
 
     return updated;
   }
@@ -865,7 +873,7 @@ export class AdminService {
   async deleteFuncao(id: number, operador: string) {
     const before = await prisma.funcao.findUnique({ where: { id } });
     if (!before) {
-      throw new AppError(404, "FUNCAO_NOT_FOUND", "Funcao nao encontrada");
+      throw new AppError(404, "FUNCAO_NOT_FOUND", "Função não encontrada");
     }
 
     const vinculados = await prisma.funcionarioFuncao.count({
@@ -876,7 +884,7 @@ export class AdminService {
       throw new AppError(
         409,
         "FUNCAO_COM_FUNCIONARIOS",
-        "Funcao possui funcionarios vinculados. Realoque os funcionarios antes de apagar.",
+        "Função possui funcionários vinculados. Realoque os funcionários antes de apagar.",
       );
     }
 
@@ -890,6 +898,7 @@ export class AdminService {
       dadosAntes: before,
       dadosDepois: null,
     });
+    await this.invalidateDashboardCaches();
   }
 
   async listFuncionarios(includeInactive = false) {
@@ -1042,11 +1051,11 @@ export class AdminService {
     });
 
     if (funcionarioComMatricula) {
-      throw new AppError(409, "MATRICULA_DUPLICADA", "Ja existe funcionario com esta matricula");
+      throw new AppError(409, "MATRICULA_DUPLICADA", "Já existe funcionário com esta matrícula");
     }
 
     if (funcionarioComMesmoNome) {
-      throw new AppError(409, "FUNCIONARIO_DUPLICADO", "Ja existe funcionario com este nome");
+      throw new AppError(409, "FUNCIONARIO_DUPLICADO", "Já existe funcionário com este nome");
     }
 
     const created = await prisma.$transaction(async (tx) => {
@@ -1197,7 +1206,7 @@ export class AdminService {
     });
 
     if (!before) {
-      throw new AppError(404, "FUNCIONARIO_NOT_FOUND", "Funcionario nao encontrado");
+      throw new AppError(404, "FUNCIONARIO_NOT_FOUND", "Funcionário não encontrado");
     }
 
     const nomeNormalizado = input.nome !== undefined ? this.normalizarNome(input.nome) : undefined;
@@ -1343,7 +1352,7 @@ export class AdminService {
     }
 
     if (funcionarioComMesmoNome) {
-      throw new AppError(409, "FUNCIONARIO_DUPLICADO", "Ja existe funcionario com este nome");
+      throw new AppError(409, "FUNCIONARIO_DUPLICADO", "Já existe funcionário com este nome");
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -1459,7 +1468,7 @@ export class AdminService {
   async deleteFuncionario(matricula: string, operador: string) {
     const before = await prisma.funcionario.findUnique({ where: { matricula } });
     if (!before) {
-      throw new AppError(404, "FUNCIONARIO_NOT_FOUND", "Funcionario nao encontrado");
+      throw new AppError(404, "FUNCIONARIO_NOT_FOUND", "Funcionário não encontrado");
     }
 
     const emprestados = await prisma.item.count({
@@ -1474,11 +1483,22 @@ export class AdminService {
       throw new AppError(
         409,
         "FUNCIONARIO_COM_EMPRESTIMO",
-        "Funcionario possui itens emprestados e nao pode ser removido",
+        "Funcionário possui itens emprestados e não pode ser removido",
       );
     }
 
-    await prisma.funcionario.delete({ where: { matricula } });
+    await prisma.$transaction(async (tx) => {
+      await Promise.all([
+        tx.solicitacao.deleteMany({
+          where: { matricula },
+        }),
+        tx.devolucao.deleteMany({
+          where: { matricula },
+        }),
+      ]);
+
+      await tx.funcionario.delete({ where: { matricula } });
+    });
 
     await this.audit({
       operador,
@@ -1547,7 +1567,7 @@ export class AdminService {
     const before = await prisma.item.findUnique({ where: { codigo } });
 
     if (!before) {
-      throw new AppError(404, "ITEM_NOT_FOUND", "Item nao encontrado");
+      throw new AppError(404, "ITEM_NOT_FOUND", "Item não encontrado");
     }
 
     if (before.status === "emprestado" && input.statusAtivo === false) {
@@ -1572,7 +1592,7 @@ export class AdminService {
       });
 
       if (conflito) {
-        throw new AppError(409, "ITEM_CODE_ALREADY_EXISTS", "Codigo do item ja cadastrado");
+        throw new AppError(409, "ITEM_CODE_ALREADY_EXISTS", "Código do item já cadastrado");
       }
     }
 
@@ -1625,14 +1645,25 @@ export class AdminService {
   async deleteItem(codigo: string, operador: string) {
     const before = await prisma.item.findUnique({ where: { codigo } });
     if (!before) {
-      throw new AppError(404, "ITEM_NOT_FOUND", "Item nao encontrado");
+      throw new AppError(404, "ITEM_NOT_FOUND", "Item não encontrado");
     }
 
     if (before.status === "emprestado") {
-      throw new AppError(409, "ITEM_EMPRESTADO", "Item emprestado nao pode ser removido");
+      throw new AppError(409, "ITEM_EMPRESTADO", "Item emprestado não pode ser removido");
     }
 
-    await prisma.item.delete({ where: { codigo } });
+    await prisma.$transaction(async (tx) => {
+      await Promise.all([
+        tx.solicitacao.deleteMany({
+          where: { itemCodigo: codigo },
+        }),
+        tx.devolucao.deleteMany({
+          where: { itemCodigo: codigo },
+        }),
+      ]);
+
+      await tx.item.delete({ where: { codigo } });
+    });
 
     await this.audit({
       operador,
@@ -1731,7 +1762,7 @@ export class AdminService {
     });
 
     if (!before) {
-      throw new AppError(404, "CREDENCIAL_NOT_FOUND", "Credencial nao encontrada");
+      throw new AppError(404, "CREDENCIAL_NOT_FOUND", "Credencial não encontrada");
     }
 
     const senhaHash = input.senha ? await bcrypt.hash(input.senha, env.BCRYPT_ROUNDS) : undefined;
@@ -1789,7 +1820,7 @@ export class AdminService {
     });
 
     if (!before) {
-      throw new AppError(404, "CREDENCIAL_NOT_FOUND", "Credencial nao encontrada");
+      throw new AppError(404, "CREDENCIAL_NOT_FOUND", "Credencial não encontrada");
     }
 
     try {
@@ -1799,7 +1830,7 @@ export class AdminService {
         throw new AppError(
           409,
           "CREDENCIAL_DEPENDENTE",
-          "Credencial possui dependencias e nao pode ser removida com hard delete",
+          "Credencial possui dependências e não pode ser removida com hard delete",
         );
       }
       throw err;
@@ -1831,7 +1862,7 @@ export class AdminService {
       throw new AppError(
         400,
         "INVALID_PAYLOAD",
-        `Chaves de configuracao invalidas: ${invalidas.join(", ")}`,
+        `Chaves de configuração inválidas: ${invalidas.join(", ")}`,
       );
     }
 
@@ -2114,7 +2145,7 @@ export class AdminService {
       throw new AppError(
         400,
         "INVALID_PAYLOAD",
-        "Reset de unidades exige reset de setores para manter o vinculo setor-unidade consistente",
+        "Reset de unidades exige reset de setores para manter o vínculo setor-unidade consistente",
       );
     }
     const contagens = this.criarContadoresReset();
@@ -2233,7 +2264,7 @@ export class AdminService {
       throw new AppError(
         400,
         "INVALID_PAYLOAD",
-        "Backup sem credenciais e sem usuario atual para preservacao",
+        "Backup sem credenciais e sem usuário atual para preservação",
       );
     }
 
@@ -2246,7 +2277,7 @@ export class AdminService {
       throw new AppError(
         400,
         "INVALID_PAYLOAD",
-        `Backup invalido: itens com matricula inexistente (${itensComMatriculaInvalida.slice(0, 10).join(", ")})`,
+        `Backup inválido: itens com matrícula inexistente (${itensComMatriculaInvalida.slice(0, 10).join(", ")})`,
       );
     }
 
@@ -2375,7 +2406,7 @@ export class AdminService {
           throw new AppError(
             400,
             "INVALID_PAYLOAD",
-            "Backup invalido: setores cadastrados sem unidades disponiveis",
+            "Backup inválido: setores cadastrados sem unidades disponíveis",
           );
         }
 
@@ -2397,7 +2428,7 @@ export class AdminService {
             throw new AppError(
               400,
               "INVALID_PAYLOAD",
-              `Backup invalido: setor ${row.nome} referencia unidades inexistentes (${unidadesInvalidas.slice(0, 10).join(", ")})`,
+              `Backup inválido: setor ${row.nome} referencia unidades inexistentes (${unidadesInvalidas.slice(0, 10).join(", ")})`,
             );
           }
 
@@ -2455,7 +2486,7 @@ export class AdminService {
             throw new AppError(
               400,
               "INVALID_PAYLOAD",
-              `Backup invalido: funcionario ${matricula} sem unidade definida`,
+              `Backup inválido: funcionário ${matricula} sem unidade definida`,
             );
           }
           const setores = this.normalizarSetores(row.setores, row.setor);
@@ -2463,7 +2494,7 @@ export class AdminService {
             throw new AppError(
               400,
               "INVALID_PAYLOAD",
-              `Backup invalido: funcionario ${matricula} sem setor definido`,
+              `Backup inválido: funcionário ${matricula} sem setor definido`,
             );
           }
 
@@ -2472,7 +2503,7 @@ export class AdminService {
             throw new AppError(
               400,
               "INVALID_PAYLOAD",
-              `Backup invalido: funcionario ${matricula} sem funcao definida`,
+              `Backup inválido: funcionário ${matricula} sem função definida`,
             );
           }
 
@@ -2498,7 +2529,7 @@ export class AdminService {
           throw new AppError(
             400,
             "INVALID_PAYLOAD",
-            `Backup invalido: unidades inexistentes (${unidadesInvalidas.slice(0, 10).join(", ")})`,
+            `Backup inválido: unidades inexistentes (${unidadesInvalidas.slice(0, 10).join(", ")})`,
           );
         }
 
@@ -2512,7 +2543,7 @@ export class AdminService {
           throw new AppError(
             400,
             "INVALID_PAYLOAD",
-            `Backup invalido: setores inexistentes (${setoresInvalidos.slice(0, 10).join(", ")})`,
+            `Backup inválido: setores inexistentes (${setoresInvalidos.slice(0, 10).join(", ")})`,
           );
         }
 
@@ -2526,7 +2557,7 @@ export class AdminService {
           throw new AppError(
             400,
             "INVALID_PAYLOAD",
-            `Backup invalido: funcoes inexistentes (${funcoesInvalidas.slice(0, 10).join(", ")})`,
+            `Backup inválido: funções inexistentes (${funcoesInvalidas.slice(0, 10).join(", ")})`,
           );
         }
 
@@ -2546,7 +2577,7 @@ export class AdminService {
           throw new AppError(
             400,
             "INVALID_PAYLOAD",
-            `Backup invalido: setores sem vinculacao com unidades dos funcionarios (${setoresIncompativeis.slice(0, 10).join(", ")})`,
+            `Backup inválido: setores sem vinculação com unidades dos funcionários (${setoresIncompativeis.slice(0, 10).join(", ")})`,
           );
         }
 
@@ -2563,7 +2594,7 @@ export class AdminService {
           throw new AppError(
             400,
             "INVALID_PAYLOAD",
-            `Backup invalido: setor principal sem vinculacao com unidade principal (${principaisIncompativeis.slice(0, 10).join(", ")})`,
+            `Backup inválido: setor principal sem vinculação com unidade principal (${principaisIncompativeis.slice(0, 10).join(", ")})`,
           );
         }
 
@@ -2772,7 +2803,7 @@ export class AdminService {
   private normalizarMatricula(matricula: string) {
     const normalizada = matricula.trim();
     if (!normalizada) {
-      throw new AppError(400, "MATRICULA_INVALIDA", "Informe a matricula do funcionario");
+      throw new AppError(400, "MATRICULA_INVALIDA", "Informe a matrícula do funcionário");
     }
     return normalizada;
   }
@@ -2784,7 +2815,7 @@ export class AdminService {
   private normalizarNome(nome: string) {
     const normalizado = nome.trim();
     if (!normalizado) {
-      throw new AppError(400, "NOME_INVALIDO", "Informe o nome do funcionario");
+      throw new AppError(400, "NOME_INVALIDO", "Informe o nome do funcionário");
     }
     return normalizado;
   }
@@ -2825,7 +2856,7 @@ export class AdminService {
       throw new AppError(
         400,
         "UNIDADE_INVALIDA",
-        `Unidade invalida ou inativa: ${invalidas.join(", ")}`,
+        `Unidade inválida ou inativa: ${invalidas.join(", ")}`,
       );
     }
   }
@@ -2838,7 +2869,7 @@ export class AdminService {
       throw new AppError(
         400,
         "SETOR_INVALIDO",
-        `Setor invalido ou inativo: ${invalidos.join(", ")}`,
+        `Setor inválido ou inativo: ${invalidos.join(", ")}`,
       );
     }
   }
@@ -2869,7 +2900,7 @@ export class AdminService {
       throw new AppError(
         400,
         "SETOR_UNIDADE_INCOMPATIVEL",
-        `Setor sem vinculo com as unidades selecionadas: ${setoresSemCompatibilidade.join(", ")}`,
+        `Setor sem vínculo com as unidades selecionadas: ${setoresSemCompatibilidade.join(", ")}`,
       );
     }
 
@@ -2893,7 +2924,7 @@ export class AdminService {
       throw new AppError(
         400,
         "FUNCAO_INVALIDA",
-        `Funcao invalida ou inativa: ${invalidas.join(", ")}`,
+        `Função inválida ou inativa: ${invalidas.join(", ")}`,
       );
     }
   }

@@ -57,7 +57,7 @@ export function AdminPage() {
   const menuSections = useMemo(
     () => [
       {
-        title: "Operacao",
+        title: "Operação",
         items: [
           {
             id: "dashboard",
@@ -72,7 +72,7 @@ export function AdminPage() {
         items: [
           {
             id: "funcionarios",
-            label: "Funcionarios",
+            label: "Funcionários",
             icon: IdCard,
             iconClass: "text-foreground/85",
           },
@@ -90,7 +90,7 @@ export function AdminPage() {
           },
           {
             id: "funcoes",
-            label: "Funcoes",
+            label: "Funções",
             icon: UserCog,
             iconClass: "text-foreground/85",
           },
@@ -105,7 +105,7 @@ export function AdminPage() {
       ...(isSuperadmin
         ? [
             {
-              title: "Seguranca",
+              title: "Segurança",
               items: [
                 {
                   id: "credenciais",
@@ -121,13 +121,13 @@ export function AdminPage() {
                 },
                 {
                   id: "configuracoes",
-                  label: "Configuracoes",
+                  label: "Configurações",
                   icon: Settings,
                   iconClass: "text-foreground/85",
                 },
                 {
                   id: "manutencao",
-                  label: "Manutencao",
+                  label: "Manutenção",
                   icon: Database,
                   iconClass: "text-foreground/85",
                 },

@@ -76,15 +76,15 @@ const BACKUP_FORMAT_VERSION = 2;
 const PREVIEW_LIMIT = 6;
 
 const RESET_TARGET_OPTIONS: Array<{ value: ResetTarget; label: string; helper: string }> = [
-  { value: "credenciais", label: "Usuarios", helper: "Limpa contas de acesso (com opcao de preservar voce)." },
-  { value: "configuracoes", label: "Configuracoes", helper: "Reinicia parametros para os valores padrao." },
+  { value: "credenciais", label: "Usuários", helper: "Limpa contas de acesso (com opção de preservar você)." },
+  { value: "configuracoes", label: "Configurações", helper: "Reinicia parâmetros para os valores padrão." },
   { value: "unidades", label: "Unidades", helper: "Apaga unidades e exige reset de setores vinculados." },
   { value: "setores", label: "Setores", helper: "Apaga o catalogo de setores." },
-  { value: "funcoes", label: "Funcoes", helper: "Apaga o catalogo de funcoes." },
-  { value: "funcionarios", label: "Funcionarios", helper: "Apaga solicitantes cadastrados." },
+  { value: "funcoes", label: "Funções", helper: "Apaga o catálogo de funções." },
+  { value: "funcionarios", label: "Funcionários", helper: "Apaga solicitantes cadastrados." },
   { value: "itens", label: "Itens", helper: "Apaga todos os itens de estoque." },
-  { value: "solicitacoes", label: "Solicitacoes", helper: "Apaga historico de emprestimos." },
-  { value: "devolucoes", label: "Devolucoes", helper: "Apaga historico de devolucoes." },
+  { value: "solicitacoes", label: "Solicitações", helper: "Apaga histórico de empréstimos." },
+  { value: "devolucoes", label: "Devoluções", helper: "Apaga histórico de devoluções." },
   { value: "auditoria", label: "Auditoria", helper: "Apaga trilha de auditoria." },
 ];
 
@@ -230,14 +230,14 @@ function analisarBackup(backup: BackupPayload, preservarUsuarioAtual: boolean): 
 
   if (backup.versao_formato !== BACKUP_FORMAT_VERSION) {
     problemas.push(
-      `Versao de backup ${backup.versao_formato} invalida para esta tela. Esperado: ${BACKUP_FORMAT_VERSION}.`,
+      `Versão de backup ${backup.versao_formato} inválida para esta tela. Esperado: ${BACKUP_FORMAT_VERSION}.`,
     );
   }
 
   if (backup.gerado_em) {
     const geradoEm = new Date(backup.gerado_em);
     if (Number.isNaN(geradoEm.getTime())) {
-      avisos.push("Data gerado_em invalida no arquivo de backup.");
+      avisos.push("Data gerado_em inválida no arquivo de backup.");
     } else {
       const dias = Math.floor((Date.now() - geradoEm.getTime()) / (1000 * 60 * 60 * 24));
       if (dias > 30) {
@@ -247,13 +247,13 @@ function analisarBackup(backup: BackupPayload, preservarUsuarioAtual: boolean): 
   }
 
   if (backup.dados.configuracoes.length === 0) {
-    avisos.push("Backup sem configuracoes. O sistema aplicara valores padrao.");
+    avisos.push("Backup sem configurações. O sistema aplicará valores padrão.");
   }
 
   if (backup.dados.credenciais.length === 0 && !preservarUsuarioAtual) {
-    problemas.push("Backup sem credenciais e sem preservacao do usuario atual. Voce pode perder acesso.");
+    problemas.push("Backup sem credenciais e sem preservação do usuário atual. Você pode perder acesso.");
   } else if (backup.dados.credenciais.length === 0) {
-    avisos.push("Backup sem credenciais. O acesso dependera da preservacao do usuario atual.");
+    avisos.push("Backup sem credenciais. O acesso dependerá da preservação do usuário atual.");
   }
 
   const duplicidades = [
@@ -263,7 +263,7 @@ function analisarBackup(backup: BackupPayload, preservarUsuarioAtual: boolean): 
       rows: backup.dados.credenciais,
     },
     {
-      label: "Configuracoes",
+      label: "Configurações",
       field: "chave",
       rows: backup.dados.configuracoes,
     },
@@ -278,12 +278,12 @@ function analisarBackup(backup: BackupPayload, preservarUsuarioAtual: boolean): 
       rows: backup.dados.setores,
     },
     {
-      label: "Funcoes",
+      label: "Funções",
       field: "nome",
       rows: backup.dados.funcoes,
     },
     {
-      label: "Funcionarios",
+      label: "Funcionários",
       field: "matricula",
       rows: backup.dados.funcionarios,
     },
@@ -327,7 +327,7 @@ function analisarBackup(backup: BackupPayload, preservarUsuarioAtual: boolean): 
   const setorUnidadesByNome = new Map<string, Set<string>>();
   for (const [index, row] of backup.dados.setores.entries()) {
     if (!isObjectRecord(row)) {
-      problemas.push(`Setor #${index + 1} com formato invalido.`);
+      problemas.push(`Setor #${index + 1} com formato inválido.`);
       continue;
     }
     const setorNome = getStringField(row, "nome") || `#${index + 1}`;
@@ -358,7 +358,7 @@ function analisarBackup(backup: BackupPayload, preservarUsuarioAtual: boolean): 
 
   for (const [index, row] of backup.dados.funcionarios.entries()) {
     if (!isObjectRecord(row)) {
-      problemas.push(`Funcionario #${index + 1} com formato invalido.`);
+      problemas.push(`Funcionário #${index + 1} com formato inválido.`);
       continue;
     }
 
@@ -404,35 +404,35 @@ function analisarBackup(backup: BackupPayload, preservarUsuarioAtual: boolean): 
     }
   }
   if (funcionariosSemUnidade.length > 0) {
-    problemas.push(`Funcionarios sem unidade: ${formatSample(funcionariosSemUnidade)}.`);
+    problemas.push(`Funcionários sem unidade: ${formatSample(funcionariosSemUnidade)}.`);
   }
   if (funcionariosSemSetor.length > 0) {
-    problemas.push(`Funcionarios sem setor: ${formatSample(funcionariosSemSetor)}.`);
+    problemas.push(`Funcionários sem setor: ${formatSample(funcionariosSemSetor)}.`);
   }
   if (funcionariosSemFuncao.length > 0) {
-    problemas.push(`Funcionarios sem funcao: ${formatSample(funcionariosSemFuncao)}.`);
+    problemas.push(`Funcionários sem função: ${formatSample(funcionariosSemFuncao)}.`);
   }
 
   if (referenciasUnidadeInexistente.length > 0) {
     problemas.push(
-      `Funcionarios referenciam unidades inexistentes: ${formatSample(referenciasUnidadeInexistente)}.`,
+      `Funcionários referenciam unidades inexistentes: ${formatSample(referenciasUnidadeInexistente)}.`,
     );
   }
   if (referenciasSetorInexistente.length > 0) {
-    problemas.push(`Funcionarios referenciam setores inexistentes: ${formatSample(referenciasSetorInexistente)}.`);
+    problemas.push(`Funcionários referenciam setores inexistentes: ${formatSample(referenciasSetorInexistente)}.`);
   }
   if (referenciasFuncaoInexistente.length > 0) {
-    problemas.push(`Funcionarios referenciam funcoes inexistentes: ${formatSample(referenciasFuncaoInexistente)}.`);
+    problemas.push(`Funcionários referenciam funções inexistentes: ${formatSample(referenciasFuncaoInexistente)}.`);
   }
 
   if (funcionariosComSetorIncompativel.length > 0) {
     problemas.push(
-      `Funcionarios com setor sem vinculo com suas unidades: ${formatSample(funcionariosComSetorIncompativel)}.`,
+      `Funcionários com setor sem vínculo com suas unidades: ${formatSample(funcionariosComSetorIncompativel)}.`,
     );
   }
   if (funcionariosComPrincipalIncompativel.length > 0) {
     problemas.push(
-      `Funcionarios com setor principal incompativel com unidade principal: ${formatSample(funcionariosComPrincipalIncompativel)}.`,
+      `Funcionários com setor principal incompatível com unidade principal: ${formatSample(funcionariosComPrincipalIncompativel)}.`,
     );
   }
 
@@ -442,7 +442,7 @@ function analisarBackup(backup: BackupPayload, preservarUsuarioAtual: boolean): 
 
   for (const [index, row] of backup.dados.itens.entries()) {
     if (!isObjectRecord(row)) {
-      problemas.push(`Item #${index + 1} com formato invalido.`);
+      problemas.push(`Item #${index + 1} com formato inválido.`);
       continue;
     }
 
@@ -463,17 +463,17 @@ function analisarBackup(backup: BackupPayload, preservarUsuarioAtual: boolean): 
   }
 
   if (itensComMatriculaInvalida.length > 0) {
-    problemas.push(`Itens com matricula inexistente: ${formatSample(itensComMatriculaInvalida)}.`);
+    problemas.push(`Itens com matrícula inexistente: ${formatSample(itensComMatriculaInvalida)}.`);
   }
   if (itensEmprestadosSemVinculo.length > 0) {
-    avisos.push(`Itens emprestados sem matricula/setor: ${formatSample(itensEmprestadosSemVinculo)}.`);
+    avisos.push(`Itens emprestados sem matrícula/setor: ${formatSample(itensEmprestadosSemVinculo)}.`);
   }
   if (itensDisponiveisComMatricula.length > 0) {
-    avisos.push(`Itens disponiveis com matricula preenchida: ${formatSample(itensDisponiveisComMatricula)}.`);
+    avisos.push(`Itens disponíveis com matrícula preenchida: ${formatSample(itensDisponiveisComMatricula)}.`);
   }
 
   if (backup.dados.auditoria.length === 0) {
-    avisos.push("Backup sem auditoria. O historico de trilha sera perdido na restauracao.");
+    avisos.push("Backup sem auditoria. O histórico de trilha será perdido na restauração.");
   }
 
   return {
@@ -535,12 +535,12 @@ export function ManutencaoTab() {
   const fluxoStatus = useMemo(
     () => [
       {
-        titulo: "Correcao do arquivo",
+        titulo: "Correção do arquivo",
         done: backupProntoParaRestaurar,
         descricao: backupImportado
           ? backupComProblemas
             ? "Corrija os problemas listados antes de restaurar."
-            : "Arquivo validado e pronto para restauracao."
+            : "Arquivo validado e pronto para restauração."
           : "Importe um backup JSON para validar.",
       },
       {
@@ -548,7 +548,7 @@ export function ManutencaoTab() {
         done: Boolean(backupGeradoEm),
         descricao: backupGeradoEm
           ? `Gerado em ${formatDateTime(backupGeradoEm)}.`
-          : "Gere backup antes de qualquer acao destrutiva.",
+          : "Gere backup antes de qualquer ação destrutiva.",
       },
       {
         titulo: "Alvos de reset",
@@ -559,11 +559,11 @@ export function ManutencaoTab() {
             : "Selecione pelo menos um alvo para reset.",
       },
       {
-        titulo: "Preservacao de acesso",
+        titulo: "Preservação de acesso",
         done: preservarUsuarioAtual,
         descricao: preservarUsuarioAtual
-          ? "Usuario atual sera preservado em reset/restauracao."
-          : "Sem preservacao de usuario atual.",
+          ? "Usuário atual será preservado em reset/restauração."
+          : "Sem preservação de usuário atual.",
       },
     ],
     [
@@ -620,7 +620,7 @@ export function ManutencaoTab() {
       const parsed = JSON.parse(content) as unknown;
 
       if (!isBackupPayload(parsed)) {
-        throw new Error("Arquivo de backup invalido");
+        throw new Error("Arquivo de backup inválido");
       }
 
       setBackupImportado(parsed);
@@ -655,7 +655,7 @@ export function ManutencaoTab() {
 
       success(
         payload.usuarioPreservado
-          ? `Reset concluido. Usuario preservado: ${payload.usuarioPreservado}.`
+          ? `Reset concluído. Usuário preservado: ${payload.usuarioPreservado}.`
           : "Reset concluido com sucesso.",
       );
       setConfirmarReset(false);
@@ -694,8 +694,8 @@ export function ManutencaoTab() {
 
       success(
         payload.usuarioPreservado
-          ? `Restauracao concluida. Usuario preservado: ${payload.usuarioPreservado}.`
-          : "Restauracao concluida com sucesso.",
+          ? `Restauração concluída. Usuário preservado: ${payload.usuarioPreservado}.`
+          : "Restauração concluída com sucesso.",
       );
       setConfirmarRestauracao(false);
     } catch (err) {
@@ -756,19 +756,19 @@ export function ManutencaoTab() {
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              Centro de manutencao
+              Centro de manutenção
             </p>
             <h2 className="mt-1 text-sm font-semibold text-foreground sm:text-base">
-              Correcao, backup, restauracao e reset em um fluxo unico
+              Correção, backup, restauração e reset em um fluxo único
             </h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              Valide o arquivo, gere backup atual e execute restauracao/reset com seguranca.
+              Valide o arquivo, gere backup atual e execute restauração/reset com segurança.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
             <StatusPill tone={backupProntoParaRestaurar ? "success" : "neutral"} className="text-[10px]">
-              Arquivo: {backupProntoParaRestaurar ? "validado" : backupImportado ? "com pendencias" : "nao carregado"}
+              Arquivo: {backupProntoParaRestaurar ? "validado" : backupImportado ? "com pendências" : "não carregado"}
             </StatusPill>
             <StatusPill tone={backupGeradoEm ? "success" : "warning"} className="text-[10px]">
               Backup atual: {backupGeradoEm ? "ok" : "pendente"}
@@ -796,20 +796,20 @@ export function ManutencaoTab() {
 
       {resultadoUltimaAcao ? (
         <SectionCard
-          title={<span className="text-sm font-semibold">Ultima acao de manutencao</span>}
+          title={<span className="text-sm font-semibold">Última ação de manutenção</span>}
           icon={ClipboardList}
-          description="Resumo da execucao mais recente de reset/restauracao."
+          description="Resumo da execução mais recente de reset/restauração."
           className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)] dark:border-border/85 dark:bg-card/90"
           headerClassName={SECTION_HEADER_CLASS}
           contentClassName={SECTION_CONTENT_CLASS}
         >
           <div className={PANEL_CLASS}>
             <p>
-              {resultadoUltimaAcao.tipo === "reset" ? "Reset" : "Restauracao"} executado em{" "}
+              {resultadoUltimaAcao.tipo === "reset" ? "Reset" : "Restauração"} executado em{" "}
               <span className="font-medium text-foreground">{formatDateTime(resultadoUltimaAcao.executadoEm)}</span>.
             </p>
             <p className="mt-1">
-              Usuario preservado:{" "}
+              Usuário preservado:{" "}
               <span className="font-medium text-foreground">
                 {resultadoUltimaAcao.usuarioPreservado || "nenhum"}
               </span>
@@ -831,13 +831,13 @@ export function ManutencaoTab() {
         <div className="rounded-2xl border border-border/70 bg-card/94 p-1.5 shadow-[var(--shadow-soft)] dark:border-border/85 dark:bg-card/90">
           <TabsList className="grid h-auto w-full grid-cols-2 gap-1 border-0 bg-transparent p-0 shadow-none sm:grid-cols-4">
             <TabsTrigger value="correcao" className="h-9 px-2 text-[11px] sm:text-xs">
-              Correcao
+              Correção
             </TabsTrigger>
             <TabsTrigger value="backup" className="h-9 px-2 text-[11px] sm:text-xs">
               Backup
             </TabsTrigger>
             <TabsTrigger value="restauracao" className="h-9 px-2 text-[11px] sm:text-xs">
-              Restauracao
+              Restauração
             </TabsTrigger>
             <TabsTrigger value="reset" className="h-9 px-2 text-[11px] sm:text-xs">
               Reset
@@ -847,9 +847,9 @@ export function ManutencaoTab() {
 
         <TabsContent value="correcao">
           <SectionCard
-            title={<span className="text-sm font-semibold">Correcao e Diagnostico</span>}
+            title={<span className="text-sm font-semibold">Correção e Diagnóstico</span>}
             icon={Wrench}
-            description="Importe o backup e veja tudo que precisa ser corrigido antes da restauracao."
+            description="Importe o backup e veja tudo que precisa ser corrigido antes da restauração."
             className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)] dark:border-border/85 dark:bg-card/90"
             headerClassName={SECTION_HEADER_CLASS}
             contentClassName={SECTION_CONTENT_CLASS}
@@ -885,7 +885,7 @@ export function ManutencaoTab() {
                   checked={preservarUsuarioAtual}
                   onCheckedChange={(checked) => setPreservarUsuarioAtual(Boolean(checked))}
                 />
-                Preservar meu usuario atual (aplica em reset e restauracao)
+                Preservar meu usuário atual (aplica em reset e restauração)
               </label>
               {backupImportado ? (
                 <div className={PANEL_CLASS}>
@@ -902,14 +902,14 @@ export function ManutencaoTab() {
                 </div>
               ) : (
                 <div className={PANEL_CLASS}>
-                  Importe o arquivo de backup para liberar a analise de correcao e a restauracao.
+                  Importe o arquivo de backup para liberar a análise de correção e a restauração.
                 </div>
               )}
 
               {backupImportado && backupAnalise?.problemas.length ? (
                 <Alert variant="destructive" className="border-destructive/35 bg-destructive/8 py-2.5">
                   <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle className="text-xs">Correcao obrigatoria antes da restauracao</AlertTitle>
+                  <AlertTitle className="text-xs">Correção obrigatória antes da restauração</AlertTitle>
                   <AlertDescription className="text-xs">
                     <ul className="space-y-1">
                       {backupAnalise.problemas.slice(0, PREVIEW_LIMIT).map((item, index) => (
@@ -942,7 +942,7 @@ export function ManutencaoTab() {
 
               {backupImportado && !backupComProblemas ? (
                 <Alert variant="success" className="py-2.5">
-                  <AlertTitle className="text-xs">Arquivo pronto para restauracao</AlertTitle>
+                  <AlertTitle className="text-xs">Arquivo pronto para restauração</AlertTitle>
                   <AlertDescription className="text-xs">
                     Nenhum bloqueio encontrado na analise automatica.
                   </AlertDescription>
@@ -967,7 +967,7 @@ export function ManutencaoTab() {
           <SectionCard
             title={<span className="text-sm font-semibold">Backup</span>}
             icon={Database}
-            description="Gera um arquivo JSON completo com dados e configuracoes do sistema."
+            description="Gera um arquivo JSON completo com dados e configurações do sistema."
             className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)] dark:border-border/85 dark:bg-card/90"
             headerClassName={SECTION_HEADER_CLASS}
             contentClassName={SECTION_CONTENT_CLASS}
@@ -982,7 +982,7 @@ export function ManutencaoTab() {
               O backup inclui credenciais (hash de senha), catalogos, movimentacoes e auditoria.
             </div>
             <div className={PANEL_CLASS}>
-              Ultimo backup gerado nesta sessao:{" "}
+              Último backup gerado nesta sessão:{" "}
               <span className="font-medium text-foreground">{formatDateTime(backupGeradoEm)}</span>
             </div>
           </SectionCard>
@@ -990,7 +990,7 @@ export function ManutencaoTab() {
 
         <TabsContent value="restauracao">
           <SectionCard
-            title={<span className="text-sm font-semibold">Restauracao</span>}
+            title={<span className="text-sm font-semibold">Restauração</span>}
             icon={Upload}
             description="Substitui os dados atuais do banco pelo backup validado."
             className="border-border/70 bg-card/94 shadow-[var(--shadow-soft)] dark:border-border/85 dark:bg-card/90"
@@ -1009,7 +1009,7 @@ export function ManutencaoTab() {
             )}
           >
             <div className={PANEL_CLASS}>
-              A restauracao apaga os dados atuais e insere o conteudo do arquivo importado.
+              A restauração apaga os dados atuais e insere o conteúdo do arquivo importado.
               {backupImportado ? (
                 <>
                   {" "}
@@ -1021,7 +1021,7 @@ export function ManutencaoTab() {
 
             {backupImportado && backupComProblemas ? (
               <p className="text-[11px] text-destructive">
-                A restauracao esta bloqueada ate a correcao dos problemas apontados no diagnostico.
+                A restauração está bloqueada até a correção dos problemas apontados no diagnóstico.
               </p>
             ) : null}
           </SectionCard>
@@ -1061,7 +1061,7 @@ export function ManutencaoTab() {
                   checked={preservarUsuarioAtual}
                   onCheckedChange={(checked) => setPreservarUsuarioAtual(Boolean(checked))}
                 />
-                Preservar meu usuario atual para evitar bloqueio de acesso
+                Preservar meu usuário atual para evitar bloqueio de acesso
               </label>
 
               <div className="grid gap-2 sm:grid-cols-2">
@@ -1105,8 +1105,8 @@ export function ManutencaoTab() {
       <ConfirmDialog
         open={confirmarRestauracao}
         onClose={() => setConfirmarRestauracao(false)}
-        title="Confirmar restauracao de backup"
-        description="A restauracao substitui os dados atuais do banco. Essa acao nao pode ser desfeita."
+        title="Confirmar restauração de backup"
+        description="A restauração substitui os dados atuais do banco. Essa ação não pode ser desfeita."
         confirmLabel="Restaurar backup"
         onConfirm={executarRestauracao}
       />
