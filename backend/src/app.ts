@@ -40,7 +40,6 @@ export function buildApp() {
       root: frontendDist,
       prefix: "/",
       wildcard: false,
-      decorateReply: false,
     });
   }
   app.addHook("onRequest", async (request) => {
@@ -107,13 +106,41 @@ export function buildApp() {
   // SPA fallback: rotas não-API servem index.html
   if (existsSync(frontendDist)) {
     app.setNotFoundHandler(async (request, reply) => {
-      const apiPrefixes = ["/auth/", "/ops/", "/admin/", "/health"];
-      if (apiPrefixes.some((p) => request.url.startsWith(p))) {
-        return reply.status(404).send({ erro: "Rota não encontrada" });
+      const [requestPath] = request.url.split("?");
+      const spaEntryPaths = new Set([
+        "/",
+        "/monitor-operacao",
+        "/monitor-operacao/",
+        "/setor",
+        "/setor/",
+        "/admin",
+        "/admin/",
+      ]);
+      const acceptHeader = request.headers.accept ?? "";
+      const acceptsHtml = acceptHeader.includes("text/html");
+      const isApiPath =
+        requestPath === "/health" ||
+        requestPath.startsWith("/auth/") ||
+        requestPath.startsWith("/ops/") ||
+        requestPath.startsWith("/admin/");
+      const isStaticAsset = /\.[a-zA-Z0-9]+$/.test(requestPath);
+
+      if (spaEntryPaths.has(requestPath)) {
+        return reply.sendFile("index.html");
       }
+
+      if (isApiPath && !acceptsHtml) {
+        return reply.status(404).send({ erro: "Rota nao encontrada" });
+      }
+
+      if (isStaticAsset) {
+        return reply.status(404).send({ erro: "Recurso nao encontrado" });
+      }
+
       return reply.sendFile("index.html");
     });
   }
 
   return app;
 }
+
