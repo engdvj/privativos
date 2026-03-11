@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
@@ -16,6 +16,7 @@ import { opsRoutes } from "./routes/ops.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const frontendDist = path.join(__dirname, "../../frontend/dist");
+const frontendIndexFile = path.join(frontendDist, "index.html");
 
 export function buildApp() {
   const app = Fastify({
@@ -137,7 +138,16 @@ export function buildApp() {
         return reply.status(404).send({ erro: "Recurso nao encontrado" });
       }
 
-      return reply.sendFile("index.html");
+      const sendFile = (reply as unknown as { sendFile?: (fileName: string) => unknown }).sendFile;
+      if (typeof sendFile === "function") {
+        return reply.sendFile("index.html");
+      }
+
+      if (existsSync(frontendIndexFile)) {
+        return reply.type("text/html; charset=UTF-8").send(readFileSync(frontendIndexFile, "utf-8"));
+      }
+
+      return reply.status(500).send({ erro: "Frontend indisponivel" });
     });
   }
 
