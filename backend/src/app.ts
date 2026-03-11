@@ -24,7 +24,15 @@ export function buildApp() {
     },
   });
 
-  app.register(helmet);
+  app.register(helmet, {
+    // Local HTTP deploy (sem TLS): evita forcar upgrade para HTTPS dos assets do SPA.
+    contentSecurityPolicy: {
+      directives: {
+        upgradeInsecureRequests: null,
+      },
+    },
+    hsts: false,
+  });
 
   // Serve frontend build (production)
   if (existsSync(frontendDist)) {
