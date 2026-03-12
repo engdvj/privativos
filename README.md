@@ -77,3 +77,27 @@ npm run prisma:seed
 ```bash
 npm run dev
 ```
+
+## Frontend em dev com backend na porta 80
+
+Por padrao, o `frontend` em `vite` agora usa proxy para `http://127.0.0.1` (porta 80).
+
+Suba o backend via Docker:
+
+```bash
+docker compose up -d
+```
+
+Depois rode o frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Se voce quiser apontar para outro alvo (ex.: backend local em `:3000`), crie `frontend/.env.local`:
+
+```bash
+VITE_API_PROXY_TARGET=http://127.0.0.1:3000
+```

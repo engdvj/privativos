@@ -38,7 +38,8 @@ const TIPOS_PADRAO = ["Kit roupa", "Lencol", "Sem tipo"];
 const TIPO_FALLBACK_PADRAO = "Sem tipo";
 const CODIGO_BASE_PADRAO = "KIT-";
 const CASAS_CODIGO_PADRAO = 3;
-const MAX_ITENS_LOTE = 200;
+const MAX_ITENS_LOTE_MISTO_OPERACAO = 1000;
+const MAX_ITENS_LOTE_MISTO_TOTAL = 2000;
 const ITENS_POR_PAGINA = 10;
 const FILTRO_INPUT_CLASS =
   "h-8 rounded-xl border-border/80 bg-background/85 text-xs dark:border-border/90 dark:bg-background/70";
@@ -116,6 +117,30 @@ function montarOpcoesTipo(tiposExistentes: string[], tiposBase: string[]) {
 }
 
 type ModoCriacaoItem = "unitario" | "lote";
+type AcaoLote = "adicionar" | "remover";
+
+type OperacaoLote = {
+  id: string;
+  acao: AcaoLote;
+  tipo: string;
+  tamanho: string;
+  quantidade: number;
+  descricao: string;
+  status: ItemStatus;
+};
+
+function gerarIdOperacaoLote() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizarDescricaoOpcional(valor: string) {
+  const normalizado = valor.trim();
+  return normalizado.length > 0 ? normalizado : null;
+}
+
+function chaveEstoque(tipo: string, tamanho: string) {
+  return `${normalizarTipoChave(tipo)}::${normalizarTamanho(tamanho)}`;
+}
 
 type SugestaoCodigo = {
   base: string;
@@ -232,12 +257,20 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
   const [novoTamanho, setNovoTamanho] = useState("");
   const [gerenciandoTipo, setGerenciandoTipo] = useState(false);
   const [modoCriacao, setModoCriacao] = useState<ModoCriacaoItem>("unitario");
+  const [acaoLote, setAcaoLote] = useState<AcaoLote>("adicionar");
   const [lote, setLote] = useState({
     codigoBase: CODIGO_BASE_PADRAO,
     numeroInicial: "1",
-    quantidade: "1",
     casasNumero: String(CASAS_CODIGO_PADRAO),
   });
+  const [operacaoLoteMisto, setOperacaoLoteMisto] = useState({
+    tipo: TIPOS_PADRAO[0],
+    tamanho: "UNICO",
+    quantidade: "1",
+    descricao: "",
+    status: "disponivel" as ItemStatus,
+  });
+  const [carrinhoLoteMisto, setCarrinhoLoteMisto] = useState<OperacaoLote[]>([]);
   const [loteSelecao, setLoteSelecao] = useState({
     tipo: "todos",
     codigoBase: CODIGO_BASE_PADRAO,
@@ -289,32 +322,121 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
     }
   }, [opcoesTipo, tipoSelecionado]);
 
+  useEffect(() => {
+    setCarrinhoLoteMisto([]);
+    setOperacaoLoteMisto((prev) => ({
+      ...prev,
+      quantidade: "1",
+      descricao: "",
+      status: "disponivel",
+    }));
+  }, [acaoLote]);
+
+  const resumoCarrinhoLoteMisto = useMemo(() => {
+    const adicionados = carrinhoLoteMisto
+      .filter((item) => item.acao === "adicionar")
+      .reduce((acc, item) => acc + item.quantidade, 0);
+    const removidos = carrinhoLoteMisto
+      .filter((item) => item.acao === "remover")
+      .reduce((acc, item) => acc + item.quantidade, 0);
+
+    return { adicionados, removidos };
+  }, [carrinhoLoteMisto]);
+
+  const estoqueDisponivelPorTipoTamanho = useMemo(() => {
+    const mapa = new Map<string, { tipo: string; tamanho: string; disponiveis: number }>();
+    for (const item of rows) {
+      if (!item.statusAtivo || item.status !== "disponivel") {
+        continue;
+      }
+      const tipo = normalizarTipo(item.tipo);
+      const tamanho = normalizarTamanho(item.tamanho);
+      const chave = chaveEstoque(tipo, tamanho);
+      const atual = mapa.get(chave);
+      if (atual) {
+        atual.disponiveis += 1;
+      } else {
+        mapa.set(chave, { tipo, tamanho, disponiveis: 1 });
+      }
+    }
+    return mapa;
+  }, [rows]);
+
+  const opcoesRemocaoDisponiveis = useMemo(
+    () => Array.from(estoqueDisponivelPorTipoTamanho.values())
+      .sort((a, b) => a.tipo.localeCompare(b.tipo) || a.tamanho.localeCompare(b.tamanho)),
+    [estoqueDisponivelPorTipoTamanho],
+  );
+  const tiposDisponiveisRemocao = useMemo(
+    () => [...new Set(opcoesRemocaoDisponiveis.map((item) => item.tipo))],
+    [opcoesRemocaoDisponiveis],
+  );
+  const tamanhosDisponiveisRemocao = useMemo(
+    () => opcoesRemocaoDisponiveis
+      .filter((item) => normalizarTipoChave(item.tipo) === normalizarTipoChave(operacaoLoteMisto.tipo))
+      .map((item) => item.tamanho),
+    [opcoesRemocaoDisponiveis, operacaoLoteMisto.tipo],
+  );
+
+  useEffect(() => {
+    if (acaoLote !== "remover" || opcoesRemocaoDisponiveis.length === 0) {
+      return;
+    }
+    const existeSelecao = opcoesRemocaoDisponiveis.some(
+      (item) =>
+        normalizarTipoChave(item.tipo) === normalizarTipoChave(operacaoLoteMisto.tipo)
+        && normalizarTamanho(item.tamanho) === normalizarTamanho(operacaoLoteMisto.tamanho),
+    );
+    if (!existeSelecao) {
+      const primeira = opcoesRemocaoDisponiveis[0];
+      setOperacaoLoteMisto((prev) => ({
+        ...prev,
+        tipo: primeira.tipo,
+        tamanho: primeira.tamanho,
+      }));
+    }
+  }, [acaoLote, opcoesRemocaoDisponiveis, operacaoLoteMisto.tipo, operacaoLoteMisto.tamanho]);
+
+  const disponiveisSelecionados = useMemo(() => {
+    const chave = chaveEstoque(operacaoLoteMisto.tipo, operacaoLoteMisto.tamanho);
+    return estoqueDisponivelPorTipoTamanho.get(chave)?.disponiveis ?? 0;
+  }, [estoqueDisponivelPorTipoTamanho, operacaoLoteMisto.tipo, operacaoLoteMisto.tamanho]);
+
+  const quantidadePendenteRemocaoSelecionada = useMemo(
+    () => carrinhoLoteMisto
+      .filter((item) =>
+        item.acao === "remover"
+        && normalizarTipoChave(item.tipo) === normalizarTipoChave(operacaoLoteMisto.tipo)
+        && normalizarTamanho(item.tamanho) === normalizarTamanho(operacaoLoteMisto.tamanho),
+      )
+      .reduce((acc, item) => acc + item.quantidade, 0),
+    [carrinhoLoteMisto, operacaoLoteMisto.tipo, operacaoLoteMisto.tamanho],
+  );
+
   const codigosLotePreview = useMemo(() => {
-    if (modoCriacao !== "lote") {
+    if (modoCriacao !== "lote" || acaoLote !== "adicionar" || resumoCarrinhoLoteMisto.adicionados <= 0) {
       return [];
     }
 
     const base = lote.codigoBase.trim();
     const numeroInicial = Number.parseInt(lote.numeroInicial, 10);
-    const quantidade = Number.parseInt(lote.quantidade, 10);
     const casasNumero = Number.parseInt(lote.casasNumero, 10);
-
-    if (!base || !Number.isInteger(numeroInicial) || !Number.isInteger(quantidade) || !Number.isInteger(casasNumero)) {
+    if (!base || !Number.isInteger(numeroInicial) || !Number.isInteger(casasNumero)) {
       return [];
     }
 
-    if (numeroInicial < 0 || quantidade <= 0 || casasNumero <= 0) {
+    if (numeroInicial < 0 || casasNumero <= 0) {
       return [];
     }
 
-    const previewQuantidade = Math.min(quantidade, 20);
+    const quantidadePreview = Math.min(resumoCarrinhoLoteMisto.adicionados, 20);
     return gerarCodigosLote({
       base,
       numeroInicial,
-      quantidade: previewQuantidade,
+      quantidade: quantidadePreview,
       casasNumero,
     });
-  }, [modoCriacao, lote]);
+  }, [acaoLote, modoCriacao, resumoCarrinhoLoteMisto.adicionados, lote]);
 
   function resetarFormularioCriacao() {
     const sugestao = sugerirSequenciaCodigo(rows);
@@ -331,12 +453,20 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
     setTamanhoSelecionado("UNICO");
     setNovoTamanho("");
     setModoCriacao("unitario");
+    setAcaoLote("adicionar");
     setLote({
       codigoBase: sugestao.base,
       numeroInicial: String(sugestao.proximoNumero),
-      quantidade: "1",
       casasNumero: String(sugestao.casasNumero),
     });
+    setOperacaoLoteMisto({
+      tipo: tipoInicial,
+      tamanho: "UNICO",
+      quantidade: "1",
+      descricao: "",
+      status: "disponivel",
+    });
+    setCarrinhoLoteMisto([]);
   }
 
   function abrirModalCriacao() {
@@ -357,52 +487,111 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
     setSelecionarLoteAberto(true);
   }
 
+  function adicionarOperacaoLoteMisto() {
+    const tipo = normalizarTipo(operacaoLoteMisto.tipo);
+    const tamanho = normalizarTamanho(operacaoLoteMisto.tamanho);
+    const quantidade = Number.parseInt(operacaoLoteMisto.quantidade, 10);
+    const descricaoNormalizada = operacaoLoteMisto.descricao.trim();
+
+    if (!tipo || !tamanho || !Number.isInteger(quantidade) || quantidade <= 0) {
+      error("Preencha tipo, tamanho e quantidade validos");
+      return;
+    }
+
+    if (quantidade > MAX_ITENS_LOTE_MISTO_OPERACAO) {
+      error(`Quantidade maxima por operacao: ${MAX_ITENS_LOTE_MISTO_OPERACAO}`);
+      return;
+    }
+
+    if (acaoLote === "remover") {
+      const disponiveis = estoqueDisponivelPorTipoTamanho.get(chaveEstoque(tipo, tamanho))?.disponiveis ?? 0;
+      const pendente = carrinhoLoteMisto
+        .filter((item) =>
+          item.acao === "remover"
+          && normalizarTipoChave(item.tipo) === normalizarTipoChave(tipo)
+          && normalizarTamanho(item.tamanho) === tamanho,
+        )
+        .reduce((acc, item) => acc + item.quantidade, 0);
+      if (disponiveis <= 0) {
+        error("Nao ha itens disponiveis para esse tipo e tamanho");
+        return;
+      }
+      if (quantidade + pendente > disponiveis) {
+        error(`Quantidade indisponivel: restam ${Math.max(disponiveis - pendente, 0)} para remover`);
+        return;
+      }
+    }
+
+    setCarrinhoLoteMisto((prev) => {
+      const indiceExistente = prev.findIndex((item) => {
+        if (item.acao !== acaoLote) return false;
+        if (normalizarTipoChave(item.tipo) !== normalizarTipoChave(tipo)) return false;
+        if (normalizarTamanho(item.tamanho) !== tamanho) return false;
+        if (item.acao === "remover") return true;
+        const descricaoItem = item.descricao.trim();
+        return item.status === operacaoLoteMisto.status && descricaoItem === descricaoNormalizada;
+      });
+
+      if (indiceExistente >= 0) {
+        return prev.map((item, index) =>
+          index === indiceExistente
+            ? { ...item, quantidade: item.quantidade + quantidade }
+            : item,
+        );
+      }
+
+      return [
+        ...prev,
+        {
+          id: gerarIdOperacaoLote(),
+          acao: acaoLote,
+          tipo,
+          tamanho,
+          quantidade,
+          descricao: acaoLote === "adicionar" ? descricaoNormalizada : "",
+          status: operacaoLoteMisto.status,
+        },
+      ];
+    });
+
+    setOperacaoLoteMisto((prev) => ({
+      ...prev,
+      quantidade: "1",
+      descricao: "",
+    }));
+  }
+
+  function removerOperacaoLoteMisto(id: string) {
+    setCarrinhoLoteMisto((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  function limparCarrinhoLoteMisto() {
+    setCarrinhoLoteMisto([]);
+  }
+
   async function criar() {
-    const tipoFinal = tipoSelecionado === NOVO_TIPO_OPTION
-      ? normalizarTipo(novoTipo)
-      : normalizarTipo(tipoSelecionado);
-    const tamanhoFinal = tamanhoSelecionado === NOVO_TAMANHO_OPTION
-      ? normalizarTamanho(novoTamanho)
-      : normalizarTamanho(tamanhoSelecionado);
-
-    if (!tipoFinal || !tamanhoFinal) {
-      error("Preencha tipo e tamanho para criar item");
-      return;
-    }
-
-    const descricaoFinal = novo.descricao.trim() || null;
-
-    if (modoCriacao === "unitario" && !novo.codigo.trim()) {
-      error("Preencha código, tipo e tamanho para criar item");
-      return;
-    }
-
+    const isUnitario = modoCriacao === "unitario";
     const isLote = modoCriacao === "lote";
     const baseLote = lote.codigoBase.trim();
     const numeroInicialLote = Number.parseInt(lote.numeroInicial, 10);
-    const quantidadeLote = Number.parseInt(lote.quantidade, 10);
     const casasNumeroLote = Number.parseInt(lote.casasNumero, 10);
 
-    if (isLote) {
-      if (!baseLote || !Number.isInteger(numeroInicialLote) || !Number.isInteger(quantidadeLote) || !Number.isInteger(casasNumeroLote)) {
-        error("Preencha código base, número inicial, quantidade e casas do código");
+    if (isUnitario) {
+      const tipoFinal = tipoSelecionado === NOVO_TIPO_OPTION
+        ? normalizarTipo(novoTipo)
+        : normalizarTipo(tipoSelecionado);
+      const tamanhoFinal = tamanhoSelecionado === NOVO_TAMANHO_OPTION
+        ? normalizarTamanho(novoTamanho)
+        : normalizarTamanho(tamanhoSelecionado);
+      const descricaoFinal = normalizarDescricaoOpcional(novo.descricao);
+
+      if (!tipoFinal || !tamanhoFinal || !novo.codigo.trim()) {
+        error("Preencha codigo, tipo e tamanho para criar item");
         return;
       }
 
-      if (numeroInicialLote < 0 || quantidadeLote <= 0 || casasNumeroLote <= 0) {
-        error("Número inicial deve ser maior ou igual a zero; quantidade e casas do código devem ser maiores que zero");
-        return;
-      }
-
-      if (quantidadeLote > MAX_ITENS_LOTE) {
-        error(`Quantidade máxima por lote: ${MAX_ITENS_LOTE} itens`);
-        return;
-      }
-    }
-
-    setCreating(true);
-    try {
-      if (!isLote) {
+      setCreating(true);
+      try {
         await api.post(endpointBase, {
           codigo: novo.codigo.trim(),
           descricao: descricaoFinal,
@@ -411,59 +600,109 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
           status: novo.status,
         });
         success("Item criado com sucesso");
-      } else {
-        const codigos = gerarCodigosLote({
-          base: baseLote,
-          numeroInicial: numeroInicialLote,
-          quantidade: quantidadeLote,
-          casasNumero: casasNumeroLote,
-        });
+        resetarFormularioCriacao();
+        setOpenCreateModal(false);
+        await carregar();
+        notificarAtualizacaoGlobal("kit");
+      } catch (err) {
+        error(err instanceof Error ? err.message : "Erro ao criar item");
+        await carregar();
+      } finally {
+        setCreating(false);
+      }
+      return;
+    }
 
-        const codigosNormalizados = codigos.map((codigo) => codigo.toLowerCase());
-        const codigosDuplicadosNoLote = codigos.filter(
-          (_codigo, index) => codigosNormalizados.indexOf(codigosNormalizados[index]) !== index,
-        );
-        if (codigosDuplicadosNoLote.length > 0) {
-          error(`Lote inválido: códigos duplicados (${resumirCodigos([...new Set(codigosDuplicadosNoLote)])})`);
-          return;
-        }
+    if (!isLote) {
+      return;
+    }
 
-        const codigosExistentes = new Set(rows.map((row) => row.codigo.toLowerCase()));
-        const codigosConflitantes = codigos.filter((codigo) => codigosExistentes.has(codigo.toLowerCase()));
-        if (codigosConflitantes.length > 0) {
-          error(`Já existem códigos cadastrados neste lote: ${resumirCodigos(codigosConflitantes)}`);
-          return;
-        }
+    if (carrinhoLoteMisto.length === 0) {
+      error("Adicione ao menos um item no lote");
+      return;
+    }
 
-        const codigosCriados: string[] = [];
-        for (const codigo of codigos) {
-          try {
-            await api.post(endpointBase, {
-              codigo,
-              descricao: descricaoFinal,
-              tipo: tipoFinal,
-              tamanho: tamanhoFinal,
-              status: novo.status,
-            });
-            codigosCriados.push(codigo);
-          } catch (err) {
-            const mensagemBase = err instanceof Error ? err.message : "Erro ao criar item";
-            const sufixo = codigosCriados.length > 0
-              ? ` (${codigosCriados.length} itens criados antes da falha)`
-              : "";
-            throw new Error(`${mensagemBase}${sufixo}`);
-          }
-        }
+    if (acaoLote === "adicionar") {
+      const loteNumericoValido = Number.isInteger(numeroInicialLote) && Number.isInteger(casasNumeroLote);
+      if (!baseLote || !loteNumericoValido) {
+        error("Preencha codigo base, numero inicial e casas do codigo");
+        return;
+      }
+      if (numeroInicialLote < 0 || casasNumeroLote <= 0) {
+        error("Numero inicial deve ser maior ou igual a zero e casas do codigo maior que zero");
+        return;
+      }
+    }
 
-        success(`${codigosCriados.length} itens criados com sucesso`);
+    const totalAdicoes = carrinhoLoteMisto
+      .filter((item) => item.acao === "adicionar")
+      .reduce((acc, item) => acc + item.quantidade, 0);
+    const totalRemocoes = carrinhoLoteMisto
+      .filter((item) => item.acao === "remover")
+      .reduce((acc, item) => acc + item.quantidade, 0);
+
+    if (acaoLote === "adicionar") {
+      if (totalAdicoes <= 0) {
+        error("Nao ha itens para adicionar");
+        return;
+      }
+      if (totalAdicoes > MAX_ITENS_LOTE_MISTO_TOTAL) {
+        error(`Limite excedido: maximo de ${MAX_ITENS_LOTE_MISTO_TOTAL} itens por lote`);
+        return;
+      }
+    } else {
+      if (totalRemocoes <= 0) {
+        error("Nao ha itens para remover");
+        return;
+      }
+      if (totalRemocoes > MAX_ITENS_LOTE_MISTO_TOTAL) {
+        error(`Limite excedido: maximo de ${MAX_ITENS_LOTE_MISTO_TOTAL} itens por lote`);
+        return;
+      }
+    }
+
+    const operacoesPayload = carrinhoLoteMisto.map((item) => ({
+      acao: item.acao,
+      tipo: normalizarTipo(item.tipo),
+      tamanho: normalizarTamanho(item.tamanho),
+      quantidade: item.quantidade,
+      descricao: item.acao === "adicionar" ? normalizarDescricaoOpcional(item.descricao) : undefined,
+      status: item.acao === "adicionar" ? item.status : undefined,
+    }));
+
+    setCreating(true);
+    try {
+      const response = await api.post<{
+        resumo?: {
+          adicionados?: number;
+          removidos?: number;
+          proximo_numero?: number;
+        };
+      }>(`${endpointBase}/lote-misto`, {
+        codigo_base: acaoLote === "adicionar" ? baseLote : CODIGO_BASE_PADRAO,
+        numero_inicial: acaoLote === "adicionar" ? numeroInicialLote : 0,
+        casas_codigo: acaoLote === "adicionar" ? casasNumeroLote : CASAS_CODIGO_PADRAO,
+        operacoes: operacoesPayload,
+      });
+
+      const adicionados = response?.resumo?.adicionados ?? 0;
+      const removidos = response?.resumo?.removidos ?? 0;
+      const proximoNumero = response?.resumo?.proximo_numero;
+      if (acaoLote === "adicionar" && Number.isInteger(proximoNumero)) {
+        setLote((prev) => ({ ...prev, numeroInicial: String(proximoNumero) }));
       }
 
+      success(
+        acaoLote === "adicionar"
+          ? `${adicionados} item(ns) adicionados ao lote`
+          : `${removidos} item(ns) removidos por quantidade`,
+      );
       resetarFormularioCriacao();
       setOpenCreateModal(false);
       await carregar();
       notificarAtualizacaoGlobal("kit");
     } catch (err) {
-      error(err instanceof Error ? err.message : "Erro ao criar item");
+      error(err instanceof Error ? err.message : "Erro ao processar lote");
       await carregar();
     } finally {
       setCreating(false);
@@ -1245,42 +1484,57 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
       <Modal
         open={openCreateModal}
         onClose={() => setOpenCreateModal(false)}
-        title={modoCriacao === "lote" ? "Novo Lote de Itens" : "Novo Item"}
+        title={
+          modoCriacao === "lote"
+            ? acaoLote === "adicionar"
+              ? "Criar lote de itens"
+              : "Remover itens por quantidade"
+            : "Novo item"
+        }
         description={
           modoCriacao === "lote"
-            ? "Use um código base e uma quantidade para gerar códigos em sequência."
-            : "Cadastre código, tipo, descrição opcional, tamanho e status inicial."
+            ? acaoLote === "adicionar"
+              ? "Adicione varias linhas no lote e crie tudo de uma vez."
+              : "Selecione tipo, tamanho e quantidade para baixa automatica."
+            : "Cadastre um item individual."
         }
-        maxWidthClassName="max-w-4xl"
+        maxWidthClassName="max-w-5xl"
       >
         <div className="space-y-4">
           <div className="space-y-3 rounded-2xl border border-border/65 bg-surface-2/45 p-3 sm:p-4">
-            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-12">
-              <FormField label="Modo de criação" htmlFor="novo-item-modo" className="xl:col-span-3">
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <FormField label="Modo de criacao" htmlFor="novo-item-modo-select">
                 <Select value={modoCriacao} onValueChange={(value) => setModoCriacao(value as ModoCriacaoItem)}>
-                  <SelectTrigger id="novo-item-modo" className="h-9 text-xs">
+                  <SelectTrigger id="novo-item-modo-select" className="h-9 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="unitario">Unitario</SelectItem>
+                    <SelectItem value="unitario">Item unico</SelectItem>
                     <SelectItem value="lote">Lote</SelectItem>
                   </SelectContent>
                 </Select>
               </FormField>
 
-              {modoCriacao === "unitario" ? (
-                <FormField label="Código" htmlFor="novo-item-codigo" className="xl:col-span-9">
-                  <Input
-                    id="novo-item-codigo"
-                    value={novo.codigo}
-                    onChange={(e) => setNovo((p) => ({ ...p, codigo: e.target.value }))}
-                    placeholder="Código"
-                    className="h-9 text-xs"
-                  />
+              {modoCriacao === "lote" && (
+                <FormField label="Acao do lote" htmlFor="novo-item-lote-acao">
+                  <Select value={acaoLote} onValueChange={(value) => setAcaoLote(value as AcaoLote)}>
+                    <SelectTrigger id="novo-item-lote-acao" className="h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="adicionar">Adicionar varios itens</SelectItem>
+                      <SelectItem value="remover">Remover por quantidade</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </FormField>
-              ) : (
-                <>
-                  <FormField label="Código base" htmlFor="novo-item-lote-base" className="xl:col-span-4">
+              )}
+            </div>
+
+            {modoCriacao === "lote" && acaoLote === "adicionar" && (
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Padrao de codigo</p>
+                <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-12">
+                  <FormField label="Codigo base" htmlFor="novo-item-lote-base" className="xl:col-span-4">
                     <Input
                       id="novo-item-lote-base"
                       value={lote.codigoBase}
@@ -1289,7 +1543,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
                       className="h-9 text-xs"
                     />
                   </FormField>
-                  <FormField label="Número inicial" htmlFor="novo-item-lote-inicial" className="xl:col-span-3">
+                  <FormField label="Numero inicial" htmlFor="novo-item-lote-inicial" className="xl:col-span-4">
                     <Input
                       id="novo-item-lote-inicial"
                       type="number"
@@ -1299,18 +1553,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
                       className="h-9 text-xs"
                     />
                   </FormField>
-                  <FormField label="Quantidade" htmlFor="novo-item-lote-quantidade" className="xl:col-span-3">
-                    <Input
-                      id="novo-item-lote-quantidade"
-                      type="number"
-                      min={1}
-                      max={MAX_ITENS_LOTE}
-                      value={lote.quantidade}
-                      onChange={(e) => setLote((prev) => ({ ...prev, quantidade: e.target.value }))}
-                      className="h-9 text-xs"
-                    />
-                  </FormField>
-                  <FormField label="Casas do código" htmlFor="novo-item-lote-casas" className="xl:col-span-2">
+                  <FormField label="Casas do codigo" htmlFor="novo-item-lote-casas" className="xl:col-span-4">
                     <Input
                       id="novo-item-lote-casas"
                       type="number"
@@ -1321,182 +1564,380 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
                       className="h-9 text-xs"
                     />
                   </FormField>
-                </>
-              )}
-            </div>
+                </div>
 
-            {modoCriacao === "lote" && (
+                <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-2.5 text-xs text-muted-foreground">
+                  {codigosLotePreview.length > 0 ? (
+                    <p>
+                      Previa dos codigos: <span className="font-mono text-foreground">{resumirCodigos(codigosLotePreview)}</span>
+                      {resumoCarrinhoLoteMisto.adicionados > codigosLotePreview.length ? " ..." : ""}
+                    </p>
+                  ) : (
+                    <p>Monte o carrinho de adicao para visualizar os codigos que serao gerados.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {modoCriacao === "lote" && acaoLote === "remover" && (
               <div className="rounded-xl border border-border/70 bg-background/70 px-3 py-2.5 text-xs text-muted-foreground">
-                {codigosLotePreview.length > 0 ? (
-                  <p>
-                    Prévia de códigos: <span className="font-mono text-foreground">{resumirCodigos(codigosLotePreview)}</span>
-                    {Number.parseInt(lote.quantidade, 10) > codigosLotePreview.length ? " ..." : ""}
-                  </p>
+                <p>Estoque disponivel carregado automaticamente: {opcoesRemocaoDisponiveis.length} combinacao(oes) tipo+tamanho.</p>
+                {opcoesRemocaoDisponiveis.length === 0 ? (
+                  <p className="mt-0.5">Nao ha itens disponiveis para remocao por quantidade.</p>
                 ) : (
-                  <p>Preencha o padrão do lote para gerar a prévia de códigos.</p>
+                  <p className="mt-0.5">
+                    Exemplo: {opcoesRemocaoDisponiveis.slice(0, 6).map((item) => `${item.tipo}/${item.tamanho} (${item.disponiveis})`).join(", ")}
+                    {opcoesRemocaoDisponiveis.length > 6 ? " ..." : ""}
+                  </p>
                 )}
               </div>
             )}
           </div>
 
-          <div className="rounded-2xl border border-border/65 bg-surface-2/45 p-3 sm:p-4">
-            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-12">
-              <FormField label="Tipo" htmlFor="novo-item-tipo-select" className="sm:col-span-2 xl:col-span-4">
-                <DropdownMenu open={dropdownTipoAberto} onOpenChange={setDropdownTipoAberto} modal={false}>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      id="novo-item-tipo-select"
-                      type="button"
-                      variant="outline"
-                      className="group h-9 w-full justify-between rounded-xl border-input bg-surface-2 px-3.5 text-xs font-normal shadow-sm hover:border-primary/40 hover:bg-surface-2"
-                      disabled={gerenciandoTipo || creating}
+          {modoCriacao === "lote" ? (
+            <>
+              <div className="space-y-3 rounded-2xl border border-border/65 bg-surface-2/45 p-3 sm:p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {acaoLote === "adicionar" ? "Adicionar linha no lote" : "Remocao por quantidade"}
+                </p>
+
+                <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-12">
+                  <FormField label="Tipo" htmlFor="lote-tipo" className="xl:col-span-4">
+                    <Select
+                      value={operacaoLoteMisto.tipo}
+                      onValueChange={(value) => setOperacaoLoteMisto((prev) => ({ ...prev, tipo: value }))}
                     >
-                      <span className={cn("truncate", tipoSelecionado === NOVO_TIPO_OPTION && "text-muted-foreground")}>
-                        {tipoSelecionado === NOVO_TIPO_OPTION ? "Criar novo tipo..." : tipoSelecionado}
-                      </span>
-                      <ChevronDown
-                        className={cn(
-                          "h-4 w-4 text-muted-foreground transition-transform duration-200",
-                          dropdownTipoAberto && "rotate-180",
-                        )}
-                      />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[var(--radix-dropdown-menu-trigger-width)] p-1"
-                  >
-                    {opcoesTipo.map((tipo) => {
-                      const selecionado = normalizarTipoChave(tipoSelecionado) === normalizarTipoChave(tipo);
-                      return (
-                        <DropdownMenuItem
-                          key={tipo}
-                          className="gap-1.5 px-2 py-1.5 text-xs"
-                          onSelect={(event) => {
-                            event.preventDefault();
-                            setTipoSelecionado(tipo);
-                            setDropdownTipoAberto(false);
-                          }}
+                      <SelectTrigger id="lote-tipo" className="h-9 text-xs">
+                        <SelectValue placeholder="Tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(acaoLote === "remover" ? tiposDisponiveisRemocao : opcoesTipo).map((tipo) => (
+                          <SelectItem key={`lote-tipo-${tipo}`} value={tipo}>
+                            {tipo}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+
+                  <FormField label="Tamanho" htmlFor="lote-tamanho" className="xl:col-span-3">
+                    <Select
+                      value={operacaoLoteMisto.tamanho}
+                      onValueChange={(value) => setOperacaoLoteMisto((prev) => ({ ...prev, tamanho: value }))}
+                    >
+                      <SelectTrigger id="lote-tamanho" className="h-9 text-xs">
+                        <SelectValue placeholder="Tamanho" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(acaoLote === "remover" ? tamanhosDisponiveisRemocao : opcoesTamanho).map((tamanho) => (
+                          <SelectItem key={`lote-tamanho-${tamanho}`} value={tamanho}>
+                            {tamanho}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
+
+                  <FormField label="Quantidade" htmlFor="lote-quantidade" className="xl:col-span-3">
+                    <Input
+                      id="lote-quantidade"
+                      type="number"
+                      min={1}
+                      max={acaoLote === "adicionar" ? MAX_ITENS_LOTE_MISTO_OPERACAO : Math.max(disponiveisSelecionados - quantidadePendenteRemocaoSelecionada, 1)}
+                      value={operacaoLoteMisto.quantidade}
+                      onChange={(e) => setOperacaoLoteMisto((prev) => ({ ...prev, quantidade: e.target.value }))}
+                      className="h-9 text-xs"
+                    />
+                  </FormField>
+
+                  <div className="hidden xl:block xl:col-span-2" />
+
+                  {acaoLote === "adicionar" ? (
+                    <>
+                      <FormField label="Descricao (opcional)" htmlFor="lote-descricao" className="sm:col-span-2 xl:col-span-8">
+                        <Input
+                          id="lote-descricao"
+                          value={operacaoLoteMisto.descricao}
+                          onChange={(e) => setOperacaoLoteMisto((prev) => ({ ...prev, descricao: e.target.value }))}
+                          placeholder="Descricao"
+                          className="h-9 text-xs"
+                        />
+                      </FormField>
+                      <FormField label="Status" htmlFor="lote-status" className="xl:col-span-4">
+                        <Select
+                          value={operacaoLoteMisto.status}
+                          onValueChange={(value) => setOperacaoLoteMisto((prev) => ({ ...prev, status: value as ItemStatus }))}
                         >
-                          <span className="inline-flex h-4 w-4 items-center justify-center text-primary/80">
-                            {selecionado ? <Check className="h-3.5 w-3.5" /> : null}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate">{tipo}</span>
-                          <div className="ml-1 flex items-center gap-0.5">
-                            <button
-                              type="button"
-                              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                              onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                setDropdownTipoAberto(false);
-                                void editarTipoEspecifico(tipo);
-                              }}
-                              aria-label={`Editar tipo ${tipo}`}
-                              title={`Editar ${tipo}`}
-                              disabled={gerenciandoTipo || creating}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
-                              onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                setDropdownTipoAberto(false);
-                                void removerTipoEspecifico(tipo);
-                              }}
-                              aria-label={`Remover tipo ${tipo}`}
-                              title={`Remover ${tipo}`}
-                              disabled={gerenciandoTipo || creating}
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
+                          <SelectTrigger id="lote-status" className="h-9 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="disponivel">disponivel</SelectItem>
+                            <SelectItem value="emprestado">emprestado</SelectItem>
+                            <SelectItem value="inativo">inativo</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormField>
+                    </>
+                  ) : (
+                    <div className="sm:col-span-2 xl:col-span-12 rounded-lg border border-border/70 bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+                      Disponiveis para esse filtro: {disponiveisSelecionados} | Ja no carrinho para remover: {quantidadePendenteRemocaoSelecionada}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 text-xs"
+                    onClick={() => {
+                      setOperacaoLoteMisto((prev) => ({
+                        ...prev,
+                        quantidade: "1",
+                        descricao: "",
+                        status: "disponivel",
+                      }));
+                    }}
+                    disabled={creating}
+                  >
+                    Limpar formulario
+                  </Button>
+                  <Button
+                    type="button"
+                    className="h-9 text-xs"
+                    onClick={adicionarOperacaoLoteMisto}
+                    disabled={creating || (acaoLote === "remover" && opcoesRemocaoDisponiveis.length === 0)}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Adicionar no lote
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-3 rounded-2xl border border-border/65 bg-surface-2/45 p-3 sm:p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Itens no lote</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 text-xs"
+                    onClick={limparCarrinhoLoteMisto}
+                    disabled={carrinhoLoteMisto.length === 0 || creating}
+                  >
+                    Limpar lote
+                  </Button>
+                </div>
+
+                {carrinhoLoteMisto.length === 0 ? (
+                  <p className="rounded-xl border border-dashed border-border/70 bg-background/70 px-3 py-3 text-xs text-muted-foreground">
+                    Nenhum item adicionado no lote ainda.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {carrinhoLoteMisto.map((item, index) => (
+                      <div key={item.id} className="rounded-xl border border-border/70 bg-background/70 px-3 py-2 text-xs">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-0.5 text-muted-foreground">
+                            <p className="font-medium text-foreground">
+                              {index + 1}. {item.acao === "adicionar" ? "Adicionar" : "Remover"} {item.quantidade} item(ns)
+                            </p>
+                            <p>{item.tipo} | {item.tamanho}</p>
+                            {item.acao === "adicionar" && (
+                              <p>
+                                Status: {item.status}
+                                {normalizarDescricaoOpcional(item.descricao) ? ` | ${item.descricao.trim()}` : ""}
+                              </p>
+                            )}
                           </div>
-                        </DropdownMenuItem>
-                      );
-                    })}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      className="gap-2 px-2.5 py-1.5 text-xs"
-                      onSelect={(event) => {
-                        event.preventDefault();
-                        setTipoSelecionado(NOVO_TIPO_OPTION);
-                        setDropdownTipoAberto(false);
-                      }}
-                    >
-                      <Plus className="h-3.5 w-3.5 text-primary/80" />
-                      Criar novo tipo...
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </FormField>
-              <FormField label="Descrição (opcional)" htmlFor="novo-item-descricao" className="sm:col-span-2 xl:col-span-4">
-                <Input
-                  id="novo-item-descricao"
-                  value={novo.descricao}
-                  onChange={(e) => setNovo((p) => ({ ...p, descricao: e.target.value }))}
-                  placeholder="Descrição"
-                  className="h-9 text-xs"
-                />
-              </FormField>
-              <FormField label="Tamanho" htmlFor="novo-item-tamanho-select" className="xl:col-span-2">
-                <Select value={tamanhoSelecionado} onValueChange={setTamanhoSelecionado}>
-                  <SelectTrigger id="novo-item-tamanho-select" className="h-9 text-xs">
-                    <SelectValue placeholder="Selecione o tamanho" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {opcoesTamanho.map((tamanho) => (
-                      <SelectItem key={tamanho} value={tamanho}>
-                        {tamanho}
-                      </SelectItem>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 rounded-md text-destructive hover:bg-destructive/12 hover:text-destructive"
+                            onClick={() => removerOperacaoLoteMisto(item.id)}
+                            aria-label={`Remover linha ${index + 1}`}
+                            title="Remover linha"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
                     ))}
-                    <SelectItem value={NOVO_TAMANHO_OPTION}>Criar novo tamanho...</SelectItem>
-                  </SelectContent>
-                </Select>
-              </FormField>
-              <FormField label="Status" htmlFor="novo-item-status" className="xl:col-span-2">
-                <Select
-                  value={novo.status}
-                  onValueChange={(value) => setNovo((p) => ({ ...p, status: value as ItemStatus }))}
-                >
-                  <SelectTrigger id="novo-item-status" className="h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="disponivel">disponível</SelectItem>
-                    <SelectItem value="emprestado">emprestado</SelectItem>
-                    <SelectItem value="inativo">inativo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </FormField>
-              {tipoSelecionado === NOVO_TIPO_OPTION && (
-                <FormField label="Novo tipo" htmlFor="novo-item-tipo-custom" className="sm:col-span-2 xl:col-span-6">
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="space-y-3 rounded-2xl border border-border/65 bg-surface-2/45 p-3 sm:p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Dados do item</p>
+              <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-12">
+                <FormField label="Codigo" htmlFor="novo-item-codigo" className="xl:col-span-4">
                   <Input
-                    id="novo-item-tipo-custom"
-                    value={novoTipo}
-                    onChange={(e) => setNovoTipo(e.target.value)}
-                    placeholder="Ex.: Kit roupa cirurgico"
-                    maxLength={100}
+                    id="novo-item-codigo"
+                    value={novo.codigo}
+                    onChange={(e) => setNovo((p) => ({ ...p, codigo: e.target.value }))}
+                    placeholder="Codigo"
                     className="h-9 text-xs"
                   />
                 </FormField>
-              )}
-              {tamanhoSelecionado === NOVO_TAMANHO_OPTION && (
-                <FormField label="Novo tamanho" htmlFor="novo-item-tamanho-custom" className="sm:col-span-2 xl:col-span-6">
+                <FormField label="Tipo" htmlFor="novo-item-tipo-select" className="sm:col-span-2 xl:col-span-4">
+                  <DropdownMenu open={dropdownTipoAberto} onOpenChange={setDropdownTipoAberto} modal={false}>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        id="novo-item-tipo-select"
+                        type="button"
+                        variant="outline"
+                        className="group h-9 w-full justify-between rounded-xl border-input bg-surface-2 px-3.5 text-xs font-normal shadow-sm hover:border-primary/40 hover:bg-surface-2"
+                        disabled={gerenciandoTipo || creating}
+                      >
+                        <span className={cn("truncate", tipoSelecionado === NOVO_TIPO_OPTION && "text-muted-foreground")}>
+                          {tipoSelecionado === NOVO_TIPO_OPTION ? "Criar novo tipo..." : tipoSelecionado}
+                        </span>
+                        <ChevronDown
+                          className={cn(
+                            "h-4 w-4 text-muted-foreground transition-transform duration-200",
+                            dropdownTipoAberto && "rotate-180",
+                          )}
+                        />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="start"
+                      className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[var(--radix-dropdown-menu-trigger-width)] p-1"
+                    >
+                      {opcoesTipo.map((tipo) => {
+                        const selecionado = normalizarTipoChave(tipoSelecionado) === normalizarTipoChave(tipo);
+                        return (
+                          <DropdownMenuItem
+                            key={tipo}
+                            className="gap-1.5 px-2 py-1.5 text-xs"
+                            onSelect={(event) => {
+                              event.preventDefault();
+                              setTipoSelecionado(tipo);
+                              setDropdownTipoAberto(false);
+                            }}
+                          >
+                            <span className="inline-flex h-4 w-4 items-center justify-center text-primary/80">
+                              {selecionado ? <Check className="h-3.5 w-3.5" /> : null}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate">{tipo}</span>
+                            <div className="ml-1 flex items-center gap-0.5">
+                              <button
+                                type="button"
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  setDropdownTipoAberto(false);
+                                  void editarTipoEspecifico(tipo);
+                                }}
+                                aria-label={`Editar tipo ${tipo}`}
+                                title={`Editar ${tipo}`}
+                                disabled={gerenciandoTipo || creating}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/15 hover:text-destructive"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  setDropdownTipoAberto(false);
+                                  void removerTipoEspecifico(tipo);
+                                }}
+                                aria-label={`Remover tipo ${tipo}`}
+                                title={`Remover ${tipo}`}
+                                disabled={gerenciandoTipo || creating}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </DropdownMenuItem>
+                        );
+                      })}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="gap-2 px-2.5 py-1.5 text-xs"
+                        onSelect={(event) => {
+                          event.preventDefault();
+                          setTipoSelecionado(NOVO_TIPO_OPTION);
+                          setDropdownTipoAberto(false);
+                        }}
+                      >
+                        <Plus className="h-3.5 w-3.5 text-primary/80" />
+                        Criar novo tipo...
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </FormField>
+                <FormField label="Descricao (opcional)" htmlFor="novo-item-descricao" className="sm:col-span-2 xl:col-span-4">
                   <Input
-                    id="novo-item-tamanho-custom"
-                    value={novoTamanho}
-                    onChange={(e) => setNovoTamanho(e.target.value.toUpperCase())}
-                    placeholder="Ex.: EXG"
-                    maxLength={20}
+                    id="novo-item-descricao"
+                    value={novo.descricao}
+                    onChange={(e) => setNovo((p) => ({ ...p, descricao: e.target.value }))}
+                    placeholder="Descricao"
                     className="h-9 text-xs"
                   />
                 </FormField>
-              )}
+                <FormField label="Tamanho" htmlFor="novo-item-tamanho-select" className="xl:col-span-2">
+                  <Select value={tamanhoSelecionado} onValueChange={setTamanhoSelecionado}>
+                    <SelectTrigger id="novo-item-tamanho-select" className="h-9 text-xs">
+                      <SelectValue placeholder="Selecione o tamanho" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {opcoesTamanho.map((tamanho) => (
+                        <SelectItem key={tamanho} value={tamanho}>
+                          {tamanho}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value={NOVO_TAMANHO_OPTION}>Criar novo tamanho...</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormField>
+                <FormField label="Status" htmlFor="novo-item-status" className="xl:col-span-2">
+                  <Select
+                    value={novo.status}
+                    onValueChange={(value) => setNovo((p) => ({ ...p, status: value as ItemStatus }))}
+                  >
+                    <SelectTrigger id="novo-item-status" className="h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="disponivel">disponivel</SelectItem>
+                      <SelectItem value="emprestado">emprestado</SelectItem>
+                      <SelectItem value="inativo">inativo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormField>
+                {tipoSelecionado === NOVO_TIPO_OPTION && (
+                  <FormField label="Novo tipo" htmlFor="novo-item-tipo-custom" className="sm:col-span-2 xl:col-span-6">
+                    <Input
+                      id="novo-item-tipo-custom"
+                      value={novoTipo}
+                      onChange={(e) => setNovoTipo(e.target.value)}
+                      placeholder="Ex.: Kit roupa cirurgico"
+                      maxLength={100}
+                      className="h-9 text-xs"
+                    />
+                  </FormField>
+                )}
+                {tamanhoSelecionado === NOVO_TAMANHO_OPTION && (
+                  <FormField label="Novo tamanho" htmlFor="novo-item-tamanho-custom" className="sm:col-span-2 xl:col-span-6">
+                    <Input
+                      id="novo-item-tamanho-custom"
+                      value={novoTamanho}
+                      onChange={(e) => setNovoTamanho(e.target.value.toUpperCase())}
+                      placeholder="Ex.: EXG"
+                      maxLength={20}
+                      className="h-9 text-xs"
+                    />
+                  </FormField>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
             <Button variant="outline" className="h-9 text-xs" onClick={() => setOpenCreateModal(false)}>
@@ -1504,7 +1945,11 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
             </Button>
             <Button className="h-9 text-xs" onClick={criar} loading={creating}>
               <Plus className="h-4 w-4" />
-              {modoCriacao === "lote" ? "Criar lote" : "Criar"}
+              {modoCriacao === "lote"
+                ? acaoLote === "adicionar"
+                  ? "Criar lote"
+                  : "Remover por quantidade"
+                : "Criar item"}
             </Button>
           </div>
         </div>
@@ -1545,3 +1990,7 @@ export function ItensTab({ endpointBase = "/admin/itens" }: ItensTabProps) {
     </div>
   );
 }
+
+
+
+

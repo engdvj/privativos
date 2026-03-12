@@ -83,6 +83,24 @@ const itemUpdateSchema = z.object({
   status: z.enum(["disponivel", "emprestado", "inativo"]).optional(),
   status_ativo: z.boolean().optional(),
 });
+const itemBulkOperationSchema = z.object({
+  acao: z.enum(["adicionar", "remover"]),
+  tipo: tipoItemSchema,
+  tamanho: tamanhoSchema,
+  quantidade: z.coerce.number().int().positive().max(1000),
+  descricao: z.string().max(200).nullable().optional(),
+  status: z.enum(["disponivel", "emprestado", "inativo"]).optional(),
+});
+const itemBulkAdjustSchema = z.object({
+  codigo_base: z
+    .string()
+    .max(40)
+    .transform((value) => value.trim())
+    .refine((value) => value.length > 0, "Codigo base invalido"),
+  numero_inicial: z.coerce.number().int().min(0),
+  casas_codigo: z.coerce.number().int().min(1).max(10).default(3),
+  operacoes: z.array(itemBulkOperationSchema).min(1).max(120),
+});
 
 const credencialCreateSchema = z.object({
   usuario: z.string().min(1).max(100),
@@ -599,6 +617,37 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       operador,
     });
     return reply.status(201).send(row);
+  });
+
+  app.post("/admin/itens/lote-misto", async (request, reply) => {
+    const parsed = itemBulkAdjustSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError(400, "INVALID_PAYLOAD", "Payload invalido");
+    }
+
+    const operador = request.user?.nomeCompleto;
+    if (!operador) {
+      throw new AppError(401, "UNAUTHENTICATED", "Sessao invalida");
+    }
+
+    const resultado = await adminService.processarLoteMistoItens({
+      codigoBase: parsed.data.codigo_base,
+      numeroInicial: parsed.data.numero_inicial,
+      casasCodigo: parsed.data.casas_codigo,
+      operacoes: parsed.data.operacoes.map((operacao) => ({
+        acao: operacao.acao,
+        tipo: operacao.tipo,
+        tamanho: operacao.tamanho,
+        quantidade: operacao.quantidade,
+        descricao: operacao.acao === "adicionar"
+          ? normalizarTextoOpcional(operacao.descricao)
+          : undefined,
+        status: operacao.acao === "adicionar" ? operacao.status : undefined,
+      })),
+      operador,
+    });
+
+    return reply.status(200).send(resultado);
   });
 
   app.put("/admin/itens/:codigo", async (request, reply) => {

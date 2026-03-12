@@ -1552,6 +1552,192 @@ export class AdminService {
     return created;
   }
 
+  async processarLoteMistoItens(input: {
+    codigoBase: string;
+    numeroInicial: number;
+    casasCodigo: number;
+    operacoes: Array<{
+      acao: "adicionar" | "remover";
+      tipo: string;
+      tamanho: string;
+      quantidade: number;
+      descricao?: string | null;
+      status?: StatusItem;
+    }>;
+    operador: string;
+  }) {
+    const codigoBase = input.codigoBase.trim();
+    if (!codigoBase) {
+      throw new AppError(400, "INVALID_ITEM_CODE_BASE", "Codigo base invalido");
+    }
+
+    if (!Number.isInteger(input.numeroInicial) || input.numeroInicial < 0) {
+      throw new AppError(400, "INVALID_ITEM_CODE_START", "Numero inicial invalido");
+    }
+
+    if (!Number.isInteger(input.casasCodigo) || input.casasCodigo <= 0 || input.casasCodigo > 10) {
+      throw new AppError(400, "INVALID_ITEM_CODE_DIGITS", "Casas do codigo invalidas");
+    }
+
+    if (input.operacoes.length === 0) {
+      throw new AppError(400, "EMPTY_BULK_OPERATIONS", "Nenhuma operacao informada");
+    }
+
+    const operacoesAdicionar = input.operacoes.filter((item) => item.acao === "adicionar");
+    const operacoesRemover = input.operacoes.filter((item) => item.acao === "remover");
+    const totalAdicionar = operacoesAdicionar.reduce((acc, item) => acc + item.quantidade, 0);
+    const totalRemover = operacoesRemover.reduce((acc, item) => acc + item.quantidade, 0);
+
+    if (totalAdicionar <= 0 && totalRemover <= 0) {
+      throw new AppError(400, "EMPTY_BULK_OPERATIONS", "Nenhuma operacao valida informada");
+    }
+
+    if (totalAdicionar > 2000 || totalRemover > 2000) {
+      throw new AppError(400, "BULK_OPERATION_LIMIT", "Quantidade total excede o limite de 2000 itens por acao");
+    }
+
+    const codigosParaAdicionar =
+      totalAdicionar > 0
+        ? Array.from({ length: totalAdicionar }, (_item, index) =>
+            `${codigoBase}${String(input.numeroInicial + index).padStart(input.casasCodigo, "0")}`,
+          )
+        : [];
+
+    const resultado = await prisma.$transaction(async (tx) => {
+      const codigosRemovidos: string[] = [];
+      const now = new Date();
+
+      for (const operacao of operacoesRemover) {
+        const alvo = await tx.item.findMany({
+          where: {
+            tipo: operacao.tipo,
+            tamanho: operacao.tamanho,
+            statusAtivo: true,
+            status: "disponivel",
+          },
+          select: {
+            id: true,
+            codigo: true,
+          },
+          orderBy: [{ codigo: "asc" }],
+          take: operacao.quantidade,
+        });
+
+        if (alvo.length < operacao.quantidade) {
+          throw new AppError(
+            409,
+            "INSUFFICIENT_ITEMS_FOR_BULK_REMOVE",
+            `Nao ha itens disponiveis suficientes para remover (${operacao.tipo} ${operacao.tamanho})`,
+          );
+        }
+
+        const ids = alvo.map((item) => item.id);
+        const codigos = alvo.map((item) => item.codigo);
+        codigosRemovidos.push(...codigos);
+
+        await Promise.all([
+          tx.solicitacao.deleteMany({
+            where: {
+              itemCodigo: { in: codigos },
+            },
+          }),
+          tx.devolucao.deleteMany({
+            where: {
+              itemCodigo: { in: codigos },
+            },
+          }),
+        ]);
+
+        await tx.item.deleteMany({
+          where: {
+            id: { in: ids },
+          },
+        });
+      }
+
+      if (codigosParaAdicionar.length > 0) {
+        const conflitos = await tx.item.findMany({
+          where: {
+            codigo: { in: codigosParaAdicionar },
+          },
+          select: {
+            codigo: true,
+          },
+          take: 20,
+        });
+
+        if (conflitos.length > 0) {
+          throw new AppError(
+            409,
+            "ITEM_CODE_ALREADY_EXISTS",
+            `Codigos ja cadastrados no lote: ${conflitos.map((item) => item.codigo).join(", ")}`,
+          );
+        }
+
+        const dadosCriacao: Prisma.ItemCreateManyInput[] = [];
+        let indiceCodigo = 0;
+
+        for (const operacao of operacoesAdicionar) {
+          for (let index = 0; index < operacao.quantidade; index += 1) {
+            const codigo = codigosParaAdicionar[indiceCodigo];
+            indiceCodigo += 1;
+
+            dadosCriacao.push({
+              codigo,
+              descricao: operacao.descricao ?? null,
+              tipo: operacao.tipo,
+              tamanho: operacao.tamanho,
+              status: operacao.status ?? "disponivel",
+              statusAtivo: (operacao.status ?? "disponivel") !== "inativo",
+              atualizadoPor: input.operador,
+              atualizadoEm: now,
+            });
+          }
+        }
+
+        await tx.item.createMany({
+          data: dadosCriacao,
+        });
+      }
+
+      return {
+        codigosAdicionados: codigosParaAdicionar,
+        codigosRemovidos,
+      };
+    });
+
+    await this.audit({
+      operador: input.operador,
+      entidade: "itens",
+      operacao: "BULK_ADJUST",
+      registroId: `${codigoBase}${String(input.numeroInicial).padStart(input.casasCodigo, "0")}`,
+      dadosAntes: {
+        total_operacoes: input.operacoes.length,
+      },
+      dadosDepois: {
+        codigo_base: codigoBase,
+        numero_inicial: input.numeroInicial,
+        casas_codigo: input.casasCodigo,
+        adicionados: resultado.codigosAdicionados.length,
+        removidos: resultado.codigosRemovidos.length,
+        amostra_codigos_adicionados: resultado.codigosAdicionados.slice(0, 50),
+        amostra_codigos_removidos: resultado.codigosRemovidos.slice(0, 50),
+      },
+    });
+    await this.invalidateDashboardCaches();
+
+    return {
+      sucesso: true,
+      resumo: {
+        adicionados: resultado.codigosAdicionados.length,
+        removidos: resultado.codigosRemovidos.length,
+        codigos_adicionados: resultado.codigosAdicionados,
+        codigos_removidos: resultado.codigosRemovidos,
+        proximo_numero: input.numeroInicial + totalAdicionar,
+      },
+    };
+  }
+
   async updateItem(
     codigo: string,
     input: {
